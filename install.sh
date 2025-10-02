@@ -141,7 +141,7 @@ deploy_dotfiles() {
                     
                     local refind_template_path="$dotfiles_source_dir/refind/refind.conf"
                     local refind_dest_path="/boot/EFI/refind/refind.conf"
-                    sed "s/ROOT_PARTUUID_PLACEHOLDER/$root_partuuid/" "$refind_template_path" | sudo tee "$refind_dest_path" > /dev/null
+                    sed "s/__ROOT_PARTUUID__/$root_partuuid/" "$refind_template_path" | sudo tee "$refind_dest_path" > /dev/null
                     success "Custom rEFInd configuration with correct PARTUUID deployed."
                 else
                     error "refind-install script failed. Aborting rEFInd setup."
