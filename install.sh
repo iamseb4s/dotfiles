@@ -17,27 +17,52 @@ success() { echo -e "${C_GREEN}SUCCESS: $1${C_RESET}"; }
 error() { echo -e "${C_RED}ERROR: $1${C_RESET}"; }
 warning() { echo -e "${C_YELLOW}WARNING: $1${C_RESET}"; }
 
+# ===============================================================
+# --- CONFIGURATION ---
+# ===============================================================
+
+# --- Mandatory packages that are always installed ---
+MANDATORY_PACKAGES_ARCH=("git" "nano" "stow")
+MANDATORY_PACKAGES_UBUNTU=("git" "nano" "stow")
+
 # --- Dotfiles Packages and their System Dependencies Definition ---
+# Format: ["stow_package_name"]="system_package_names"
 declare -A DOTFILE_PACKAGES
 DOTFILE_PACKAGES=(
-    ["refind"]="refind gdisk:arch,ubuntu"
+    ["refind"]="refind gdisk"
+    # ["zsh"]="zsh starship"
+    # ["nvim"]="neovim"
 )
+
+# ===============================================================
+# --- SCRIPT LOGIC ---
+# ===============================================================
 
 # --- Install mandatory base packages ---
 install_mandatory_packages() {
-    info "Installing mandatory dependencies: git, nano, gnu-stow..."
+    info "Installing mandatory dependencies..."
     if [ -f /etc/os-release ]; then . /etc/os-release; else error "Cannot detect distribution."; exit 1; fi
 
+    local packages
     case "$ID" in
         "arch")
-            # Using 'yes |' to automatically confirm any prompts from pacman
-            yes | sudo pacman -Syu --needed git nano stow
+            packages=("${MANDATORY_PACKAGES_ARCH[@]}")
             ;;
         "ubuntu"|"debian")
-            sudo apt-get update && sudo apt-get install -y git nano stow
+            packages=("${MANDATORY_PACKAGES_UBUNTU[@]}")
             ;;
         *)
             error "Distribution '$ID' is not supported."; exit 1
+            ;;
+    esac
+    
+    info "Packages to install: ${packages[*]}"
+    case "$ID" in
+        "arch")
+            sudo pacman -Syu --noconfirm --needed "${packages[@]}"
+            ;;
+        "ubuntu"|"debian")
+            sudo apt-get update && sudo apt-get install -y "${packages[@]}"
             ;;
     esac
     success "Mandatory dependencies installed."
@@ -93,7 +118,8 @@ show_menu() {
 install_selected_dependencies() {
     local packages_to_install=()
     for selection in $SELECTIONS; do
-        local deps_string="${DOTFILE_PACKAGES[$selection]%:*}"
+        # We no longer parse for OS compatibility here, just get the package names
+        local deps_string="${DOTFILE_PACKAGES[$selection]}"
         [[ -n "$deps_string" ]] && packages_to_install+=($deps_string)
     done
     
@@ -105,7 +131,7 @@ install_selected_dependencies() {
     . /etc/os-release
     case "$ID" in
         "arch")
-            yes | sudo pacman -S --needed $unique_packages
+            sudo pacman -S --noconfirm --needed $unique_packages
             ;;
         "ubuntu"|"debian")
             sudo apt-get install -y $unique_packages
@@ -127,10 +153,9 @@ deploy_dotfiles() {
             
             # Check if we are in a Docker/virtual environment where refind-install cannot work
             if [[ "$root_device" == "overlay" ]] || [[ ! -b "$root_device" ]]; then
-                warning "Docker/virtual environment detected. 'refind-install' cannot be run."
-                info "This step will be skipped during testing. On a real machine, it would run."
+                warning "Docker/virtual environment detected. 'refind-install' will be skipped."
+                info "This step would run on a real machine."
             else
-                # This is the logic for a real machine installation
                 info "Running the official refind-install script..."
                 if sudo refind-install; then
                     info "Replacing default refind.conf with custom template..."
