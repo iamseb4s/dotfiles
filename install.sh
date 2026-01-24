@@ -166,8 +166,32 @@ deploy_dotfiles() {
                     
                     local refind_template_path="$dotfiles_source_dir/refind/refind.conf"
                     local refind_dest_path="/boot/EFI/refind/refind.conf"
+                    local refind_theme_source="$dotfiles_source_dir/refind/themes"
+                    local refind_theme_dest="/boot/EFI/refind/themes"
+
+                    # 1. Configure refind.conf with PARTUUID
                     sed "s/__ROOT_PARTUUID__/$root_partuuid/" "$refind_template_path" | sudo tee "$refind_dest_path" > /dev/null
                     success "Custom rEFInd configuration with correct PARTUUID deployed."
+
+                    # 2. Install Catppuccin Theme
+                    if [ -d "$refind_theme_source" ]; then
+                        info "Installing rEFInd themes..."
+                        # Ensure parent directory exists (refind-install should have created it, but safety first)
+                        if [ -d "/boot/EFI/refind" ]; then
+                             # Remove existing themes folder if it exists to avoid stale files/conflicts
+                            if [ -d "$refind_theme_dest" ]; then
+                                info "Removing existing themes directory..."
+                                sudo rm -rf "$refind_theme_dest"
+                            fi
+                            
+                            sudo cp -r "$refind_theme_source" "$refind_theme_dest"
+                            success "rEFInd themes copied to $refind_theme_dest"
+                        else
+                            error "Target directory /boot/EFI/refind does not exist. Themes not installed."
+                        fi
+                    else
+                        warning "Theme source directory $refind_theme_source not found."
+                    fi
                 else
                     error "refind-install script failed. Aborting rEFInd setup."
                 fi
