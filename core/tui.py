@@ -168,6 +168,13 @@ class TUI:
             return None
 
     @staticmethod
+    def wrap_text(text, width):
+        """Wraps text to a specific width using textwrap."""
+        import textwrap
+        if not text: return []
+        return textwrap.wrap(text, width)
+
+    @staticmethod
     def hide_cursor():
         """Hides the terminal cursor."""
         sys.stdout.write("\033[?25l")

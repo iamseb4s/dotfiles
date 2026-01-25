@@ -242,6 +242,12 @@ class MenuScreen(Screen):
         info_lines = []
         current_item = self.flat_items[self.cursor_idx]
         
+        # Pre-calculate right panel width for text wrapping
+        safe_width = term_width - 2
+        split_width = int(safe_width * 0.60)
+        # Margin: split_width(left) + padding(1) + sep(1) + padding(1) + [CONTENT] + padding(1) + scroll(1) + margin(1)
+        r_panel_width = safe_width - split_width - 6
+        
         if current_item['type'] == 'module':
             mod = current_item['obj']
             ovr = self.overrides.get(mod.id, {})
@@ -254,7 +260,10 @@ class MenuScreen(Screen):
             
             info_lines.append(f"{Style.BOLD}{Style.hex('#89B4FA')}{mod.label.upper()}{Style.RESET}")
             if mod.description:
-                info_lines.append(f"{Style.DIM}{mod.description}{Style.RESET}")
+                # Wrap description to panel width
+                wrapped_desc = TUI.wrap_text(mod.description, r_panel_width)
+                for line in wrapped_desc:
+                    info_lines.append(f"{Style.DIM}{line}{Style.RESET}")
             info_lines.append("")
             info_lines.append(f"{Style.BOLD}Status:  {status_color}{status_icon} {status_str}{Style.RESET}")
             
@@ -280,7 +289,12 @@ class MenuScreen(Screen):
             if tree:
                 info_lines.append("")
                 info_lines.append(f"{Style.BOLD}CONFIG TREE:{Style.RESET}")
-                info_lines.extend([f"  {l}" for l in tree])
+                for l in tree:
+                    # Wrap each line of the tree if it exceeds panel width
+                    # We subtract 2 for the tree indentation "  "
+                    wrapped_tree = TUI.wrap_text(l, r_panel_width - 2)
+                    for wl in wrapped_tree:
+                        info_lines.append(f"  {wl}")
         else:
             cat_name = current_item['obj']
             info_lines.append(f"{Style.BOLD}{Style.hex('#FDCB6E')}{cat_name.upper()}{Style.RESET}")
@@ -296,10 +310,6 @@ class MenuScreen(Screen):
 
         # --- FINAL RENDER (Side-by-side) ---
         if term_width > 100:
-            # Leave a safety margin to prevent line wrapping
-            safe_width = term_width - 2
-            split_width = int(safe_width * 0.60)
-            
             # Slicing viewports for list and info
             visible_list = list_lines[self.list_offset : self.list_offset + available_height]
             visible_info = info_lines[self.info_offset : self.info_offset + available_height]
