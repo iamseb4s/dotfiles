@@ -57,14 +57,44 @@ class TUI:
     """
     Core utility for low-level terminal manipulation and input capture.
     """
-    
+    _old_settings = None
+
+    @staticmethod
+    def set_raw_mode(enable=True):
+        """Toggles terminal RAW mode globally and disables echo."""
+        fd = sys.stdin.fileno()
+        if enable:
+            if TUI._old_settings is None:
+                TUI._old_settings = termios.tcgetattr(fd)
+            # Set raw mode and ensure ECHO is off
+            tty.setraw(fd)
+            os.system("stty -echo")
+        else:
+            if TUI._old_settings is not None:
+                termios.tcsetattr(fd, termios.TCSADRAIN, TUI._old_settings)
+                os.system("stty echo")
+                TUI._old_settings = None
+
     @staticmethod
     def get_key():
         """Captures a single keypress, handling multi-byte escape sequences."""
         fd = sys.stdin.fileno()
+        # If we are already in raw mode (managed externally), just read
+        if TUI._old_settings is not None:
+            return TUI._read_key_internal(fd)
+            
+        # Otherwise, toggle raw mode just for this read
         old_settings = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
+            return TUI._read_key_internal(fd)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    @staticmethod
+    def _read_key_internal(fd):
+        """Internal key reading logic."""
+        try:
             ch_bytes = os.read(fd, 1)
             if not ch_bytes: return None
             ch = ch_bytes.decode('utf-8', errors='ignore')
@@ -92,8 +122,8 @@ class TUI:
                     return Keys.ESC
             
             return ord(ch)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        except Exception:
+            return None
 
     @staticmethod
     def hide_cursor():
