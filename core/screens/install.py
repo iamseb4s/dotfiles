@@ -50,7 +50,7 @@ class ConfirmModal:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
         elif key == Keys.ENTER:
             return "YES" if self.focus_idx == 0 else "NO"
-        elif key == Keys.ESC or key == Keys.Q:
+        elif key in [Keys.ESC, Keys.Q, Keys.Q_UPPER]:
             return "NO"
         return None
 
@@ -79,7 +79,8 @@ class InstallScreen(Screen):
         # UI State
         self.log_offset = 0
         self.auto_scroll = True
-        self.last_scroll_time = 0
+        self.last_render_time = 0
+        self.render_throttle = 0.03 # Max ~30 FPS for logs
         self.modal = None # Used for cancel confirmation or final results
         self.spinner_chars = ["|", "/", "-", "\\"]
         self.spinner_idx = 0
@@ -100,13 +101,20 @@ class InstallScreen(Screen):
             if len(self.logs) > available_height:
                 self.log_offset = len(self.logs) - available_height
 
+        # Throttled render during high-volume logs
+        now = time.time()
+        if now - self.last_render_time > self.render_throttle:
+            self.render()
+            self.last_render_time = now
+
     def render(self):
         """Draws the split-view dashboard with bottom progress bar and scrolls."""
-        TUI.clear_screen()
+        # Use a buffer to avoid flickering and partial draws
+        buffer = []
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # Security margin to prevent line wrapping and scrolling
+        # Security margin to prevent line wrapping
         safe_width = term_width - 2
         
         # 1. Header (Pinned to top)
@@ -115,18 +123,17 @@ class InstallScreen(Screen):
         text_black = "\033[30m"
         padding = (term_width - len(title)) // 2
         header_bar = f"{bg_blue}{text_black}{' '*padding}{title}{' '*(term_width-padding-len(title))}{Style.RESET}"
-        sys.stdout.write(header_bar + "\n")
-        print()
+        buffer.append(header_bar)
+        buffer.append("")
         
         # Centered Subtitle
         task_label = self.queue[self.current_idx].label if self.current_idx >= 0 else 'Initializing'
         sub_text = f"Deployment in progress. Current task: {task_label}"
         sub_pad = (term_width - TUI.visible_len(sub_text)) // 2
-        sys.stdout.write(f"{' ' * max(0, sub_pad)}{Style.DIM}{sub_text}{Style.RESET}\n")
+        buffer.append(f"{' ' * max(0, sub_pad)}{Style.DIM}{sub_text}{Style.RESET}")
+        buffer.append("")
         
-        print()
-        
-        # 2. Split View
+        # 2. Split View Area
         self.reserved_height = 9
         available_height = term_height - self.reserved_height
         left_width = int(safe_width * 0.30)
@@ -172,13 +179,35 @@ class InstallScreen(Screen):
         # Draw exactly available_height rows
         visible_logs = self.logs[self.log_offset : self.log_offset + available_height]
         
-        current_rows = 0
         for i in range(available_height):
-            self._draw_row(i, left_lines, visible_logs, left_width, safe_width, available_height)
-            current_rows += 1
+            l_content = left_lines[i] if i < len(left_lines) else ""
+            r_content = visible_logs[i] if i < len(visible_logs) else ""
+            
+            l_len = TUI.visible_len(l_content)
+            l_pad = " " * max(0, left_width - l_len)
+            sep = f"{Style.DIM}│{Style.RESET}"
+            
+            r_area_width = safe_width - left_width - 5
+            if TUI.visible_len(r_content) > r_area_width:
+                r_content = r_content[:r_area_width-3] + "..."
+            r_len = TUI.visible_len(r_content)
+            r_pad = " " * max(0, r_area_width - r_len)
+            
+            scroll_r = f"{Style.DIM}│{Style.RESET}"
+            if len(self.logs) > available_height:
+                thumb_size = max(1, int(available_height * (available_height / len(self.logs))))
+                max_offset = len(self.logs) - available_height
+                progress = self.log_offset / max_offset
+                start_pos = int(progress * (available_height - thumb_size))
+                if start_pos <= i < start_pos + thumb_size:
+                    scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}"
+            elif len(self.logs) > 0:
+                scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}"
+            
+            buffer.append(f"{l_content}{l_pad} {sep} {r_content}{r_pad} {scroll_r}")
 
         # 3. Progress Bar
-        print() 
+        buffer.append("")
         progress_val = self.current_idx / self.total if self.total > 0 else 0
         if self.is_finished: progress_val = 1
         
@@ -186,71 +215,35 @@ class InstallScreen(Screen):
         filled = int(bar_len * progress_val)
         bar_color = Style.hex("#55E6C1") if not self.is_cancelled else Style.hex("#FF6B6B")
         bar_content = f"{bar_color}█" * filled + f"{Style.DIM}░" * (bar_len - filled) + Style.RESET
-        
         p_padding = (term_width - bar_len - 6) // 2
-        print(f"{' ' * max(0, p_padding)}[ {bar_content} ] {int(progress_val*100)}%")
-        
-        print()
+        buffer.append(f"{' ' * max(0, p_padding)}[ {bar_content} ] {int(progress_val*100)}%")
+        buffer.append("")
 
         # 4. Footer
         if self.is_finished:
-            line = f"{TUI.pill('ENTER', 'Finish', '#a6e3a1')}    {TUI.pill('R', 'Summary', '#FDCB6E')}    {TUI.pill('PgUp/Dn', 'Scroll', '#89B4FA')}    {TUI.pill('Q', 'Quit', '#f38ba8')}"
+            footer = f"{TUI.pill('ENTER', 'Finish', '#a6e3a1')}    {TUI.pill('R', 'Summary', '#FDCB6E')}    {TUI.pill('PgUp/Dn', 'Scroll', '#89B4FA')}    {TUI.pill('Q', 'Quit', '#f38ba8')}"
         elif self.is_cancelled:
-            line = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', '#FDCB6E')}"
+            footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', '#FDCB6E')}"
         else:
-            line = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', '#FDCB6E')}    {TUI.pill('Q/ESC', 'Stop', '#f38ba8')}"
-            
-        p_len = TUI.visible_len(line)
-        print(" " * max(0, (term_width - p_len) // 2) + line)
+            footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', '#FDCB6E')}    {TUI.pill('Q/ESC', 'Stop', '#f38ba8')}"
+        
+        f_len = TUI.visible_len(footer)
+        buffer.append(" " * max(0, (term_width - f_len) // 2) + footer)
 
-
-    def _draw_row(self, i, visible_left, visible_logs, left_width, safe_width, available_height):
-        """Helper to build a single row of the split view with scalable scrollbar and modal overlay."""
-        l_content = visible_left[i] if i < len(visible_left) else ""
-        r_content = visible_logs[i] if i < len(visible_logs) else ""
-        
-        l_len = TUI.visible_len(l_content)
-        l_pad = " " * max(0, left_width - l_len)
-        sep = f"{Style.DIM}│{Style.RESET}"
-        
-        # Log area with strict truncation
-        r_area_width = safe_width - left_width - 5
-        if TUI.visible_len(r_content) > r_area_width:
-            r_content = r_content[:r_area_width-3] + "..."
-            
-        r_len = TUI.visible_len(r_content)
-        r_pad = " " * max(0, r_area_width - r_len)
-        
-        # Proportional Scrollbar thumb
-        scroll_r = f"{Style.DIM}│{Style.RESET}"
-        if len(self.logs) > available_height:
-            thumb_size = max(1, int(available_height * (available_height / len(self.logs))))
-            max_offset = len(self.logs) - available_height
-            progress = self.log_offset / max_offset
-            start_pos = int(progress * (available_height - thumb_size))
-            
-            if start_pos <= i < start_pos + thumb_size:
-                scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}"
-        elif len(self.logs) > 0:
-            # If everything fits, show a full bar
-            scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}"
-        
-        row = f"{l_content}{l_pad} {sep} {r_content}{r_pad} {scroll_r}"
-        
-        # Modal Overlay
+        # 5. Modal Overlay (Final Pass on buffer)
         if self.modal:
             m_lines, m_y, m_x = self.modal.render()
-            current_y = i + 4 # Title(1) + Subtitle(1) + Spacer(1) + 1
-            if m_y <= current_y < (m_y + len(m_lines)):
-                m_idx = current_y - m_y
-                modal_line = m_lines[m_idx]
-                
-                # Simple string replacement for overlay
-                # Build a new line: [PAD] [MODAL] [PAD]
-                m_v_len = TUI.visible_len(modal_line)
-                row = " " * m_x + modal_line + " " * max(0, safe_width + 2 - m_x - m_v_len)
-                
-        print(row)
+            for i, m_line in enumerate(m_lines):
+                target_y = m_y + i
+                if 0 <= target_y < len(buffer):
+                    bg = buffer[target_y]
+                    # Simple centering overlay logic
+                    m_v_len = TUI.visible_len(m_line)
+                    buffer[target_y] = " " * m_x + m_line + " " * max(0, term_width - m_x - m_v_len)
+
+        # Atomic Draw
+        sys.stdout.write("\033[H" + "\n".join(buffer) + "\n\033[J")
+        sys.stdout.flush()
 
     def run(self):
         """Main installation loop with real-time interruption handling."""
@@ -280,13 +273,16 @@ class InstallScreen(Screen):
                 def live_callback(line):
                     self.add_log(line)
                     self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
-                    self.render()
+                    # Every log line triggers a keyboard poll for instant Q/ESC detection
+                    input_handler()
                 
                 def input_handler():
-                    # select.select is now inside System.run, so this is called when stdin is ready
+                    # Check for keyboard input when select() says stdin is ready
                     key = TUI.get_key()
+                    if key is None: return
+
                     if not self.modal:
-                        if key in [Keys.Q, Keys.ESC]:
+                        if key in [Keys.Q, Keys.Q_UPPER, Keys.ESC]:
                             self.modal = ConfirmModal("STOP INSTALLATION", "Finish current task and stop?")
                     else:
                         res = self.modal.handle_input(key)
@@ -295,6 +291,8 @@ class InstallScreen(Screen):
                             self.modal = None
                         elif res == "NO":
                             self.modal = None
+                    
+                    self.render()
 
                 # Execute with dual monitoring (logs + keyboard)
                 success = func(ovr, callback=live_callback, input_callback=input_handler)
@@ -306,18 +304,31 @@ class InstallScreen(Screen):
                     break
 
         self.is_finished = True
+        # Always force SummaryModal on completion, overwriting any pending ConfirmModal
         self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
         
         while True:
             self.render()
-            key = TUI.get_key()
+            key = TUI.get_key(blocking=True)
+            if key is None: continue
+
             if self.modal:
                 action = self.modal.handle_input(key)
                 if action == "FINISH": return "WELCOME"
                 if action == "CLOSE": self.modal = None
+                if action == "CANCEL" and not self.is_finished:
+                    self.modal = None
+                # If in summary modal and user press Q, let it exit
+                if key in [Keys.Q, Keys.Q_UPPER] and self.is_finished:
+                    sys.exit(0)
             else:
                 if key == Keys.ENTER: return "WELCOME"
-                if key == Keys.Q: sys.exit(0)
+                if key in [Keys.Q, Keys.Q_UPPER]:
+                    if self.is_finished:
+                        sys.exit(0)
+                    else:
+                        self.modal = ConfirmModal("EXIT", "Are you sure you want to exit?")
+                
                 if key == Keys.R:
                     self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
                 

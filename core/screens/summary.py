@@ -152,8 +152,10 @@ class SummaryModal:
 
     def handle_input(self, key):
         """Manages modal navigation and confirmation."""
-        if key == Keys.ESC or key == Keys.Q:
-            return "CLOSE" if self.is_results_mode else "CANCEL"
+        if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
+            if self.is_results_mode:
+                return "CLOSE"
+            return "CANCEL"
             
         if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
