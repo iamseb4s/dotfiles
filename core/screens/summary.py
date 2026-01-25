@@ -87,6 +87,35 @@ class SummaryModal:
                 
         return lines
 
+    def _get_summary_stats(self):
+        """Calculates totals for installed, cancelled and failed modules."""
+        stats = {'installed': 0, 'cancelled': 0, 'failed': 0}
+        if not self.results: return stats
+        
+        for mod in self.active_modules:
+            ovr = self.overrides.get(mod.id, {})
+            res = self.results.get(mod.id, {})
+            
+            do_pkg = ovr.get('install_pkg', True)
+            do_dots = ovr.get('install_dots', True) if mod.stow_pkg else False
+            
+            # Collect results for active sub-tasks only
+            task_results = []
+            if do_pkg: task_results.append(res.get('pkg'))
+            if do_dots: task_results.append(res.get('dots'))
+            
+            if not task_results: continue
+            
+            if any(r is False for r in task_results):
+                stats['failed'] += 1
+            elif all(r is True for r in task_results):
+                stats['installed'] += 1
+            else:
+                # Any other case (all None or mixed True/None) is considered cancelled
+                stats['cancelled'] += 1
+                
+        return stats
+
     def render(self):
         """Draws the modal with tree content and dynamic height."""
         term_width = shutil.get_terminal_size().columns
@@ -124,8 +153,22 @@ class SummaryModal:
             inner_lines.append(f"{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}")
         
         inner_lines.append("") # Spacer
-        footer_msg = "Process finished." if self.is_results_mode else "Confirm and start installation?"
-        inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
+        
+        if self.is_results_mode:
+            stats = self._get_summary_stats()
+            # Colored counts in pastel
+            c_inst = f"{Style.hex('#55E6C1')}{stats['installed']} installed{Style.RESET}"
+            c_can  = f"{Style.hex('#89B4FA')}{stats['cancelled']} cancelled{Style.RESET}"
+            c_fail = f"{Style.hex('#FF6B6B')}{stats['failed']} failed{Style.RESET}"
+            
+            stats_line = f"{c_inst}, {c_can}, {c_fail}"
+            # Centering a string with ANSI codes is tricky, we use visible_len
+            v_len = TUI.visible_len(stats_line)
+            padding = (width - 2 - v_len) // 2
+            inner_lines.append(f"{' ' * padding}{stats_line}")
+        else:
+            footer_msg = "Confirm and start installation?"
+            inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
         
         # Buttons
         if self.is_results_mode:
