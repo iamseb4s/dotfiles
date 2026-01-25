@@ -109,8 +109,8 @@ class TUI:
 
     @staticmethod
     def clear_screen():
-        """Clears the entire terminal window and resets cursor position."""
-        sys.stdout.write("\033[2J\033[H")
+        """Clears the entire terminal window and resets scrollback buffer."""
+        sys.stdout.write("\033[H\033[2J\033[3J")
         sys.stdout.flush()
 
     @staticmethod

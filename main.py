@@ -49,15 +49,21 @@ def main():
                 scr = WelcomeScreen(sys_mgr)
                 scr.render()
                 action = scr.handle_input(TUI.get_key())
-                if action == "MENU": state = "MENU"
+                if action == "MENU": 
+                    TUI.clear_screen()
+                    state = "MENU"
                 if action == "EXIT": sys.exit(0)
                 
             elif state == "MENU":
                 menu_screen.render()
                 action = menu_screen.handle_input(TUI.get_key())
                 if action == "EXIT": sys.exit(0)
-                if action == "BACK": state = "WELCOME"
-                if action == "CONFIRM": state = "INSTALL"
+                if action == "BACK": 
+                    TUI.clear_screen()
+                    state = "WELCOME"
+                if action == "CONFIRM": 
+                    TUI.clear_screen()
+                    state = "INSTALL"
             
             elif state == "INSTALL":
                 # Transfer control to the installation runner
