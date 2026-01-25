@@ -58,8 +58,11 @@ class OverrideModal:
         for mgr in self.managers:
             mark = "●" if self.selected_manager == mgr else "○"
             is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
-            prefix = f"{Style.BOLD}> {Style.RESET}" if is_focused else "  "
-            mgr_styled_items.append(f"{prefix}{mark} {mgr}")
+
+            if is_focused:
+                mgr_styled_items.append(f"{Style.BOLD}> {Style.RESET}{mark} {mgr}")
+            else:
+                mgr_styled_items.append(f"{mark} {mgr}")
         
         mgr_content = "   ".join(mgr_styled_items)
         mgr_v_len = TUI.visible_len(mgr_content)
