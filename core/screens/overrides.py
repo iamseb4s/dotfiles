@@ -20,16 +20,25 @@ class OverrideModal:
         # Resolve available managers
         self.managers = []
         if isinstance(module.manager, dict):
-            # Collect all unique managers mentioned in the dict
-            self.managers = sorted(list(set(module.manager.values())))
+            # 1. Add all managers defined in the module's dictionary
+            self.managers = list(set(module.manager.values()))
         else:
             self.managers = [module.manager]
             
-        default_manager = current_overrides.get('manager', module.get_manager()) if current_overrides else module.get_manager()
-        if isinstance(default_manager, dict):
-            default_manager = module.get_manager()
+        # 2. Always ensure the native system manager is an option
+        native_manager = module.get_manager()
+        if native_manager not in self.managers:
+            self.managers.append(native_manager)
             
-        self.selected_manager = default_manager
+        self.managers.sort()
+            
+        # 3. Resolve current selection (prioritize existing override)
+        if current_overrides and 'manager' in current_overrides:
+            self.selected_manager = current_overrides['manager']
+        else:
+            self.selected_manager = native_manager
+
+
         
         # UI Focus: 0:Package, 1:Manager, 2:Dotfiles, 3:Accept, 4:Cancel
         self.focus_idx = 0
@@ -164,9 +173,12 @@ class OverrideModal:
         # Horizontal Navigation (Strictly for Managers and Buttons)
         elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
             if self.focus_idx == 1: # Managers list
-                curr_idx = self.managers.index(self.selected_manager)
-                step = 1 if key in [Keys.RIGHT, Keys.L] else -1
-                self.selected_manager = self.managers[(curr_idx + step) % len(self.managers)]
+                try:
+                    curr_idx = self.managers.index(self.selected_manager)
+                    step = 1 if key in [Keys.RIGHT, Keys.L] else -1
+                    self.selected_manager = self.managers[(curr_idx + step) % len(self.managers)]
+                except ValueError:
+                    if self.managers: self.selected_manager = self.managers[0]
             elif self.focus_idx in [3, 4]: # Buttons row
                 self.focus_idx = 4 if self.focus_idx == 3 else 3
             
