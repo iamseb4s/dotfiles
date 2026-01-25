@@ -244,7 +244,7 @@ class MenuScreen(Screen):
         
         # Pre-calculate right panel width for text wrapping
         safe_width = term_width - 2
-        split_width = int(safe_width * 0.60)
+        split_width = int(safe_width * 0.50)
         # Margin: split_width(left) + padding(1) + sep(1) + padding(1) + [CONTENT] + padding(1) + scroll(1) + margin(1)
         r_panel_width = safe_width - split_width - 6
         
