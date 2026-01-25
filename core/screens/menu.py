@@ -1,5 +1,6 @@
 import shutil
 import time
+import sys
 from collections import defaultdict
 from core.tui import TUI, Keys, Style
 from core.screens.welcome import Screen
@@ -116,7 +117,6 @@ class MenuScreen(Screen):
 
     def render(self):
         """Draws the menu interface to the terminal."""
-        TUI.clear_screen()
         # Ensure dependencies are up-to-date before drawing
         self._resolve_dependencies()
         self.flat_items = self._build_flat_list()
@@ -154,8 +154,11 @@ class MenuScreen(Screen):
         # Render Bar: [BG_BLUE + BLACK]   TITLE   [RESET]
         header_bar = f"{bg_blue}{text_black}{left_pad}{title_text}{right_pad}{Style.RESET}"
         
-        print("\n" + header_bar + "\n")
-        print(f"  {Style.DIM}Select the packages you wish to install and configure:{Style.RESET}\n")
+        buffer = []
+        buffer.append(header_bar)
+        buffer.append("")
+        buffer.append(f"  {Style.DIM}Select the packages you wish to install and configure:{Style.RESET}")
+        buffer.append("")
 
         # --- RENDER LOGIC (SPLIT VIEW) ---
         list_lines = []
@@ -292,8 +295,6 @@ class MenuScreen(Screen):
             self.info_offset = max(0, len(info_lines) - available_height)
 
         # --- FINAL RENDER (Side-by-side) ---
-        term_height = shutil.get_terminal_size().lines
-        
         if term_width > 100:
             # Leave a safety margin to prevent line wrapping
             safe_width = term_width - 2
@@ -303,43 +304,32 @@ class MenuScreen(Screen):
             visible_list = list_lines[self.list_offset : self.list_offset + available_height]
             visible_info = info_lines[self.info_offset : self.info_offset + available_height]
             
-            max_rows = max(len(visible_list), len(visible_info))
-            
-            # Prepare modal data if active
-            modal_lines, m_y, m_x = (None, 0, 0)
-            if self.modal:
-                modal_lines, m_y, m_x = self.modal.render()
-
             for i in range(available_height):
                 bg_line = self._build_bg_line(i, visible_list, visible_info, available_height, split_width, safe_width, list_lines, info_lines)
                 
                 if self.modal:
                     m_lines, m_y, m_x = self.modal.render()
-                    # Calculate current absolute line in the terminal
-                    # Offset accounts for Header (1), Subtitle (2) and Spacers
                     terminal_line = i + 6 
-                    
                     if m_y <= terminal_line < (m_y + len(m_lines)):
                         m_idx = terminal_line - m_y
                         modal_line = m_lines[m_idx]
                         bg_line = self._overlay_string(bg_line, modal_line, m_x)
                 
-                print(bg_line)
+                buffer.append(bg_line)
         else:
             # Fallback to simple list for narrow terminals
             visible_list = list_lines[self.list_offset : self.list_offset + available_height]
             for line in visible_list:
-                print(line)
+                buffer.append(line)
             # Fill remaining to keep footer stable
             for _ in range(available_height - len(visible_list)):
-                print()
+                buffer.append("")
 
         # --- FOOTER (Pills) ---
-        print()
-        
-        # Status Line
+        buffer.append("")
         total_active = len(self.selected.union(self.auto_locked))
-        status_text = f"  Selected: {total_active} packages"
+        buffer.append(f"  Selected: {total_active} packages")
+        buffer.append("")
         
         # Footer Content
         f_move   = TUI.pill("↑/↓/k/j", "Move", "81ECEC") # Cyan
@@ -350,24 +340,19 @@ class MenuScreen(Screen):
         f_back   = TUI.pill("R", "Back", "f9e2af")       # Yellow
         f_quit   = TUI.pill("Q", "Exit", "f38ba8")       # Red
         
-        # Center the footer pills
         pills_line = f"{f_move}    {f_scroll}    {f_space}    {f_tab}    {f_enter}    {f_back}    {f_quit}"
         p_padding = (term_width - TUI.visible_len(pills_line)) // 2
         p_padding = max(0, p_padding)
-        
-        print(f"{status_text}\n")
-        
-        # User interface command hints
-        print(f"{' ' * p_padding}{pills_line}")
-
-        # Render active modal as an overlay
-        if self.modal:
-            # Modal drawing is handled within the viewport loop
-            pass
+        buffer.append(f"{' ' * p_padding}{pills_line}")
 
         # Display exit confirmation message
         if self.exit_pending:
-            print(f"\n  {Style.hex('FF6B6B')}Press ESC again to exit...{Style.RESET}")
+            buffer.append(f"  {Style.hex('FF6B6B')}Press ESC again to exit...{Style.RESET}")
+
+        # Atomic Draw
+        sys.stdout.write("\033[H" + "\n".join(buffer) + "\n\033[J")
+        sys.stdout.flush()
+
 
     def toggle_selection(self, item):
         """Handles item selection and group toggling."""
@@ -404,7 +389,7 @@ class MenuScreen(Screen):
         """Processes keyboard input and returns navigation actions."""
         # Global Exit Keys (Priority when no modal is blocking)
         if not self.modal:
-            if key == Keys.Q:
+            if key in [Keys.Q, Keys.Q_UPPER]:
                 return "EXIT"
                 
             # Double ESC safety mechanism
