@@ -96,6 +96,10 @@ class SummaryModal:
         width = 64
         title = "INSTALLATION RESULTS" if self.is_results_mode else "INSTALLATION SUMMARY"
         
+        # Adjust max visible rows based on terminal height
+        self.max_visible_rows = min(15, term_height - 10)
+        content_rows = min(len(self.content_lines), self.max_visible_rows)
+        
         # 2. Build Inner Content
         inner_lines = []
         inner_lines.append("") # Top spacer
@@ -108,18 +112,18 @@ class SummaryModal:
             color = item['color']
             inner_lines.append(f"  {color}{text}{Style.RESET}")
             
-        # Fill empty space if content is shorter than max rows
-        for _ in range(self.max_visible_rows - len(visible_content)):
-            inner_lines.append("")
+        # Fill empty space
+        if len(self.content_lines) > self.max_visible_rows:
+            for _ in range(self.max_visible_rows - len(visible_content)):
+                inner_lines.append("")
 
         # Scroll indicator line (internal)
         if len(self.content_lines) > self.max_visible_rows:
             remaining = len(self.content_lines) - self.max_visible_rows - self.scroll_offset
             scroll_text = f"--- {max(0, remaining)} more entries ---" if remaining > 0 else "--- End of list ---"
             inner_lines.append(f"{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}")
-        else:
-            inner_lines.append("")
-            
+        
+        inner_lines.append("") # Spacer
         footer_msg = "Process finished." if self.is_results_mode else "Confirm and start installation?"
         inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
         
@@ -141,8 +145,6 @@ class SummaryModal:
         scroll_pos = None
         scroll_size = None
         if len(self.content_lines) > self.max_visible_rows:
-            # Scroll thumb size relative to the content area (max_visible_rows)
-            # We offset the position by 1 because of the top spacer in inner_lines
             thumb_size = max(1, int(self.max_visible_rows**2 / len(self.content_lines)))
             prog = self.scroll_offset / (len(self.content_lines) - self.max_visible_rows)
             scroll_pos = 1 + int(prog * (self.max_visible_rows - thumb_size))
