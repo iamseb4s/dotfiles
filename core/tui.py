@@ -31,6 +31,7 @@ class Keys:
     Q = 113 # q
     Q_UPPER = 81 # Q
     R = 114 # Refresh/Back
+    RESIZE = -2 # Virtual key for terminal resize
 
 class Style:
     """ANSI TrueColor and text attribute escape sequences."""
@@ -60,6 +61,23 @@ class TUI:
     """
     _old_settings = None
     _raw_ref_count = 0
+    _resize_pending = False
+
+    @staticmethod
+    def init_signal_handler():
+        """Initializes SIGWINCH handler for terminal resizing."""
+        import signal
+        def handler(sig, frame):
+            TUI._resize_pending = True
+        signal.signal(signal.SIGWINCH, handler)
+
+    @staticmethod
+    def is_resize_pending():
+        """Checks and resets the resize pending flag."""
+        if TUI._resize_pending:
+            TUI._resize_pending = False
+            return True
+        return False
 
     @staticmethod
     def set_raw_mode(enable=True):
@@ -99,19 +117,35 @@ class TUI:
                 TUI._old_settings = None
 
     @staticmethod
-    def get_key(blocking=False):
+    def get_key(blocking=False, timeout=None):
         """Captures a single keypress, handling multi-byte escape sequences."""
         if not sys.stdin.isatty():
             return None
             
+        # Immediate check for resize signal
+        if TUI._resize_pending:
+            TUI._resize_pending = False
+            return Keys.RESIZE
+
         fd = sys.stdin.fileno()
         
-        # If not blocking, check if there is data to read
-        if not blocking:
-            import select
-            r, _, _ = select.select([fd], [], [], 0)
+        # Determine the correct timeout for select
+        # - If blocking with no timeout: 0.1s (to allow signal handling)
+        # - If not blocking: 0 (immediate poll)
+        # - Otherwise: use provided timeout
+        if timeout is not None:
+            actual_timeout = timeout
+        else:
+            actual_timeout = 0.1 if blocking else 0
+            
+        import select
+        try:
+            r, _, _ = select.select([fd], [], [], actual_timeout)
             if not r:
                 return None
+        except (select.error, InterruptedError):
+            # This happens on SIGWINCH or other signals
+            return Keys.RESIZE
 
         # If we are NOT in global raw mode, we MUST toggle it for this read
         # to ensure ECHO is off and ICANON is off.

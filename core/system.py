@@ -69,7 +69,12 @@ class System:
                         finished = process.poll() is not None
                         
                         # Monitor process and keyboard via select
-                        readable, _, _ = select.select([process.stdout, sys.stdin], [], [], 0.02)
+                        try:
+                            readable, _, _ = select.select([process.stdout, sys.stdin], [], [], 0.02)
+                        except (select.error, InterruptedError):
+                            # Handle terminal resize (SIGWINCH) or other interrupts
+                            if input_callback: input_callback()
+                            continue
                         
                         for source in readable:
                             if source == process.stdout and process.stdout:

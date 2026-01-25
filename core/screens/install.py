@@ -280,6 +280,11 @@ class InstallScreen(Screen):
                     # Check for keyboard input when select() says stdin is ready
                     key = TUI.get_key()
                     if key is None: return
+                    
+                    if key == Keys.RESIZE:
+                        TUI.clear_screen()
+                        self.render()
+                        return
 
                     if not self.modal:
                         if key in [Keys.Q, Keys.Q_UPPER, Keys.ESC]:
@@ -311,6 +316,10 @@ class InstallScreen(Screen):
             self.render()
             key = TUI.get_key(blocking=True)
             if key is None: continue
+            
+            if key == Keys.RESIZE:
+                TUI.clear_screen()
+                continue
 
             if self.modal:
                 action = self.modal.handle_input(key)
