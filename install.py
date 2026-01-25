@@ -125,6 +125,7 @@ class MenuScreen:
             # --- RENDER MODULE ---
             elif item['type'] == 'module':
                 mod = item['obj']
+                installed = mod.is_installed()
                 
                 # Determine visual state
                 if mod.id in self.auto_locked:
@@ -135,6 +136,10 @@ class MenuScreen:
                     mark = "[■]"        # User selected
                     color = Style.hex("55E6C1") # Pastel Green
                     suffix = ""
+                elif installed:
+                    mark = "[ ]"        # Not selected but installed
+                    color = Style.hex("89B4FA") # Pastel Blue
+                    suffix = " ●"       # Installed indicator
                 else:
                     mark = "[ ]"
                     color = ""
