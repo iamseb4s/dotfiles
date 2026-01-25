@@ -4,20 +4,23 @@ import os
 
 class Module:
     """
-    Base class for all modules. Designed to be data-driven.
+    Base class for all installation modules.
     """
-    # Override these in child classes
+    # Unique identifier
     id = None
+    # User-facing label
     label = None
+    # Functional description
     description = ""
     category = "Uncategorized"
     dependencies = []
     
-    # Package Management: 'system', 'cargo', 'bob', 'brew', 'git', 'wget'
+    # Supported drivers: 'system', 'cargo', 'bob', 'brew', 'git', 'wget'
     manager = "system"
+    # Mapping for OS-specific package names
     package_name = None 
     
-    # Dotfiles Configuration
+    # Stow configuration
     stow_pkg = None      
     stow_target = None   
 
@@ -32,10 +35,10 @@ class Module:
         return self.package_name or self.id
 
     def is_installed(self):
-        """Generic installation check."""
+        """Detection logic based on the package manager type."""
         pkg = self.get_package_name()
         if self.manager == "system":
-            return shutil.which(pkg) is not None
+            return shutil.which(pkg or "") is not None
         elif self.manager == "cargo":
             return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif self.manager == "brew":
@@ -76,3 +79,46 @@ class Module:
         except Exception as e:
             print(f"[{self.id}] Error: {e}")
             return False
+
+    def get_config_tree(self):
+        """
+        Recursively scans the dotfiles source directory to generate 
+        a visual file tree.
+        """
+        if not self.stow_pkg:
+            return []
+            
+        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
+        if not os.path.exists(pkg_path):
+            return [f"No source files found in dots/{self.stow_pkg}"]
+            
+        tree = []
+        target = self.stow_target or "~/"
+        tree.append(f"Target: {target}")
+        tree.append("")
+        
+        def scan(path, prefix="", depth=0):
+            # Enforce depth limit for UI stability
+            if not os.path.isdir(path) or depth > 2:
+                if depth > 2:
+                    tree.append(f"{prefix}└── ...")
+                return
+            try:
+                entries = sorted(os.listdir(path))
+            except PermissionError:
+                tree.append(f"{prefix}└── [Permission Denied]")
+                return
+
+            for i, entry in enumerate(entries):
+                is_last = (i == len(entries) - 1)
+                full_path = os.path.join(path, entry)
+                
+                connector = "└── " if is_last else "├── "
+                tree.append(f"{prefix}{connector}{entry}")
+                
+                if os.path.isdir(full_path):
+                    new_prefix = prefix + ("    " if is_last else "│   ")
+                    scan(full_path, new_prefix, depth + 1)
+                    
+        scan(pkg_path)
+        return tree

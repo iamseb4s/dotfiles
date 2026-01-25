@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import shutil
 import importlib
 import time
 from collections import defaultdict
@@ -35,6 +36,8 @@ class MenuScreen:
         self.auto_locked = set()   # Modules forced by dependencies (read-only in UI)
         
         self.cursor_idx = 0
+        self.list_offset = 0       # Automatic scroll for the list
+        self.info_offset = 0       # Manual scroll for the info panel
         self.flat_items = [] 
         self.exit_pending = False
         self.last_esc_time = 0
@@ -82,18 +85,45 @@ class MenuScreen:
         if self.cursor_idx >= len(self.flat_items):
             self.cursor_idx = len(self.flat_items) - 1
 
-        print("\n                INSTALLATION MENU")
-        print("  " + "="*45)
-        print("  [↑/↓/k/j]: Move     [ TAB ]: Expand/Collapse")
-        print("  [   R   ]: Back     [  Q  ]: Exit")
-        print("  [ SPACE ]: Select   [ENTER]: Install")
-        print("  " + "="*45 + "\n")
+        # Viewport logic for vertical scrolling
+        term_height = shutil.get_terminal_size().lines
+        # Layout reservation: header, status, footer and margin
+        available_height = term_height - 9
+        available_height = max(1, available_height)
 
+
+        # Automatic list scroll: keep cursor within visible range
+        if self.cursor_idx < self.list_offset:
+            self.list_offset = self.cursor_idx
+        elif self.cursor_idx >= self.list_offset + available_height:
+            self.list_offset = self.cursor_idx - available_height + 1
+
+        # --- MODERN HEADER ---
+        term_width = shutil.get_terminal_size().columns
+        title_text = " PACKAGES SELECTOR "
+        
+        # Colors
+        bg_blue = Style.hex("89B4FA", bg=True)
+        text_black = "\033[30m"
+        
+        # Centering logic for title
+        padding = (term_width - len(title_text)) // 2
+        padding = max(0, padding)
+        left_pad = " " * padding
+        right_pad = " " * (term_width - padding - len(title_text))
+        
+        header_bar = f"{bg_blue}{text_black}{left_pad}{title_text}{right_pad}{Style.RESET}"
+        
+        print("\n" + header_bar + "\n")
+        print(f"  {Style.DIM}Select the packages you wish to install and configure:{Style.RESET}\n")
+
+        # --- RENDER LOGIC (SPLIT VIEW) ---
+        list_lines = []
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
             cursor_char = ">" if is_cursor else " "
             
-            # --- RENDER HEADER ---
+            # --- RENDER HEADER (CATEGORY) ---
             if item['type'] == 'header':
                 cat_name = item['obj']
                 icon = "▼" if self.expanded[cat_name] else "►"
@@ -112,22 +142,23 @@ class MenuScreen:
                     sel_mark = "[-]" # Partial selection
                     header_color = Style.hex("FDCB6E") # Pastel Yellow (Partial)
                 
-                line = f"{cursor_char} {icon} {sel_mark} {cat_name.upper()}"
+                # Header line with 2-space global margin
+                line = f"  {cursor_char} {icon} {sel_mark} {cat_name.upper()}"
                 
-                # Header styling logic
+                # Draw category headers with status indicators
                 if is_cursor:
-                    # Cursor: Bold + Inverted (Clean highlight, no state color)
-                    sys.stdout.write(f"{Style.BOLD}{Style.INVERT}{line}{Style.RESET}\n")
+                    # Cursor highlight: Bold + Inverted
+                    list_lines.append(f"{Style.BOLD}{Style.INVERT}{line}   {Style.RESET}")
                 else:
-                    # Normal: Bold + State Color
-                    sys.stdout.write(f"{Style.BOLD}{header_color}{line}{Style.RESET}\n")
+                    # Selection state color
+                    list_lines.append(f"{Style.BOLD}{header_color}{line}{Style.RESET}")
 
-            # --- RENDER MODULE ---
+            # --- RENDER MODULE (PACKAGE) ---
             elif item['type'] == 'module':
                 mod = item['obj']
                 installed = mod.is_installed()
                 
-                # Determine visual state
+                # Determine visual state based on selection and installation
                 if mod.id in self.auto_locked:
                     mark = "[■]"        # Locked by dependency
                     color = Style.hex("FF6B6B")  # Pastel Red
@@ -145,29 +176,164 @@ class MenuScreen:
                     color = ""
                     suffix = ""
                 
-                line = f"{cursor_char}     {mark} {mod.label}{suffix}"
+                # Tree structure for package listing
+                hierarchy_icon = "│"
+                line = f"  {cursor_char} {hierarchy_icon}     {mark} {mod.label}{suffix}"
                 
                 if is_cursor:
-                    sys.stdout.write(f"{Style.INVERT}{line}{Style.RESET}\n")
+                    # Cursor highlight: Inverted
+                    list_lines.append(f"{Style.INVERT}{line}   {Style.RESET}")
                 else:
-                    sys.stdout.write(f"{color}{line}{Style.RESET}\n")
+                    # Normal mode: Dim hierarchy icon, color package label
+                    styled_line = f"  {cursor_char} {Style.DIM}{hierarchy_icon}{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}"
+                    list_lines.append(styled_line)
+
+        # --- INFO PANEL (RIGHT COLUMN) ---
+        info_lines = []
+        current_item = self.flat_items[self.cursor_idx]
         
-        # Footer information
-        print("\n  " + "-"*45)
+        if current_item['type'] == 'module':
+            mod = current_item['obj']
+            # Header
+            is_installed = mod.is_installed()
+            status_str = "Installed" if is_installed else "Not Installed"
+            status_icon = "●" if is_installed else "○"
+            status_color = Style.hex("#89B4FA") if is_installed else ""
+            
+            info_lines.append(f"{Style.BOLD}{Style.hex('#89B4FA')}{mod.label.upper()}{Style.RESET}")
+            if mod.description:
+                # Wrap description if too long? For now keep it simple
+                info_lines.append(f"{Style.DIM}{mod.description}{Style.RESET}")
+            info_lines.append("")
+            info_lines.append(f"{Style.BOLD}Status:  {status_color}{status_icon} {status_str}{Style.RESET}")
+            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{mod.manager}")
+            
+            # Config Tree
+            tree = mod.get_config_tree()
+            if tree:
+                info_lines.append("")
+                info_lines.append(f"{Style.BOLD}CONFIG TREE:{Style.RESET}")
+                info_lines.extend([f"  {l}" for l in tree])
+        else:
+            cat_name = current_item['obj']
+            info_lines.append(f"{Style.BOLD}{Style.hex('#FDCB6E')}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"{Style.DIM}Packages in this group:{Style.RESET}")
+            info_lines.append("")
+            for m in self.categories[cat_name]:
+                mark = "●" if m.is_installed() else "○"
+                info_lines.append(f"  {mark} {m.label}")
+
+        # Bound check info_offset after possible change
+        if self.info_offset > max(0, len(info_lines) - available_height):
+            self.info_offset = max(0, len(info_lines) - available_height)
+
+        # --- FINAL RENDER (Side-by-side) ---
+        if term_width > 100:
+            # Leave a safety margin to prevent line wrapping
+            safe_width = term_width - 2
+            split_width = int(safe_width * 0.60)
+            
+            # Slicing viewports for list and info
+            visible_list = list_lines[self.list_offset : self.list_offset + available_height]
+            visible_info = info_lines[self.info_offset : self.info_offset + available_height]
+            
+            max_rows = max(len(visible_list), len(visible_info))
+            
+            for i in range(max_rows):
+                # Get current lines or empty strings
+                left = visible_list[i] if i < len(visible_list) else ""
+                right = visible_info[i] if i < len(visible_info) else ""
+                
+                # --- LEFT COLUMN (List) ---
+                l_len = TUI.visible_len(left)
+                l_padding = " " * (split_width - 2 - l_len)
+                
+                # Scrollbar Left (List) with proportional indicator
+                if len(list_lines) > available_height:
+                    max_l_off = len(list_lines) - available_height
+                    l_prog = self.list_offset / max_l_off
+                    l_indicator_pos = int(l_prog * (available_height - 1))
+                    scroll_l = f"{Style.hex('#89B4FA')}┃{Style.RESET}" if i == l_indicator_pos else f"{Style.DIM}│{Style.RESET}"
+                else:
+                    scroll_l = " "
+
+                # Central Separator
+                central_sep = f"{Style.DIM}│{Style.RESET}"
+                
+                # --- RIGHT COLUMN (Info) ---
+                # Calculate remaining width for info text, leaving 2 spaces for scrollbar
+                r_content_width = safe_width - split_width - 4
+                r_len = TUI.visible_len(right)
+                r_padding = " " * max(0, r_content_width - 2 - r_len)
+                
+                # Scrollbar Right (Info) with proportional indicator
+                if len(info_lines) > available_height:
+                    max_r_off = len(info_lines) - available_height
+                    r_prog = self.info_offset / max_r_off
+                    r_indicator_pos = int(r_prog * (available_height - 1))
+                    scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}" if i == r_indicator_pos else f"{Style.DIM}│{Style.RESET}"
+                else:
+                    scroll_r = " "
+
+                # Final Row Construction
+                print(f"{left}{l_padding} {scroll_l} {central_sep} {right}{r_padding} {scroll_r}")
+            
+            # Fill remaining height
+            remaining = available_height - max_rows
+            for _ in range(remaining):
+                s_l = f"{Style.DIM}│{Style.RESET}" if len(list_lines) > available_height else " "
+                s_r = f"{Style.DIM}│{Style.RESET}" if len(info_lines) > available_height else " "
+                empty_l = " " * (split_width - 2)
+                empty_r = " " * (safe_width - split_width - 4 - 2)
+                print(f"{empty_l} {s_l} {Style.DIM}│{Style.RESET} {empty_r}  {s_r}")
+        else:
+            # Fallback to simple list for narrow terminals
+            visible_list = list_lines[self.list_offset : self.list_offset + available_height]
+            for line in visible_list:
+                print(line)
+            # Fill remaining to keep footer stable
+            for _ in range(available_height - len(visible_list)):
+                print()
+
+        # --- FOOTER (Pills) ---
+        print()
+        
+        # Status Line
         total_active = len(self.selected.union(self.auto_locked))
-        print(f"  Selected: {total_active} packages")
+        status_text = f"  Selected: {total_active} packages"
+        
+        # Footer Content
+        f_move   = TUI.pill("↑/↓/k/j", "Move", "81ECEC") # Cyan
+        f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", "89B4FA") # Blue
+        f_space  = TUI.pill("SPACE", "Select", "89B4FA") # Blue
+        f_tab    = TUI.pill("TAB", "Group", "CBA6F7")    # Mauve
+        f_enter  = TUI.pill("ENTER", "Install", "a6e3a1")# Green
+        f_back   = TUI.pill("R", "Back", "f9e2af")       # Yellow
+        f_quit   = TUI.pill("Q", "Exit", "f38ba8")       # Red
+        
+        # Center the footer pills
+        pills_line = f"{f_move}    {f_scroll}    {f_space}    {f_tab}    {f_enter}    {f_back}    {f_quit}"
+        p_padding = (term_width - TUI.visible_len(pills_line)) // 2
+        p_padding = max(0, p_padding)
+        
+        print(f"{status_text}\n")
+        
+        # User interface command hints
+        print(f"{' ' * p_padding}{pills_line}")
+
+
         
         if self.exit_pending:
             print(f"\n  {Style.hex('FF5555')}Press ESC again to exit...{Style.RESET}")
 
     def toggle_selection(self, item):
-        """Handles spacebar logic for toggling items/groups."""
+        """Handles item selection and group toggling."""
         self._resolve_dependencies()
         
         if item['type'] == 'module':
             mod_id = item['obj'].id
             
-            # Cannot manually toggle if locked by dependency
+            # Prevent manual toggle if locked by dependency
             if mod_id in self.auto_locked:
                 return 
 
@@ -180,7 +346,7 @@ class MenuScreen:
             cat = item['obj']
             mods = self.categories[cat]
             
-            # Check if group is effectively fully active
+            # Toggle group state
             all_active = all(self.is_active(m.id) for m in mods)
             
             if all_active:
@@ -194,7 +360,7 @@ class MenuScreen:
                         self.selected.add(m.id)
 
     def handle_input(self, key):
-        """Processes keyboard events and returns action codes."""
+        """Processes keyboard input and returns navigation actions."""
         self.flat_items = self._build_flat_list() 
         
         # Double ESC safety mechanism
@@ -215,12 +381,28 @@ class MenuScreen:
         if key == Keys.R or key == Keys.BACKSPACE:
             return "BACK"
 
-        # Navigation
-        if key in [Keys.UP, Keys.K] or key == 65: 
+        # List Quick Scroll (Ctrl+k / Ctrl+j)
+        if key == Keys.CTRL_K:
+            self.cursor_idx = max(0, self.cursor_idx - 5)
+            self.info_offset = 0
+        elif key == Keys.CTRL_J:
+            self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 5)
+            self.info_offset = 0
+
+        # Info Panel Scroll (PgUp / PgDn)
+        elif key == Keys.PGUP:
+            self.info_offset = max(0, self.info_offset - 3)
+        elif key == Keys.PGDN:
+            self.info_offset += 3
+
+        # Standard Navigation
+        elif key in [Keys.UP, Keys.K] or key == 65: 
             self.cursor_idx = max(0, self.cursor_idx - 1)
+            self.info_offset = 0
         
         elif key in [Keys.DOWN, Keys.J] or key == 66: 
             self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 1)
+            self.info_offset = 0
             
         elif key == Keys.SPACE:
             self.toggle_selection(self.flat_items[self.cursor_idx])
@@ -241,9 +423,7 @@ class MenuScreen:
                  self.expanded[current['obj']] = True
         
         elif key == Keys.ENTER:
-            # Check if there is anything to install (User Selected + Auto Locked)
             if len(self.selected.union(self.auto_locked)) > 0:
-                # Merge locked dependencies into the final selection set
                 self.selected.update(self.auto_locked)
                 return "CONFIRM"
         
@@ -293,9 +473,10 @@ class InstallScreen:
             except Exception as e:
                 self.logs.append(f"EXCEPTION: {e}")
                 
-            time.sleep(0.5) # Fake delay for UX (remove in production if slow)
+            # Controlled pause for visual feedback
+            time.sleep(0.5)
         
-        # Final Screen
+        # Final summary screen
         TUI.clear_screen()
         print("\n  INSTALLATION COMPLETE")
         print("  " + "="*30)
@@ -362,11 +543,13 @@ def main():
                 if action == "CONFIRM": state = "INSTALL"
             
             elif state == "INSTALL":
-                # Pass control to Install Runner
+                # Final execution of selected installation routines
                 installer = InstallScreen(modules, menu_screen.selected)
                 installer.run()
                 sys.exit(0)
     finally:
+        # Restore terminal state on exit
+        TUI.clear_screen()
         TUI.show_cursor()
 
 if __name__ == "__main__":
