@@ -295,6 +295,8 @@ class MenuScreen(Screen):
 
             if mod_id in self.selected:
                 self.selected.remove(mod_id)
+                # Clear overrides when manually deselecting
+                self.overrides.pop(mod_id, None)
             else:
                 self.selected.add(mod_id)
                 
@@ -307,7 +309,10 @@ class MenuScreen(Screen):
             
             if all_active:
                 for m in mods: 
-                    if m.id in self.selected: self.selected.remove(m.id)
+                    if m.id in self.selected: 
+                        self.selected.remove(m.id)
+                        # Clear overrides when mass-deselecting
+                        self.overrides.pop(m.id, None)
             else:
                 for m in mods: 
                     if m.id not in self.auto_locked:
