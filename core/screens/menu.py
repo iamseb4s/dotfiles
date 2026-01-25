@@ -1,19 +1,10 @@
-#!/usr/bin/env python3
-import sys
-import os
 import shutil
-import importlib
 import time
 from collections import defaultdict
+from core.tui import TUI, Keys, Style
+from core.screens.welcome import Screen
 
-# Ensure we can import from local directories
-sys.path.append(os.getcwd())
-
-from core.system import System
-from core.tui import TUI, Keys, WelcomeScreen, Style
-
-# --- MENU SCREEN IMPLEMENTATION ---
-class MenuScreen:
+class MenuScreen(Screen):
     """
     Manages the interactive selection menu, including category grouping,
     dependency resolution, and rendering state.
@@ -90,7 +81,6 @@ class MenuScreen:
         # Layout reservation: header, status, footer and margin
         available_height = term_height - 9
         available_height = max(1, available_height)
-
 
         # Automatic list scroll: keep cursor within visible range
         if self.cursor_idx < self.list_offset:
@@ -181,7 +171,7 @@ class MenuScreen:
                 line = f"  {cursor_char} {hierarchy_icon}     {mark} {mod.label}{suffix}"
                 
                 if is_cursor:
-                    # Cursor highlight: Inverted
+                    # Cursor highlight: Invert whole line for better feedback
                     list_lines.append(f"{Style.INVERT}{line}   {Style.RESET}")
                 else:
                     # Normal mode: Dim hierarchy icon, color package label
@@ -202,7 +192,6 @@ class MenuScreen:
             
             info_lines.append(f"{Style.BOLD}{Style.hex('#89B4FA')}{mod.label.upper()}{Style.RESET}")
             if mod.description:
-                # Wrap description if too long? For now keep it simple
                 info_lines.append(f"{Style.DIM}{mod.description}{Style.RESET}")
             info_lines.append("")
             info_lines.append(f"{Style.BOLD}Status:  {status_color}{status_icon} {status_str}{Style.RESET}")
@@ -321,8 +310,6 @@ class MenuScreen:
         # User interface command hints
         print(f"{' ' * p_padding}{pills_line}")
 
-
-        
         if self.exit_pending:
             print(f"\n  {Style.hex('FF5555')}Press ESC again to exit...{Style.RESET}")
 
@@ -350,11 +337,9 @@ class MenuScreen:
             all_active = all(self.is_active(m.id) for m in mods)
             
             if all_active:
-                # Deselect all user choices in this category
                 for m in mods: 
                     if m.id in self.selected: self.selected.remove(m.id)
             else:
-                # Select all (skipping those already locked)
                 for m in mods: 
                     if m.id not in self.auto_locked:
                         self.selected.add(m.id)
@@ -381,7 +366,7 @@ class MenuScreen:
         if key == Keys.R or key == Keys.BACKSPACE:
             return "BACK"
 
-        # List Quick Scroll (Ctrl+k / Ctrl+j)
+        # List Quick Navigation
         if key == Keys.CTRL_K:
             self.cursor_idx = max(0, self.cursor_idx - 5)
             self.info_offset = 0
@@ -389,7 +374,7 @@ class MenuScreen:
             self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 5)
             self.info_offset = 0
 
-        # Info Panel Scroll (PgUp / PgDn)
+        # Detail Panel Scroll
         elif key == Keys.PGUP:
             self.info_offset = max(0, self.info_offset - 3)
         elif key == Keys.PGDN:
@@ -428,129 +413,3 @@ class MenuScreen:
                 return "CONFIRM"
         
         return None
-
-# --- INSTALL SCREEN ---
-class InstallScreen:
-    def __init__(self, modules, selected_ids):
-        self.queue = [m for m in modules if m.id in selected_ids]
-        self.total = len(self.queue)
-        self.current = 0
-        self.logs = []
-    
-    def render_progress(self, current_pkg_name):
-        TUI.clear_screen()
-        percent = int((self.current / self.total) * 100)
-        bar_len = 30
-        filled = int(bar_len * percent / 100)
-        bar = "█" * filled + "░" * (bar_len - filled)
-        
-        print("\n  INSTALLATION IN PROGRESS")
-        print(f"  [{bar}] {percent}%")
-        print(f"  Processing: {current_pkg_name}\n")
-        
-        print("  LOGS:")
-        print("  " + "-"*40)
-        # Show last 10 log lines
-        for log in self.logs[-10:]:
-            print(f"  > {log}")
-            
-    def run(self):
-        for mod in self.queue:
-            self.current += 1
-            self.render_progress(mod.label)
-            
-            # TODO: Redirect stdout capture so we can show logs in UI
-            # For now we just append start/end messages
-            self.logs.append(f"Installing {mod.id}...")
-            
-            try:
-                if mod.install():
-                    self.logs.append(f"{mod.id} installed.")
-                    mod.configure()
-                    self.logs.append(f"{mod.id} configured.")
-                else:
-                    self.logs.append(f"ERROR: {mod.id} installation failed.")
-            except Exception as e:
-                self.logs.append(f"EXCEPTION: {e}")
-                
-            # Controlled pause for visual feedback
-            time.sleep(0.5)
-        
-        # Final summary screen
-        TUI.clear_screen()
-        print("\n  INSTALLATION COMPLETE")
-        print("  " + "="*30)
-        for log in self.logs:
-             # Basic color highlighting
-             if "ERROR" in log or "EXCEPTION" in log:
-                 print(f"  {Style.hex('FF5555')}{log}{Style.RESET}")
-             else:
-                 print(f"  {log}")
-        print("\n  Press ANY KEY to exit.")
-        TUI.get_key()
-
-
-# --- MAIN APP LOADER ---
-def load_modules(sys_manager):
-    """Dynamically load modules from the modules/ directory."""
-    modules = []
-    modules_dir = os.path.join(os.getcwd(), "modules")
-    for filename in os.listdir(modules_dir):
-        if filename.endswith(".py") and filename not in ["__init__.py", "base.py"]:
-            module_name = filename[:-3]
-            try:
-                # Import module
-                mod = importlib.import_module(f"modules.{module_name}")
-                
-                # Find class inheriting from Module
-                # We assume the class name usually matches the file (e.g. RefindModule)
-                # or just inspect all attributes.
-                for attr_name in dir(mod):
-                    attr = getattr(mod, attr_name)
-                    # Check if it's a class, inherits from Module, and is not Module itself
-                    if isinstance(attr, type) and attr.__name__.endswith("Module") and attr.__name__ != "Module":
-                        instance = attr(sys_manager)
-                        modules.append(instance)
-                        break
-            except Exception as e:
-                print(f"Failed to load module {filename}: {e}")
-                
-    return modules
-
-def main():
-    try:
-        TUI.hide_cursor()
-        sys_mgr = System()
-        modules = load_modules(sys_mgr)
-        
-        # State Machine
-        state = "WELCOME"
-        menu_screen = MenuScreen(modules)
-        
-        while True:
-            if state == "WELCOME":
-                scr = WelcomeScreen(sys_mgr)
-                scr.render()
-                action = scr.handle_input(TUI.get_key())
-                if action == "MENU": state = "MENU"
-                if action == "EXIT": sys.exit(0)
-                
-            elif state == "MENU":
-                menu_screen.render()
-                action = menu_screen.handle_input(TUI.get_key())
-                if action == "EXIT": sys.exit(0)
-                if action == "BACK": state = "WELCOME"
-                if action == "CONFIRM": state = "INSTALL"
-            
-            elif state == "INSTALL":
-                # Final execution of selected installation routines
-                installer = InstallScreen(modules, menu_screen.selected)
-                installer.run()
-                sys.exit(0)
-    finally:
-        # Restore terminal state on exit
-        TUI.clear_screen()
-        TUI.show_cursor()
-
-if __name__ == "__main__":
-    main()

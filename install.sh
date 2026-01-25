@@ -49,4 +49,4 @@ fi
 
 # Launch the main Python installer
 info "Launching installer..."
-python3 install.py "$@"
+python3 main.py "$@"
