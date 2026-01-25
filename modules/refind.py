@@ -9,12 +9,18 @@ class RefindModule(Module):
     category = "System Core"
     manager = "system"
     package_name = "refind gdisk"
+    
+    # Package metadata
+    stow_pkg = "refind"
+    stow_target = "/boot/EFI/refind"
 
     def is_installed(self):
+        """Checks for rEFInd configuration in the EFI partition."""
         return os.path.exists("/boot/EFI/refind/refind.conf")
 
     def configure(self):
-        print("[refind] Custom configuration...")
+        """Performs custom rEFInd deployment, including theme installation and PARTUUID resolution."""
+        print("[refind] Executing custom configuration sequence...")
         repo_root = os.getcwd()
         theme_source = os.path.join(repo_root, "dots", "refind", "themes")
         conf_template = os.path.join(repo_root, "dots", "refind", "refind.conf")
@@ -22,11 +28,11 @@ class RefindModule(Module):
         theme_dest = os.path.join(efi_base, "themes")
         conf_dest = os.path.join(efi_base, "refind.conf")
 
-        # 1. Run refind-install if folder doesn't exist
+        # Core installation via system tools
         if not os.path.exists(efi_base):
             self.sys.run("refind-install", needs_root=True)
 
-        # 2. Generate and Move Config
+        # Config generation and deployment
         try:
             root_dev = subprocess.check_output("findmnt -n -o SOURCE /", shell=True, text=True).strip()
             root_partuuid = subprocess.check_output(f"lsblk -no PARTUUID {root_dev}", shell=True, text=True).strip()
