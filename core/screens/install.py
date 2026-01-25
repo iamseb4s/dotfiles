@@ -71,6 +71,8 @@ class InstallScreen(Screen):
         self.status = {}  # {mod_id: {'pkg': 'pending', 'dots': 'pending'}}
         for m in self.queue:
             self.status[m.id] = {'pkg': 'pending', 'dots': 'pending'}
+            # Initialize results as None (not attempted)
+            self.results[m.id] = {'pkg': None, 'dots': None}
             
         self.logs = []
         self.is_finished = False
@@ -254,8 +256,6 @@ class InstallScreen(Screen):
             ovr = self.overrides.get(mod.id, {})
             do_pkg = ovr.get('install_pkg', True)
             do_dots = ovr.get('install_dots', True) if mod.stow_pkg else False
-            
-            self.results[mod.id] = {'pkg': True, 'dots': True}
             
             # Sub-tasks execution
             tasks = []

@@ -50,20 +50,20 @@ class SummaryModal:
             # Icons and colors based on mode
             if self.is_results_mode:
                 # Package result icon
-                if not do_pkg: 
+                success_pkg = res.get('pkg')
+                if not do_pkg or success_pkg is None: 
                     pkg_icon, pkg_color = "○", Style.DIM
                 else: 
-                    success = res.get('pkg')
-                    pkg_icon = "✔" if success else "✘"
-                    pkg_color = Style.hex("#55E6C1") if success else Style.hex("#FF6B6B")
+                    pkg_icon = "✔" if success_pkg else "✘"
+                    pkg_color = Style.hex("#55E6C1") if success_pkg else Style.hex("#FF6B6B")
                 
                 # Dots result icon
-                if not do_dots or not has_config: 
+                success_dots = res.get('dots')
+                if not do_dots or not has_config or success_dots is None: 
                     dots_icon, dots_color = "○", Style.DIM
                 else: 
-                    success = res.get('dots')
-                    dots_icon = "✔" if success else "✘"
-                    dots_color = Style.hex("#55E6C1") if success else Style.hex("#FF6B6B")
+                    dots_icon = "✔" if success_dots else "✘"
+                    dots_color = Style.hex("#55E6C1") if success_dots else Style.hex("#FF6B6B")
             else:
                 pkg_icon = "■" if do_pkg else " "
                 dots_icon = "■" if do_dots else " "
