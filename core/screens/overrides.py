@@ -41,7 +41,7 @@ class OverrideModal:
 
         
         # UI Focus: 0:Package, 1:Manager, 2:Dotfiles, 3:Accept, 4:Cancel
-        self.focus_idx = 0
+        self.focus_idx = 3
         self.editing_name = False
 
     def render(self):
@@ -49,84 +49,104 @@ class OverrideModal:
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # Modal dimensions
-        width = 54
-        # Adjust height based on available options
-        height = 14 if self.has_dots else 12
-        start_x = (term_width - width) // 2
-        start_y = (term_height - height) // 2
+        # 1. Prepare Content and Measure Width
+        title_text = f"OVERRIDE: {self.mod.label.upper()}"
+        pkg_measure = f"> [ ] Install Package: '{self.pkg_name}' ✎"
         
-        lines = []
-        lines.append(f"╔{'═' * (width-2)}╗")
-        title = f" OVERRIDE: {self.mod.label.upper()} "
-        lines.append(f"║{title.center(width-2)}║")
-        lines.append(f"╠{'═' * (width-2)}╣")
-        lines.append(f"║{' ' * (width-2)}║")
+        # Prepare managers line for measurement
+        mgr_styled_items = []
+        for mgr in self.managers:
+            mark = "●" if self.selected_manager == mgr else "○"
+            is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
+
+            if is_focused:
+                # Purple + BOLD for selection
+                style = Style.hex("#CBA6F7") + Style.BOLD
+                mgr_styled_items.append(f"{style}{mark} {mgr}{Style.RESET}")
+            else:
+                mgr_styled_items.append(f"{mark} {mgr}")
+        
+        mgr_content = "   ".join(mgr_styled_items)
+        mgr_v_len = TUI.visible_len(mgr_content)
+        
+        # Determine optimal modal width
+        width = max(54, len(title_text) + 10, TUI.visible_len(pkg_measure) + 6, mgr_v_len + 6)
+        width = min(width, term_width - 4)
+        
+        # 2. Build Inner Lines (without borders)
+        inner_lines = []
+        inner_lines.append("") # Top spacer
         
         # Option 0: Package Toggle
         pkg_mark = "■" if self.install_pkg else " "
-        cursor = ">" if self.focus_idx == 0 else " "
-        pkg_label = f"{cursor} [{pkg_mark}] Install Package: '{self.pkg_name}'"
-        if self.editing_name: pkg_label += " ✎"
+        is_focused = (self.focus_idx == 0)
+        label = f"  [{pkg_mark}] Install Package: '{self.pkg_name}'"
+        if self.editing_name: label += " ✎"
         
-        # Calculate padding based on visible length to prevent border distortion
-        v_len = TUI.visible_len(pkg_label)
-        padding = " " * (width - 6 - v_len)
-        lines.append(f"║  {pkg_label}{padding}  ║")
-        
-        # Option 1: Managers (Only if package is enabled)
-        if self.install_pkg:
-            mgr_content = ""
-            for mgr in self.managers:
-                mark = "●" if self.selected_manager == mgr else "○"
-                is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
-                prefix = f"{Style.BOLD}> {Style.RESET}" if is_focused else "  "
-                mgr_content += f"{prefix}{mark} {mgr}   "
-            
-            # Center the managers line
-            v_len = TUI.visible_len(mgr_content)
-            padding_total = width - 2 - v_len
-            left_p = " " * (padding_total // 2)
-            right_p = " " * (padding_total - len(left_p))
-            lines.append(f"║{left_p}{mgr_content}{right_p}║")
+        if is_focused:
+            style = Style.hex("#CBA6F7") + Style.BOLD
+            inner_lines.append(f"{style}{label}{Style.RESET}")
         else:
-            lines.append(f"║{' ' * (width-2)}║")
-            
-        lines.append(f"║{' ' * (width-2)}║")
+            inner_lines.append(label)
         
-        # Option 2: Dotfiles Toggle (Conditional)
+        # Option 1: Managers
+        if self.install_pkg:
+            padding_total = width - 2 - mgr_v_len
+            l_p = " " * (padding_total // 2)
+            inner_lines.append(f"{l_p}{mgr_content}")
+        else:
+            inner_lines.append("")
+            
+        inner_lines.append("") # Spacer
+        
+        # Option 2: Dotfiles
         if self.has_dots:
             label_text = "Configure Dotfiles (Stow)"
             if self.mod.id == "refind": label_text = "Copy Configuration files"
             
             dot_mark = "■" if self.install_dots else " "
-            cursor = ">" if self.focus_idx == 2 else " "
-            dot_label = f"{cursor} [{dot_mark}] {label_text}"
-            v_len = TUI.visible_len(dot_label)
-            padding = " " * (width - 6 - v_len)
-            lines.append(f"║  {dot_label}{padding}  ║")
-            lines.append(f"║{' ' * (width-2)}║")
+            is_focused = (self.focus_idx == 2)
+            label = f"  [{dot_mark}] {label_text}"
+            
+            if is_focused:
+                style = Style.hex("#CBA6F7") + Style.BOLD
+                inner_lines.append(f"{style}{label}{Style.RESET}")
+            else:
+                inner_lines.append(label)
+            inner_lines.append("")
         
-        # Instructions Line
+        # Instructions
         instr = "(Press R to rename)" if self.focus_idx == 0 else ""
-        lines.append(f"║{Style.DIM}{instr.center(width-2)}{Style.RESET}║")
+        inner_lines.append(f"{Style.DIM}{instr.center(width-2)}{Style.RESET}")
         
         # Buttons
         btn_acc = "  ACCEPT  "
         btn_can = "  CANCEL  "
         
-        # Apply style to focused button
-        acc_styled = f"{Style.INVERT}{btn_acc}{Style.RESET}" if self.focus_idx == 3 else f"[{btn_acc.strip()}]"
-        can_styled = f"{Style.INVERT}{btn_can}{Style.RESET}" if self.focus_idx == 4 else f"[{btn_can.strip()}]"
+        purple_bg = Style.hex("#CBA6F7", bg=True)
+        text_black = "\033[30m"
+        
+        if self.focus_idx == 3:
+            acc_styled = f"{purple_bg}{text_black}{btn_acc}{Style.RESET}"
+        else:
+            acc_styled = f"[{btn_acc.strip()}]"
+            
+        if self.focus_idx == 4:
+            can_styled = f"{purple_bg}{text_black}{btn_can}{Style.RESET}"
+        else:
+            can_styled = f"[{btn_can.strip()}]"
         
         btn_row = f"{acc_styled}     {can_styled}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
-        left_p = " " * padding
-        right_p = " " * (width - 2 - padding - v_len)
+        inner_lines.append(f"{' ' * padding}{btn_row}")
+
+        # 3. Wrap in Container
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title=title_text, is_focused=True)
         
-        lines.append(f"║{left_p}{btn_row}{right_p}║")
-        lines.append(f"╚{'═' * (width-2)}╝")
+        start_x = (term_width - width) // 2
+        start_y = (term_height - height) // 2
         
         return lines, start_y, start_x
 

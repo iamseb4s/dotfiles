@@ -7,7 +7,7 @@ import importlib
 sys.path.append(os.getcwd())
 
 from core.system import System
-from core.tui import TUI
+from core.tui import TUI, Keys
 from core.screens.welcome import WelcomeScreen
 from core.screens.menu import MenuScreen
 from core.screens.install import InstallScreen
@@ -35,6 +35,9 @@ def load_modules(sys_manager):
 
 def main():
     """Main execution loop controlling application state."""
+    
+    TUI.init_signal_handler()
+
     try:
         TUI.set_raw_mode(True)
         TUI.hide_cursor()
@@ -47,10 +50,22 @@ def main():
         menu_screen = MenuScreen(modules)
         
         while True:
+            if TUI.is_resize_pending():
+                TUI.clear_screen()
+
             if state == "WELCOME":
                 scr = WelcomeScreen(sys_mgr)
                 scr.render()
-                action = scr.handle_input(TUI.get_key(blocking=True))
+                # Wait for input
+                while True:
+                    key = TUI.get_key(blocking=True)
+                    if key == Keys.RESIZE:
+                        TUI.clear_screen()
+                        scr.render()
+                        continue
+                    if key is not None: break
+                
+                action = scr.handle_input(key)
                 if action == "MENU": 
                     TUI.clear_screen()
                     state = "MENU"
@@ -58,7 +73,15 @@ def main():
                 
             elif state == "MENU":
                 menu_screen.render()
-                action = menu_screen.handle_input(TUI.get_key(blocking=True))
+                while True:
+                    key = TUI.get_key(blocking=True)
+                    if key == Keys.RESIZE:
+                        TUI.clear_screen()
+                        menu_screen.render()
+                        continue
+                    if key is not None: break
+                
+                action = menu_screen.handle_input(key)
                 if action == "EXIT": sys.exit(0)
                 if action == "BACK": 
                     TUI.clear_screen()

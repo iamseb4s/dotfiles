@@ -50,20 +50,20 @@ class SummaryModal:
             # Icons and colors based on mode
             if self.is_results_mode:
                 # Package result icon
-                if not do_pkg: 
+                success_pkg = res.get('pkg')
+                if not do_pkg or success_pkg is None: 
                     pkg_icon, pkg_color = "○", Style.DIM
                 else: 
-                    success = res.get('pkg')
-                    pkg_icon = "✔" if success else "✘"
-                    pkg_color = Style.hex("#55E6C1") if success else Style.hex("#FF6B6B")
+                    pkg_icon = "✔" if success_pkg else "✘"
+                    pkg_color = Style.hex("#55E6C1") if success_pkg else Style.hex("#FF6B6B")
                 
                 # Dots result icon
-                if not do_dots or not has_config: 
+                success_dots = res.get('dots')
+                if not do_dots or not has_config or success_dots is None: 
                     dots_icon, dots_color = "○", Style.DIM
                 else: 
-                    success = res.get('dots')
-                    dots_icon = "✔" if success else "✘"
-                    dots_color = Style.hex("#55E6C1") if success else Style.hex("#FF6B6B")
+                    dots_icon = "✔" if success_dots else "✘"
+                    dots_color = Style.hex("#55E6C1") if success_dots else Style.hex("#FF6B6B")
             else:
                 pkg_icon = "■" if do_pkg else " "
                 dots_icon = "■" if do_dots else " "
@@ -87,64 +87,126 @@ class SummaryModal:
                 
         return lines
 
+    def _get_summary_stats(self):
+        """Calculates totals for installed, cancelled and failed modules."""
+        stats = {'installed': 0, 'cancelled': 0, 'failed': 0}
+        if not self.results: return stats
+        
+        for mod in self.active_modules:
+            ovr = self.overrides.get(mod.id, {})
+            res = self.results.get(mod.id, {})
+            
+            do_pkg = ovr.get('install_pkg', True)
+            do_dots = ovr.get('install_dots', True) if mod.stow_pkg else False
+            
+            # Collect results for active sub-tasks only
+            task_results = []
+            if do_pkg: task_results.append(res.get('pkg'))
+            if do_dots: task_results.append(res.get('dots'))
+            
+            if not task_results: continue
+            
+            if any(r is False for r in task_results):
+                stats['failed'] += 1
+            elif all(r is True for r in task_results):
+                stats['installed'] += 1
+            else:
+                # Any other case (all None or mixed True/None) is considered cancelled
+                stats['cancelled'] += 1
+                
+        return stats
+
     def render(self):
         """Draws the modal with tree content and dynamic height."""
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # Modal dimensions
+        # 1. Modal dimensions
         width = 64
+        title = "INSTALLATION RESULTS" if self.is_results_mode else "INSTALLATION SUMMARY"
+        
+        # Adjust max visible rows based on terminal height
+        self.max_visible_rows = min(15, term_height - 10)
         content_rows = min(len(self.content_lines), self.max_visible_rows)
         
-        lines = []
-        lines.append(f"╔{'═' * (width-2)}╗")
-        title = " INSTALLATION RESULTS " if self.is_results_mode else " INSTALLATION SUMMARY "
-        lines.append(f"║{title.center(width-2)}║")
-        lines.append(f"╠{'═' * (width-2)}╣")
-        lines.append(f"║{' ' * (width-2)}║")
+        # 2. Build Inner Content
+        inner_lines = []
+        inner_lines.append("") # Top spacer
         
-        # Content Viewport
+        # Viewport logic
         visible_content = self.content_lines[self.scroll_offset : self.scroll_offset + self.max_visible_rows]
         
         for item in visible_content:
             text = item['text']
             color = item['color']
-            v_len = TUI.visible_len(text)
-            padding = " " * (width - 6 - v_len)
-            lines.append(f"║  {color}{text}{Style.RESET}{padding}  ║")
+            inner_lines.append(f"  {color}{text}{Style.RESET}")
             
-        for _ in range(content_rows - len(visible_content)):
-            lines.append(f"║{' ' * (width-2)}║")
+        # Fill empty space
+        if len(self.content_lines) > self.max_visible_rows:
+            for _ in range(self.max_visible_rows - len(visible_content)):
+                inner_lines.append("")
 
+        # Scroll indicator line (internal)
         if len(self.content_lines) > self.max_visible_rows:
             remaining = len(self.content_lines) - self.max_visible_rows - self.scroll_offset
             scroll_text = f"--- {max(0, remaining)} more entries ---" if remaining > 0 else "--- End of list ---"
-            lines.append(f"║{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}║")
-        else:
-            lines.append(f"║{' ' * (width-2)}║")
+            inner_lines.append(f"{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}")
+        
+        inner_lines.append("") # Spacer
+        
+        if self.is_results_mode:
+            stats = self._get_summary_stats()
+            # Colored counts in pastel
+            c_inst = f"{Style.hex('#55E6C1')}{stats['installed']} installed{Style.RESET}"
+            c_can  = f"{Style.hex('#89B4FA')}{stats['cancelled']} cancelled{Style.RESET}"
+            c_fail = f"{Style.hex('#FF6B6B')}{stats['failed']} failed{Style.RESET}"
             
-        footer_msg = "Process finished." if self.is_results_mode else "Confirm and start installation?"
-        lines.append(f"║{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}║")
+            stats_line = f"{c_inst}, {c_can}, {c_fail}"
+            # Centering a string with ANSI codes is tricky, we use visible_len
+            v_len = TUI.visible_len(stats_line)
+            padding = (width - 2 - v_len) // 2
+            inner_lines.append(f"{' ' * padding}{stats_line}")
+        else:
+            footer_msg = "Confirm and start installation?"
+            inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
         
         # Buttons
         if self.is_results_mode:
             btn_left, btn_right = "  FINISH  ", "  VIEW LOGS  "
         else:
-            btn_left, btn_right = "  START INSTALL  ", "  CANCEL  "
+            btn_left, btn_right = "  INSTALL  ", "  CANCEL  "
         
-        l_styled = f"{Style.INVERT}{btn_left}{Style.RESET}" if self.focus_idx == 0 else f"[{btn_left.strip()}]"
-        r_styled = f"{Style.INVERT}{btn_right}{Style.RESET}" if self.focus_idx == 1 else f"[{btn_right.strip()}]"
+        purple_bg = Style.hex("#CBA6F7", bg=True)
+        text_black = "\033[30m"
+        
+        if self.focus_idx == 0:
+            l_styled = f"{purple_bg}{text_black}{btn_left}{Style.RESET}"
+        else:
+            l_styled = f"[{btn_left.strip()}]"
+            
+        if self.focus_idx == 1:
+            r_styled = f"{purple_bg}{text_black}{btn_right}{Style.RESET}"
+        else:
+            r_styled = f"[{btn_right.strip()}]"
         
         btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
-        left_p = " " * padding
-        right_p = " " * (width - 2 - padding - v_len)
+        inner_lines.append(f"{' ' * padding}{btn_row}")
+
+        # 3. Calculate Scroll Parameters for the Border
+        scroll_pos = None
+        scroll_size = None
+        if len(self.content_lines) > self.max_visible_rows:
+            thumb_size = max(1, int(self.max_visible_rows**2 / len(self.content_lines)))
+            prog = self.scroll_offset / (len(self.content_lines) - self.max_visible_rows)
+            scroll_pos = 1 + int(prog * (self.max_visible_rows - thumb_size))
+            scroll_size = thumb_size
+
+        # 4. Wrap in Container
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title=title, is_focused=True, scroll_pos=scroll_pos, scroll_size=scroll_size)
         
-        lines.append(f"║{left_p}{btn_row}{right_p}║")
-        lines.append(f"╚{'═' * (width-2)}╝")
-        
-        height = len(lines)
         start_x = (term_width - width) // 2
         start_y = (term_height - height) // 2
         

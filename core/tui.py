@@ -31,6 +31,7 @@ class Keys:
     Q = 113 # q
     Q_UPPER = 81 # Q
     R = 114 # Refresh/Back
+    RESIZE = -2 # Virtual key for terminal resize
 
 class Style:
     """ANSI TrueColor and text attribute escape sequences."""
@@ -60,6 +61,23 @@ class TUI:
     """
     _old_settings = None
     _raw_ref_count = 0
+    _resize_pending = False
+
+    @staticmethod
+    def init_signal_handler():
+        """Initializes SIGWINCH handler for terminal resizing."""
+        import signal
+        def handler(sig, frame):
+            TUI._resize_pending = True
+        signal.signal(signal.SIGWINCH, handler)
+
+    @staticmethod
+    def is_resize_pending():
+        """Checks and resets the resize pending flag."""
+        if TUI._resize_pending:
+            TUI._resize_pending = False
+            return True
+        return False
 
     @staticmethod
     def set_raw_mode(enable=True):
@@ -99,19 +117,35 @@ class TUI:
                 TUI._old_settings = None
 
     @staticmethod
-    def get_key(blocking=False):
+    def get_key(blocking=False, timeout=None):
         """Captures a single keypress, handling multi-byte escape sequences."""
         if not sys.stdin.isatty():
             return None
             
+        # Immediate check for resize signal
+        if TUI._resize_pending:
+            TUI._resize_pending = False
+            return Keys.RESIZE
+
         fd = sys.stdin.fileno()
         
-        # If not blocking, check if there is data to read
-        if not blocking:
-            import select
-            r, _, _ = select.select([fd], [], [], 0)
+        # Determine the correct timeout for select
+        # - If blocking with no timeout: 0.1s (to allow signal handling)
+        # - If not blocking: 0 (immediate poll)
+        # - Otherwise: use provided timeout
+        if timeout is not None:
+            actual_timeout = timeout
+        else:
+            actual_timeout = 0.1 if blocking else 0
+            
+        import select
+        try:
+            r, _, _ = select.select([fd], [], [], actual_timeout)
             if not r:
                 return None
+        except (select.error, InterruptedError):
+            # This happens on SIGWINCH or other signals
+            return Keys.RESIZE
 
         # If we are NOT in global raw mode, we MUST toggle it for this read
         # to ensure ECHO is off and ICANON is off.
@@ -168,6 +202,147 @@ class TUI:
             return None
 
     @staticmethod
+    def truncate_ansi(text, max_len):
+        """Truncates a string containing ANSI codes without breaking them."""
+        if TUI.visible_len(text) <= max_len:
+            return text
+            
+        # Pattern to match ANSI escape sequences
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        
+        result = ""
+        current_visible_len = 0
+        last_match_end = 0
+        
+        for match in ansi_escape.finditer(text):
+            # Text before the ANSI code
+            pre_ansi = text[last_match_end:match.start()]
+            for char in pre_ansi:
+                if current_visible_len < max_len - 3: # Leave room for "..."
+                    result += char
+                    current_visible_len += 1
+                else:
+                    return result + Style.RESET + "..."
+            
+            # The ANSI code itself (doesn't count toward length)
+            result += match.group()
+            last_match_end = match.end()
+            
+        # Final bit of text after last ANSI code
+        post_ansi = text[last_match_end:]
+        for char in post_ansi:
+            if current_visible_len < max_len - 3:
+                result += char
+                current_visible_len += 1
+            else:
+                return result + Style.RESET + "..."
+                
+        return result
+
+    @staticmethod
+    def ansi_slice(text, start, end=None):
+        """Slices a string by its visible length, preserving all ANSI codes."""
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        result = ""
+        current_visible_pos = 0
+        last_match_end = 0
+        
+        for match in ansi_escape.finditer(text):
+            # Process plain text before the ANSI sequence
+            pre_text = text[last_match_end:match.start()]
+            for char in pre_text:
+                if current_visible_pos >= start and (end is None or current_visible_pos < end):
+                    result += char
+                current_visible_pos += 1
+            
+            # Always include the ANSI sequence itself
+            result += match.group()
+            last_match_end = match.end()
+            
+        # Process remaining plain text
+        post_text = text[last_match_end:]
+        for char in post_text:
+            if current_visible_pos >= start and (end is None or current_visible_pos < end):
+                result += char
+            current_visible_pos += 1
+            
+        return result
+
+    @staticmethod
+    def overlay(bg, fg, x):
+        """Composites foreground text onto background text at a specific x-offset."""
+        fg_len = TUI.visible_len(fg)
+        left = TUI.ansi_slice(bg, 0, x)
+        right = TUI.ansi_slice(bg, x + fg_len)
+        return left + fg + right
+
+    @staticmethod
+    def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
+        """Wraps a list of lines in a rounded box with an optional title and integrated scrollbar."""
+        base_border_color = color if color else (Style.hex("#CBA6F7") if is_focused else Style.hex("#585B70"))
+        thumb_color = Style.hex("#CBA6F7") if is_focused else Style.hex("#89B4FA")
+        reset = Style.RESET
+        
+        # 1. Top border with title
+        top = "╭─"
+        if title:
+            display_title = title.upper()
+            max_title_len = width - 6
+            if len(display_title) > max_title_len:
+                display_title = display_title[:max_title_len-1] + "…"
+            top += f" {Style.BOLD}{display_title}{Style.RESET}{base_border_color} ─"
+        remaining = width - TUI.visible_len(top) - 1
+        top += "─" * max(0, remaining) + "╮"
+        output = [f"{base_border_color}{top}{reset}"]
+        
+        # 2. Content lines
+        internal_width = width - 2
+        for i in range(height - 2):
+            content = lines[i] if i < len(lines) else ""
+            
+            # Truncate safely if it exceeds internal width
+            if TUI.visible_len(content) > internal_width:
+                content = TUI.truncate_ansi(content, internal_width)
+            
+            v_len = TUI.visible_len(content)
+            padding = " " * max(0, internal_width - v_len)
+            
+            # Integrated Scrollbar logic
+            r_char = "│"
+            r_color = base_border_color
+            if scroll_pos is not None and scroll_size is not None:
+                if scroll_pos <= i < scroll_pos + scroll_size:
+                    r_char = "┃"
+                    r_color = thumb_color
+            output.append(f"{base_border_color}│{reset}{content}{padding}{r_color}{r_char}{reset}")
+            
+        # 3. Bottom border
+        bottom = "╰" + "─" * (width - 2) + "╯"
+        output.append(f"{base_border_color}{bottom}{reset}")
+        return output
+
+    @staticmethod
+    def stitch_containers(left_box, right_box, gap=1):
+        """Combines two container buffers line by line with a gap."""
+        max_lines = max(len(left_box), len(right_box))
+        combined = []
+        spacer = " " * gap
+        
+        for i in range(max_lines):
+            l_line = left_box[i] if i < len(left_box) else " " * TUI.visible_len(left_box[0])
+            r_line = right_box[i] if i < len(right_box) else " " * TUI.visible_len(right_box[0])
+            combined.append(f"{l_line}{spacer}{r_line}")
+            
+        return combined
+
+    @staticmethod
+    def wrap_text(text, width):
+        """Wraps text to a specific width using textwrap."""
+        import textwrap
+        if not text: return []
+        return textwrap.wrap(text, width)
+
+    @staticmethod
     def hide_cursor():
         """Hides the terminal cursor."""
         sys.stdout.write("\033[?25l")
@@ -192,21 +367,23 @@ class TUI:
         sys.stdout.flush()
 
     @staticmethod
-    def draw_box(lines, title="", center=False):
+    def draw_box(lines, title="", center=False, width=None):
         """Renders a bordered container with optional centering and bold titles."""
         if not lines: return
         
         term_width = shutil.get_terminal_size().columns
-        # Calculate width based on content
-        content_width = max(len(line) for line in lines)
-        width = max(content_width + 4, len(title) + 6)
+        # Calculate width based on content if not provided
+        if width is None:
+            content_width = max(len(line) for line in lines)
+            # Increased default padding for a more spacious look
+            width = max(content_width + 12, len(title) + 14)
         
         # Centering margin
         margin = (term_width - width) // 2 if center else 2
         margin = max(0, margin)
         indent = " " * margin
             
-        print(f"{indent}┌" + "─" * (width - 2) + "┐")
+        print(f"{indent}╭" + "─" * (width - 2) + "╮")
         if title:
             padding = (width - 2 - len(title) - 2) // 2
             padding = max(0, padding)
@@ -214,15 +391,19 @@ class TUI:
             print(f"{indent}├" + "─" * (width - 2) + "┤")
             
         for line in lines:
-            # Check if line has a label (contains ':')
+            # Calculate visible length to handle padding correctly
+            v_len = TUI.visible_len(line)
+            padding_total = (width - 4) - v_len
+            left_pad = padding_total // 2
+            right_pad = padding_total - left_pad
+            
             if ":" in line:
                 label, value = line.split(":", 1)
                 formatted_line = f"{Style.BOLD}{label}:{Style.RESET}{value}"
-                padding_needed = width - 4 - len(line)
-                print(f"{indent}│ {formatted_line}{' ' * padding_needed} │")
+                print(f"{indent}│ {' ' * left_pad}{formatted_line}{' ' * right_pad} │")
             else:
-                print(f"{indent}│ {line:<{width-4}} │")
-        print(f"{indent}└" + "─" * (width - 2) + "┘")
+                print(f"{indent}│ {' ' * left_pad}{line}{' ' * right_pad} │")
+        print(f"{indent}╰" + "─" * (width - 2) + "╯")
 
     @staticmethod
     def visible_len(text):
