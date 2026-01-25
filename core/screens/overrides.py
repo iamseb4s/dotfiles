@@ -49,17 +49,34 @@ class OverrideModal:
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # Modal dimensions
-        width = 54
-        # Adjust height based on available options
-        height = 14 if self.has_dots else 12
+        # 1. Prepare Content and Measure Width
+        title_text = f" OVERRIDE: {self.mod.label.upper()} "
+        pkg_measure = f"> [ ] Install Package: '{self.pkg_name}' ✎"
+        
+        # Prepare managers line for measurement
+        mgr_items = []
+        for mgr in self.managers:
+            mark = "●" if self.selected_manager == mgr else "○"
+            is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
+            prefix = "> " if is_focused else "  "
+            mgr_items.append(f"{prefix}{mark} {mgr}")
+        
+        full_mgr_string = "   ".join(mgr_items)
+        mgr_v_len = TUI.visible_len(full_mgr_string)
+        
+        # Determine optimal modal width (min 54, enough for managers, max terminal)
+        width = max(54, len(title_text) + 10, TUI.visible_len(pkg_measure) + 10, mgr_v_len + 8)
+        width = min(width, term_width - 2)
+        
+        # Base height
+        height = 12 if self.has_dots else 10
+        
         start_x = (term_width - width) // 2
         start_y = (term_height - height) // 2
         
         lines = []
         lines.append(f"╔{'═' * (width-2)}╗")
-        title = f" OVERRIDE: {self.mod.label.upper()} "
-        lines.append(f"║{title.center(width-2)}║")
+        lines.append(f"║{title_text.center(width-2)}║")
         lines.append(f"╠{'═' * (width-2)}╣")
         lines.append(f"║{' ' * (width-2)}║")
         
@@ -69,32 +86,34 @@ class OverrideModal:
         pkg_label = f"{cursor} [{pkg_mark}] Install Package: '{self.pkg_name}'"
         if self.editing_name: pkg_label += " ✎"
         
-        # Calculate padding based on visible length to prevent border distortion
         v_len = TUI.visible_len(pkg_label)
         padding = " " * (width - 6 - v_len)
         lines.append(f"║  {pkg_label}{padding}  ║")
         
-        # Option 1: Managers (Only if package is enabled)
+        # Option 1: Managers (Single line, no extra spacer above)
         if self.install_pkg:
-            mgr_content = ""
+            # Re-build with real styles
+            mgr_styled_items = []
             for mgr in self.managers:
                 mark = "●" if self.selected_manager == mgr else "○"
                 is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
                 prefix = f"{Style.BOLD}> {Style.RESET}" if is_focused else "  "
-                mgr_content += f"{prefix}{mark} {mgr}   "
+                mgr_styled_items.append(f"{prefix}{mark} {mgr}")
+            
+            mgr_content = "   ".join(mgr_styled_items)
+            v_len = TUI.visible_len(mgr_content)
             
             # Center the managers line
-            v_len = TUI.visible_len(mgr_content)
             padding_total = width - 2 - v_len
-            left_p = " " * (padding_total // 2)
-            right_p = " " * (padding_total - len(left_p))
-            lines.append(f"║{left_p}{mgr_content}{right_p}║")
+            l_p = " " * (padding_total // 2)
+            r_p = " " * (padding_total - len(l_p))
+            lines.append(f"║{l_p}{mgr_content}{r_p}║")
         else:
             lines.append(f"║{' ' * (width-2)}║")
             
         lines.append(f"║{' ' * (width-2)}║")
         
-        # Option 2: Dotfiles Toggle (Conditional)
+        # Option 2: Dotfiles
         if self.has_dots:
             label_text = "Configure Dotfiles (Stow)"
             if self.mod.id == "refind": label_text = "Copy Configuration files"
@@ -107,25 +126,20 @@ class OverrideModal:
             lines.append(f"║  {dot_label}{padding}  ║")
             lines.append(f"║{' ' * (width-2)}║")
         
-        # Instructions Line
+        # Instructions
         instr = "(Press R to rename)" if self.focus_idx == 0 else ""
         lines.append(f"║{Style.DIM}{instr.center(width-2)}{Style.RESET}║")
         
         # Buttons
         btn_acc = "  ACCEPT  "
         btn_can = "  CANCEL  "
-        
-        # Apply style to focused button
         acc_styled = f"{Style.INVERT}{btn_acc}{Style.RESET}" if self.focus_idx == 3 else f"[{btn_acc.strip()}]"
         can_styled = f"{Style.INVERT}{btn_can}{Style.RESET}" if self.focus_idx == 4 else f"[{btn_can.strip()}]"
         
         btn_row = f"{acc_styled}     {can_styled}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
-        left_p = " " * padding
-        right_p = " " * (width - 2 - padding - v_len)
-        
-        lines.append(f"║{left_p}{btn_row}{right_p}║")
+        lines.append(f"║{' ' * padding}{btn_row}{' ' * (width - 2 - padding - v_len)}║")
         lines.append(f"╚{'═' * (width-2)}╝")
         
         return lines, start_y, start_x
