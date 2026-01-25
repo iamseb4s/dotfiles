@@ -92,39 +92,36 @@ class SummaryModal:
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # Modal dimensions
+        # 1. Modal dimensions
         width = 64
-        content_rows = min(len(self.content_lines), self.max_visible_rows)
+        title = "INSTALLATION RESULTS" if self.is_results_mode else "INSTALLATION SUMMARY"
         
-        lines = []
-        lines.append(f"╔{'═' * (width-2)}╗")
-        title = " INSTALLATION RESULTS " if self.is_results_mode else " INSTALLATION SUMMARY "
-        lines.append(f"║{title.center(width-2)}║")
-        lines.append(f"╠{'═' * (width-2)}╣")
-        lines.append(f"║{' ' * (width-2)}║")
+        # 2. Build Inner Content
+        inner_lines = []
+        inner_lines.append("") # Top spacer
         
-        # Content Viewport
+        # Viewport logic
         visible_content = self.content_lines[self.scroll_offset : self.scroll_offset + self.max_visible_rows]
         
         for item in visible_content:
             text = item['text']
             color = item['color']
-            v_len = TUI.visible_len(text)
-            padding = " " * (width - 6 - v_len)
-            lines.append(f"║  {color}{text}{Style.RESET}{padding}  ║")
+            inner_lines.append(f"  {color}{text}{Style.RESET}")
             
-        for _ in range(content_rows - len(visible_content)):
-            lines.append(f"║{' ' * (width-2)}║")
+        # Fill empty space if content is shorter than max rows
+        for _ in range(self.max_visible_rows - len(visible_content)):
+            inner_lines.append("")
 
+        # Scroll indicator line (internal)
         if len(self.content_lines) > self.max_visible_rows:
             remaining = len(self.content_lines) - self.max_visible_rows - self.scroll_offset
             scroll_text = f"--- {max(0, remaining)} more entries ---" if remaining > 0 else "--- End of list ---"
-            lines.append(f"║{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}║")
+            inner_lines.append(f"{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}")
         else:
-            lines.append(f"║{' ' * (width-2)}║")
+            inner_lines.append("")
             
         footer_msg = "Process finished." if self.is_results_mode else "Confirm and start installation?"
-        lines.append(f"║{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}║")
+        inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
         
         # Buttons
         if self.is_results_mode:
@@ -138,13 +135,23 @@ class SummaryModal:
         btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
-        left_p = " " * padding
-        right_p = " " * (width - 2 - padding - v_len)
+        inner_lines.append(f"{' ' * padding}{btn_row}")
+
+        # 3. Calculate Scroll Parameters for the Border
+        scroll_pos = None
+        scroll_size = None
+        if len(self.content_lines) > self.max_visible_rows:
+            # Scroll thumb size relative to the content area (max_visible_rows)
+            # We offset the position by 1 because of the top spacer in inner_lines
+            thumb_size = max(1, int(self.max_visible_rows**2 / len(self.content_lines)))
+            prog = self.scroll_offset / (len(self.content_lines) - self.max_visible_rows)
+            scroll_pos = 1 + int(prog * (self.max_visible_rows - thumb_size))
+            scroll_size = thumb_size
+
+        # 4. Wrap in Container
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title=title, is_focused=True, scroll_pos=scroll_pos, scroll_size=scroll_size)
         
-        lines.append(f"║{left_p}{btn_row}{right_p}║")
-        lines.append(f"╚{'═' * (width-2)}╝")
-        
-        height = len(lines)
         start_x = (term_width - width) // 2
         start_y = (term_height - height) // 2
         

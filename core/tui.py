@@ -346,7 +346,7 @@ class TUI:
         margin = max(0, margin)
         indent = " " * margin
             
-        print(f"{indent}┌" + "─" * (width - 2) + "┐")
+        print(f"{indent}╭" + "─" * (width - 2) + "╮")
         if title:
             padding = (width - 2 - len(title) - 2) // 2
             padding = max(0, padding)
@@ -366,7 +366,7 @@ class TUI:
                 print(f"{indent}│ {' ' * left_pad}{formatted_line}{' ' * right_pad} │")
             else:
                 print(f"{indent}│ {' ' * left_pad}{line}{' ' * right_pad} │")
-        print(f"{indent}└" + "─" * (width - 2) + "┘")
+        print(f"{indent}╰" + "─" * (width - 2) + "╯")
 
     @staticmethod
     def visible_len(text):

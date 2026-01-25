@@ -50,68 +50,44 @@ class OverrideModal:
         term_height = shutil.get_terminal_size().lines
         
         # 1. Prepare Content and Measure Width
-        title_text = f" OVERRIDE: {self.mod.label.upper()} "
+        title_text = f"OVERRIDE: {self.mod.label.upper()}"
         pkg_measure = f"> [ ] Install Package: '{self.pkg_name}' ✎"
         
         # Prepare managers line for measurement
-        mgr_items = []
+        mgr_styled_items = []
         for mgr in self.managers:
             mark = "●" if self.selected_manager == mgr else "○"
             is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
-            prefix = "> " if is_focused else "  "
-            mgr_items.append(f"{prefix}{mark} {mgr}")
+            prefix = f"{Style.BOLD}> {Style.RESET}" if is_focused else "  "
+            mgr_styled_items.append(f"{prefix}{mark} {mgr}")
         
-        full_mgr_string = "   ".join(mgr_items)
-        mgr_v_len = TUI.visible_len(full_mgr_string)
+        mgr_content = "   ".join(mgr_styled_items)
+        mgr_v_len = TUI.visible_len(mgr_content)
         
-        # Determine optimal modal width (min 54, enough for managers, max terminal)
-        width = max(54, len(title_text) + 10, TUI.visible_len(pkg_measure) + 10, mgr_v_len + 8)
-        width = min(width, term_width - 2)
+        # Determine optimal modal width
+        width = max(54, len(title_text) + 10, TUI.visible_len(pkg_measure) + 6, mgr_v_len + 6)
+        width = min(width, term_width - 4)
         
-        # Base height
-        height = 12 if self.has_dots else 10
-        
-        start_x = (term_width - width) // 2
-        start_y = (term_height - height) // 2
-        
-        lines = []
-        lines.append(f"╔{'═' * (width-2)}╗")
-        lines.append(f"║{title_text.center(width-2)}║")
-        lines.append(f"╠{'═' * (width-2)}╣")
-        lines.append(f"║{' ' * (width-2)}║")
+        # 2. Build Inner Lines (without borders)
+        inner_lines = []
+        inner_lines.append("") # Top spacer
         
         # Option 0: Package Toggle
         pkg_mark = "■" if self.install_pkg else " "
         cursor = ">" if self.focus_idx == 0 else " "
-        pkg_label = f"{cursor} [{pkg_mark}] Install Package: '{self.pkg_name}'"
-        if self.editing_name: pkg_label += " ✎"
+        label = f" {cursor} [{pkg_mark}] Install Package: '{self.pkg_name}'"
+        if self.editing_name: label += " ✎"
+        inner_lines.append(label)
         
-        v_len = TUI.visible_len(pkg_label)
-        padding = " " * (width - 6 - v_len)
-        lines.append(f"║  {pkg_label}{padding}  ║")
-        
-        # Option 1: Managers (Single line, no extra spacer above)
+        # Option 1: Managers
         if self.install_pkg:
-            # Re-build with real styles
-            mgr_styled_items = []
-            for mgr in self.managers:
-                mark = "●" if self.selected_manager == mgr else "○"
-                is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
-                prefix = f"{Style.BOLD}> {Style.RESET}" if is_focused else "  "
-                mgr_styled_items.append(f"{prefix}{mark} {mgr}")
-            
-            mgr_content = "   ".join(mgr_styled_items)
-            v_len = TUI.visible_len(mgr_content)
-            
-            # Center the managers line
-            padding_total = width - 2 - v_len
+            padding_total = width - 2 - mgr_v_len
             l_p = " " * (padding_total // 2)
-            r_p = " " * (padding_total - len(l_p))
-            lines.append(f"║{l_p}{mgr_content}{r_p}║")
+            inner_lines.append(f"{l_p}{mgr_content}")
         else:
-            lines.append(f"║{' ' * (width-2)}║")
+            inner_lines.append("")
             
-        lines.append(f"║{' ' * (width-2)}║")
+        inner_lines.append("") # Spacer
         
         # Option 2: Dotfiles
         if self.has_dots:
@@ -120,15 +96,12 @@ class OverrideModal:
             
             dot_mark = "■" if self.install_dots else " "
             cursor = ">" if self.focus_idx == 2 else " "
-            dot_label = f"{cursor} [{dot_mark}] {label_text}"
-            v_len = TUI.visible_len(dot_label)
-            padding = " " * (width - 6 - v_len)
-            lines.append(f"║  {dot_label}{padding}  ║")
-            lines.append(f"║{' ' * (width-2)}║")
+            inner_lines.append(f" {cursor} [{dot_mark}] {label_text}")
+            inner_lines.append("")
         
         # Instructions
         instr = "(Press R to rename)" if self.focus_idx == 0 else ""
-        lines.append(f"║{Style.DIM}{instr.center(width-2)}{Style.RESET}║")
+        inner_lines.append(f"{Style.DIM}{instr.center(width-2)}{Style.RESET}")
         
         # Buttons
         btn_acc = "  ACCEPT  "
@@ -139,8 +112,14 @@ class OverrideModal:
         btn_row = f"{acc_styled}     {can_styled}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
-        lines.append(f"║{' ' * padding}{btn_row}{' ' * (width - 2 - padding - v_len)}║")
-        lines.append(f"╚{'═' * (width-2)}╝")
+        inner_lines.append(f"{' ' * padding}{btn_row}")
+
+        # 3. Wrap in Container
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title=title_text, is_focused=True)
+        
+        start_x = (term_width - width) // 2
+        start_y = (term_height - height) // 2
         
         return lines, start_y, start_x
 

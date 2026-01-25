@@ -211,8 +211,8 @@ class MenuScreen(Screen):
         visible_info = info_lines[self.info_offset : self.info_offset + (available_height - 2)]
 
         # Generate Boxes
-        left_box = TUI.create_container(visible_list, left_width, available_height, title="PACKAGES", is_focused=(self.active_panel == 0))
-        right_box = TUI.create_container(visible_info, right_width, available_height, title="INFORMATION", is_focused=(self.active_panel == 1))
+        left_box = TUI.create_container(visible_list, left_width, available_height, title="PACKAGES", is_focused=(self.active_panel == 0 and not self.modal))
+        right_box = TUI.create_container(visible_info, right_width, available_height, title="INFORMATION", is_focused=(self.active_panel == 1 and not self.modal))
         
         # Integrated Scrollbars
         # Left Box
@@ -222,7 +222,7 @@ class MenuScreen(Screen):
             thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(list_lines)))
             start_pos = int(prog * (available_height - 2 - thumb_size))
             for i in range(available_height - 2):
-                is_focus = (self.active_panel == 0)
+                is_focus = (self.active_panel == 0 and not self.modal)
                 border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
                 thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
                 char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
@@ -236,7 +236,7 @@ class MenuScreen(Screen):
             thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(info_lines)))
             start_pos = int(prog * (available_height - 2 - thumb_size))
             for i in range(available_height - 2):
-                is_focus = (self.active_panel == 1)
+                is_focus = (self.active_panel == 1 and not self.modal)
                 border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
                 thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
                 

@@ -15,23 +15,14 @@ class ConfirmModal:
 
     def render(self):
         width = 50
-        height = 8
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        start_x = (term_width - width) // 2
-        start_y = (term_height - height) // 2
+        # 1. Build Inner Lines
+        inner_lines = ["", self.message.center(48), ""]
         
-        lines = []
-        lines.append(f"╔{'═' * (width-2)}╗")
-        lines.append(f"║{self.title.center(width-2)}║")
-        lines.append(f"╠{'═' * (width-2)}╣")
-        lines.append(f"║{' ' * (width-2)}║")
-        lines.append(f"║{self.message.center(width-2)}║")
-        lines.append(f"║{' ' * (width-2)}║")
-        
-        btn_y = f"  YES  "
-        btn_n = f"  NO   "
+        btn_y = "  YES  "
+        btn_n = "  NO   "
         if self.focus_idx == 0: btn_y = f"{Style.INVERT}{btn_y}{Style.RESET}"
         else: btn_y = f"[{btn_y.strip()}]"
         if self.focus_idx == 1: btn_n = f"{Style.INVERT}{btn_n}{Style.RESET}"
@@ -40,10 +31,17 @@ class ConfirmModal:
         btn_row = f"{btn_y}     {btn_n}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
-        lines.append(f"║{' ' * padding}{btn_row}{' ' * (width - 2 - padding - v_len)}║")
-        lines.append(f"╚{'═' * (width-2)}╝")
+        inner_lines.append(f"{' ' * padding}{btn_row}")
+        
+        # 2. Wrap in Container
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title=self.title, is_focused=True)
+        
+        start_x = (term_width - width) // 2
+        start_y = (term_height - height) // 2
         
         return lines, start_y, start_x
+
 
     def handle_input(self, key):
         if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
@@ -167,9 +165,10 @@ class InstallScreen(Screen):
         visible_logs = self.logs[self.log_offset : self.log_offset + (available_height - 2)]
         
         # 4. Generate Boxes
-        # Focus: Left during installation, Right if scrolling (not strictly managed yet but following the pattern)
-        left_box = TUI.create_container(left_lines, left_width, available_height, title="TASKS", is_focused=not self.is_finished)
-        right_box = TUI.create_container(visible_logs, right_width, available_height, title="LOGS", is_focused=self.is_finished)
+        # Focus: Left during installation, Right if scrolling
+        # Background boxes lose focus if a modal is visible
+        left_box = TUI.create_container(left_lines, left_width, available_height, title="TASKS", is_focused=(not self.is_finished and not self.modal))
+        right_box = TUI.create_container(visible_logs, right_width, available_height, title="LOGS", is_focused=(self.is_finished and not self.modal))
         
         # Integrated Scrollbar for Logs
         if len(self.logs) > (available_height - 2):
@@ -180,7 +179,7 @@ class InstallScreen(Screen):
             
             # Inject thumb into the right border of the right box
             for i in range(available_height - 2):
-                is_focus = self.is_finished
+                is_focus = self.is_finished and not self.modal
                 border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
                 thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
                 
