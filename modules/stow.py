@@ -6,3 +6,4 @@ class StowModule(Module):
     description = "Symlink farm manager for dotfiles"
     category = "System Core"
     manager = "system"
+    stow_pkg = None

@@ -34,6 +34,14 @@ class Module:
             if self.sys.is_debian: return self.package_name.get("debian")
         return self.package_name or self.id
 
+    def get_manager(self):
+        """Resolves the package manager based on OS or direct value."""
+        if isinstance(self.manager, dict):
+            if self.sys.is_arch: return self.manager.get("arch", "system")
+            if self.sys.is_debian: return self.manager.get("debian", "system")
+            return self.manager.get("default", "system")
+        return self.manager or "system"
+
     def is_installed(self):
         """Detection logic based on the package manager type."""
         pkg = self.get_package_name()
