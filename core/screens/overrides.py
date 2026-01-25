@@ -41,7 +41,7 @@ class OverrideModal:
 
         
         # UI Focus: 0:Package, 1:Manager, 2:Dotfiles, 3:Accept, 4:Cancel
-        self.focus_idx = 0
+        self.focus_idx = 3
         self.editing_name = False
 
     def render(self):
