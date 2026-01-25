@@ -68,8 +68,15 @@ def main():
             elif state == "INSTALL":
                 # Transfer control to the installation runner with user overrides
                 installer = InstallScreen(modules, menu_screen.selected, menu_screen.overrides)
-                installer.run()
-                sys.exit(0)
+                result = installer.run()
+                
+                if result == "WELCOME":
+                    # Reset state and menu for a clean start
+                    state = "WELCOME"
+                    TUI.clear_screen()
+                    menu_screen = MenuScreen(modules)
+                else:
+                    sys.exit(0)
     finally:
         # Restore terminal state on exit
         TUI.clear_screen()
