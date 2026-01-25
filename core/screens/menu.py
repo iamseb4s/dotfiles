@@ -4,6 +4,7 @@ from collections import defaultdict
 from core.tui import TUI, Keys, Style
 from core.screens.welcome import Screen
 from core.screens.overrides import OverrideModal
+from core.screens.summary import SummaryModal
 
 class MenuScreen(Screen):
     """
@@ -314,9 +315,12 @@ class MenuScreen(Screen):
                 
                 if self.modal:
                     m_lines, m_y, m_x = self.modal.render()
-                    current_y = i + 6
-                    if m_y <= current_y < (m_y + len(m_lines)):
-                        m_idx = current_y - m_y
+                    # Calculate current absolute line in the terminal
+                    # Offset accounts for Header (1), Subtitle (2) and Spacers
+                    terminal_line = i + 6 
+                    
+                    if m_y <= terminal_line < (m_y + len(m_lines)):
+                        m_idx = terminal_line - m_y
                         modal_line = m_lines[m_idx]
                         bg_line = self._overlay_string(bg_line, modal_line, m_x)
                 
@@ -420,38 +424,50 @@ class MenuScreen(Screen):
         # Priority 1: Handle Active Modal
         if self.modal:
             action = self.modal.handle_input(key)
-            if action == "ACCEPT":
-                mod = self.flat_items[self.cursor_idx]['obj']
-                mod_id = mod.id
-                ovr = self.modal.get_overrides()
-                
-                # Validation based on real module capabilities
-                can_install_pkg = ovr['install_pkg']
-                can_install_dots = ovr['install_dots'] if mod.stow_pkg else False
-                
-                # Intelligent comparison: check if anything actually changed from defaults
-                is_modified = (
-                    ovr['pkg_name'] != mod.get_package_name() or
-                    ovr['manager'] != mod.get_manager() or
-                    not ovr['install_pkg'] or
-                    (mod.stow_pkg and not ovr['install_dots'])
-                )
-                
-                # Sincronize selection state
-                if not can_install_pkg and not can_install_dots:
-                    # Nothing real to install
-                    self.selected.discard(mod_id)
-                    self.overrides.pop(mod_id, None)
-                else:
-                    self.selected.add(mod_id)
-                    if is_modified:
-                        self.overrides[mod_id] = ovr
-                    else:
+            
+            # Handling OverrideModal
+            if isinstance(self.modal, OverrideModal):
+                if action == "ACCEPT":
+                    mod = self.flat_items[self.cursor_idx]['obj']
+                    mod_id = mod.id
+                    ovr = self.modal.get_overrides()
+                    
+                    # Validation based on real module capabilities
+                    can_install_pkg = ovr['install_pkg']
+                    can_install_dots = ovr['install_dots'] if mod.stow_pkg else False
+                    
+                    # Intelligent comparison: check if anything actually changed from defaults
+                    is_modified = (
+                        ovr['pkg_name'] != mod.get_package_name() or
+                        ovr['manager'] != mod.get_manager() or
+                        not ovr['install_pkg'] or
+                        (mod.stow_pkg and not ovr['install_dots'])
+                    )
+                    
+                    # Sincronize selection state
+                    if not can_install_pkg and not can_install_dots:
+                        # Nothing real to install
+                        self.selected.discard(mod_id)
                         self.overrides.pop(mod_id, None)
-                
-                self.modal = None
-            elif action == "CANCEL":
-                self.modal = None
+                    else:
+                        self.selected.add(mod_id)
+                        if is_modified:
+                            self.overrides[mod_id] = ovr
+                        else:
+                            self.overrides.pop(mod_id, None)
+                    
+                    self.modal = None
+                elif action == "CANCEL":
+                    self.modal = None
+                    
+            # Handling SummaryModal
+            elif isinstance(self.modal, SummaryModal):
+                if action == "INSTALL":
+                    self.modal = None
+                    return "CONFIRM"
+                elif action == "CANCEL":
+                    self.modal = None
+                    
             return None
 
         if key == Keys.R or key == Keys.BACKSPACE:
@@ -503,8 +519,9 @@ class MenuScreen(Screen):
                  self.expanded[current['obj']] = True
         
         elif key == Keys.ENTER:
-            if len(self.selected.union(self.auto_locked)) > 0:
-                self.selected.update(self.auto_locked)
-                return "CONFIRM"
+            # Show summary modal before proceeding
+            total_selection = self.selected.union(self.auto_locked)
+            if len(total_selection) > 0:
+                self.modal = SummaryModal(self.modules, total_selection, self.overrides)
         
         return None
