@@ -3,6 +3,8 @@ import termios
 import tty
 import os
 import time
+import re
+import shutil
 
 class Keys:
     UP = 65
@@ -97,24 +99,44 @@ class TUI:
         sys.stdout.flush()
 
     @staticmethod
-    def draw_box(lines, title=""):
-        """Draws a bordered box around text lines."""
+    def draw_box(lines, title="", center=False):
+        """Draws a bordered box around text lines with bold labels."""
         if not lines: return
-        width = max(len(line) for line in lines) + 4
-        if title:
-            width = max(width, len(title) + 6)
+        
+        term_width = shutil.get_terminal_size().columns
+        # Calculate width based on content
+        content_width = max(len(line) for line in lines)
+        width = max(content_width + 4, len(title) + 6)
+        
+        # Centering margin
+        margin = (term_width - width) // 2 if center else 2
+        margin = max(0, margin)
+        indent = " " * margin
             
-        print("  ┌" + "─" * (width - 2) + "┐")
+        print(f"{indent}┌" + "─" * (width - 2) + "┐")
         if title:
             padding = (width - 2 - len(title) - 2) // 2
-            # Ensure padding is not negative
             padding = max(0, padding)
-            print("  │" + " " * padding + f" {title} " + " " * (width - 2 - padding - len(title) - 2) + "│")
-            print("  ├" + "─" * (width - 2) + "┤")
+            print(f"{indent}│" + " " * padding + f" {Style.BOLD}{title}{Style.RESET} " + " " * (width - 2 - padding - len(title) - 2) + "│")
+            print(f"{indent}├" + "─" * (width - 2) + "┤")
             
         for line in lines:
-            print(f"  │ {line:<{width-4}} │")
-        print("  └" + "─" * (width - 2) + "┘")
+            # Check if line has a label (contains ':')
+            if ":" in line:
+                label, value = line.split(":", 1)
+                formatted_line = f"{Style.BOLD}{label}:{Style.RESET}{value}"
+                # Padding must account for invisible ANSI codes from Style
+                padding_needed = width - 4 - len(line)
+                print(f"{indent}│ {formatted_line}{' ' * padding_needed} │")
+            else:
+                print(f"{indent}│ {line:<{width-4}} │")
+        print(f"{indent}└" + "─" * (width - 2) + "┘")
+
+    @staticmethod
+    def visible_len(text):
+        """Returns the length of the string without ANSI escape codes."""
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        return len(ansi_escape.sub('', text))
 
     @staticmethod
     def hex_to_ansi(hex_color, bg=False):
@@ -127,7 +149,7 @@ class TUI:
         bg = Style.hex(color_hex, bg=True)
         fg = Style.hex(color_hex, bg=False)
         # Pill: [Colored BG + Black Text] KEY [Reset] [Colored Text] Action
-        return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}  "
+        return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}"
 
 class Screen:
     def render(self):
@@ -142,6 +164,7 @@ class WelcomeScreen(Screen):
 
     def render(self):
         TUI.clear_screen()
+        term_width = shutil.get_terminal_size().columns
         print("\n\n")
         
         banner = [
@@ -162,19 +185,31 @@ class WelcomeScreen(Screen):
             f"User: {os.getenv('USER', 'unknown')}"
         ]
         
-        # Colorize banner
+        # Render Centered Banner
         print(f"{Style.hex('#81ECEC')}") # Cyan
         for line in banner:
-            print(f"   {line}")
-        print(f"{Style.RESET}\n")
+            padding = (term_width - len(line)) // 2
+            padding = max(0, padding)
+            print(f"{' ' * padding}{line}")
+        print(f"{Style.RESET}")
         
-        TUI.draw_box(sys_info, "System Information")
+        # Render Polished Subtitle
+        subtitle = "─ Dotfiles & Packages Installer ─"
+        s_padding = (term_width - len(subtitle)) // 2
+        print(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}\n\n")
         
-        # Footer Pills
-        p_enter = TUI.pill("ENTER", "Start", "a6e3a1") # Green
-        p_quit  = TUI.pill("Q", "Exit", "f38ba8")      # Red
+        # Render Centered Box
+        TUI.draw_box(sys_info, "SYSTEM INFORMATION", center=True)
         
-        print(f"\n\n   {p_enter}   {p_quit}")
+        # Footer Centered Pills
+        p_enter = TUI.pill("ENTER", "Start Installation", "a6e3a1") # Green
+        p_quit  = TUI.pill("Q", "Exit", "f38ba8")               # Red
+        
+        pills_line = f"{p_enter}     {p_quit}"
+        p_padding = (term_width - TUI.visible_len(pills_line)) // 2
+        p_padding = max(0, p_padding)
+        
+        print(f"\n\n{' ' * p_padding}{pills_line}")
         
     def handle_input(self, key):
         if key == Keys.ENTER:

@@ -83,33 +83,38 @@ class MenuScreen:
         if self.cursor_idx >= len(self.flat_items):
             self.cursor_idx = len(self.flat_items) - 1
 
-        # --- MODERN HEADER ---
+        # --- MODERN HEADER WITH SELECTION COUNTER ---
         term_width = shutil.get_terminal_size().columns
-        title = "DOTFILES INSTALLER"
+        title_text = " PACKAGES SELECTOR "
+        
+        # Calculate selection totals for the counter
+        active_total = len(self.selected.union(self.auto_locked))
+        counter_text = f" [ {active_total:02} / {len(self.modules):02} ] "
         
         # Colors
         bg_blue = Style.hex("89B4FA", bg=True)
         text_black = "\033[30m"
         
-        # Center the title
-        padding = (term_width - len(title)) // 2
-        # Ensure padding isn't negative
+        # Centering logic for title, counter aligned to the right
+        padding = (term_width - len(title_text)) // 2
         padding = max(0, padding)
-        
         left_pad = " " * padding
-        right_pad = " " * (term_width - padding - len(title))
+        
+        # Dynamic middle padding to push counter to the far right
+        mid_pad_len = term_width - len(left_pad) - len(title_text) - len(counter_text)
+        mid_pad = " " * max(0, mid_pad_len)
         
         # Render Bar: [BG_BLUE + BLACK]   TITLE   [RESET]
-        header_bar = f"{bg_blue}{text_black}{left_pad}{title}{right_pad}{Style.RESET}"
+        header_bar = f"{bg_blue}{text_black}{left_pad}{title_text}{mid_pad}{counter_text}{Style.RESET}"
         
         print("\n" + header_bar + "\n")
-        print(f"  {Style.DIM}Select packages to configure:{Style.RESET}\n")
+        print(f"  {Style.DIM}Select the packages you wish to install and configure:{Style.RESET}\n")
 
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
             cursor_char = ">" if is_cursor else " "
             
-            # --- RENDER HEADER ---
+            # --- RENDER HEADER (CATEGORY) ---
             if item['type'] == 'header':
                 cat_name = item['obj']
                 icon = "▼" if self.expanded[cat_name] else "►"
@@ -128,22 +133,24 @@ class MenuScreen:
                     sel_mark = "[-]" # Partial selection
                     header_color = Style.hex("FDCB6E") # Pastel Yellow (Partial)
                 
-                line = f"{cursor_char} {icon} {sel_mark} {cat_name.upper()}"
+                # Header line with 2-space global margin
+                line = f"  {cursor_char} {icon} {sel_mark} {cat_name.upper()}"
                 
                 # Header styling logic
                 if is_cursor:
                     # Cursor: Bold + Inverted (Clean highlight, no state color)
-                    sys.stdout.write(f"{Style.BOLD}{Style.INVERT}{line}{Style.RESET}\n")
+                    # Added trailing spaces for visual symmetry
+                    sys.stdout.write(f"{Style.BOLD}{Style.INVERT}{line}   {Style.RESET}\n")
                 else:
                     # Normal: Bold + State Color
                     sys.stdout.write(f"{Style.BOLD}{header_color}{line}{Style.RESET}\n")
 
-            # --- RENDER MODULE ---
+            # --- RENDER MODULE (PACKAGE) ---
             elif item['type'] == 'module':
                 mod = item['obj']
                 installed = mod.is_installed()
                 
-                # Determine visual state
+                # Determine visual state based on selection and installation
                 if mod.id in self.auto_locked:
                     mark = "[■]"        # Locked by dependency
                     color = Style.hex("FF6B6B")  # Pastel Red
@@ -161,22 +168,22 @@ class MenuScreen:
                     color = ""
                     suffix = ""
                 
-                line = f"{cursor_char}     {mark} {mod.label}{suffix}"
+                # Visual hierarchy style: '  > │     '
+                hierarchy_icon = "│"
+                line = f"  {cursor_char} {hierarchy_icon}     {mark} {mod.label}{suffix}"
                 
                 if is_cursor:
-                    sys.stdout.write(f"{Style.INVERT}{line}{Style.RESET}\n")
+                    # In cursor mode, we invert the whole line including hierarchy for better feedback
+                    # Added trailing spaces for visual symmetry with the prefix
+                    sys.stdout.write(f"{Style.INVERT}{line}   {Style.RESET}\n")
                 else:
-                    sys.stdout.write(f"{color}{line}{Style.RESET}\n")
+                    # Normal mode: Dim the hierarchy icon, color the package label
+                    styled_line = f"  {cursor_char} {Style.DIM}{hierarchy_icon}{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}"
+                    sys.stdout.write(f"{styled_line}\n")
         
         # --- FOOTER (Pills) ---
         print("\n")
         
-        def pill(key, action, color_hex):
-            bg = Style.hex(color_hex, bg=True)
-            fg = Style.hex(color_hex, bg=False)
-            # Pill: [Colored BG + Black Text] KEY [Reset] [Colored Text] Action
-            return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}  "
-
         # Footer Content
         f_move  = TUI.pill("↑/↓/k/j", "Move", "81ECEC") # Cyan
         f_space = TUI.pill("SPACE", "Select", "89B4FA") # Blue
@@ -189,8 +196,14 @@ class MenuScreen:
         total_active = len(self.selected.union(self.auto_locked))
         status_text = f"  Selected: {total_active} packages"
         
+        # Center the footer pills
+        # Add explicit spacing between pills now that internal margin is removed
+        pills_line = f"{f_move}    {f_space}    {f_tab}    {f_enter}    {f_back}    {f_quit}"
+        p_padding = (term_width - TUI.visible_len(pills_line)) // 2
+        p_padding = max(0, p_padding)
+        
         print(f"{status_text}\n")
-        print(f"  {f_move}{f_space}{f_tab}{f_enter}{f_back}{f_quit}")
+        print(f"{' ' * p_padding}{pills_line}")
         
         if self.exit_pending:
             print(f"\n  {Style.hex('FF5555')}Press ESC again to exit...{Style.RESET}")
