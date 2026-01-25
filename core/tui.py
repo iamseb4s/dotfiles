@@ -240,6 +240,43 @@ class TUI:
         return result
 
     @staticmethod
+    def ansi_slice(text, start, end=None):
+        """Slices a string by its visible length, preserving all ANSI codes."""
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        result = ""
+        current_visible_pos = 0
+        last_match_end = 0
+        
+        for match in ansi_escape.finditer(text):
+            # Process plain text before the ANSI sequence
+            pre_text = text[last_match_end:match.start()]
+            for char in pre_text:
+                if current_visible_pos >= start and (end is None or current_visible_pos < end):
+                    result += char
+                current_visible_pos += 1
+            
+            # Always include the ANSI sequence itself
+            result += match.group()
+            last_match_end = match.end()
+            
+        # Process remaining plain text
+        post_text = text[last_match_end:]
+        for char in post_text:
+            if current_visible_pos >= start and (end is None or current_visible_pos < end):
+                result += char
+            current_visible_pos += 1
+            
+        return result
+
+    @staticmethod
+    def overlay(bg, fg, x):
+        """Composites foreground text onto background text at a specific x-offset."""
+        fg_len = TUI.visible_len(fg)
+        left = TUI.ansi_slice(bg, 0, x)
+        right = TUI.ansi_slice(bg, x + fg_len)
+        return left + fg + right
+
+    @staticmethod
     def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
         """Wraps a list of lines in a rounded box with an optional title and integrated scrollbar."""
         base_border_color = color if color else (Style.hex("#CBA6F7") if is_focused else Style.hex("#585B70"))

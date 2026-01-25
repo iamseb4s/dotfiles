@@ -216,9 +216,7 @@ class InstallScreen(Screen):
             for i, m_line in enumerate(m_lines):
                 target_y = m_y + i
                 if 0 <= target_y < len(buffer):
-                    # For installation, we use a simpler overlay since it's centered
-                    pad = " " * m_x
-                    buffer[target_y] = pad + m_line + " " * (term_width - m_x - TUI.visible_len(m_line))
+                    buffer[target_y] = TUI.overlay(buffer[target_y], m_line, m_x)
 
         # Final buffer management to prevent terminal scroll
         final_output = "\n".join(buffer[:term_height])

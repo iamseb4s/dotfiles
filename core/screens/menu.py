@@ -74,16 +74,8 @@ class MenuScreen(Screen):
         return (mod_id in self.selected) or (mod_id in self.auto_locked)
 
     def _overlay_string(self, bg, fg, start_x):
-        """Simple overlay that centers the modal line."""
-        # Instead of real overlay, we'll just build a new line:
-        # [PADDING_X] [MODAL_LINE] [REMAINING_PADDING]
-        # This effectively "hides" the background where the modal is.
-        term_width = shutil.get_terminal_size().columns
-        fg_visible_len = TUI.visible_len(fg)
-        
-        left_pad = " " * start_x
-        right_pad = " " * max(0, term_width - start_x - fg_visible_len)
-        return f"{left_pad}{fg}{right_pad}"
+        """Composites the modal line onto the background line non-destructively."""
+        return TUI.overlay(bg, fg, start_x)
 
     def _get_info_lines(self, right_width):
         """Helper to pre-calculate info lines for scroll limits."""
