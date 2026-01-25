@@ -34,6 +34,14 @@ class Module:
             if self.sys.is_debian: return self.package_name.get("debian")
         return self.package_name or self.id
 
+    def get_manager(self):
+        """Resolves the package manager based on OS or direct value."""
+        if isinstance(self.manager, dict):
+            if self.sys.is_arch: return self.manager.get("arch", "system")
+            if self.sys.is_debian: return self.manager.get("debian", "system")
+            return self.manager.get("default", "system")
+        return self.manager or "system"
+
     def is_installed(self):
         """Detection logic based on the package manager type."""
         pkg = self.get_package_name()
@@ -45,22 +53,24 @@ class Module:
             return shutil.which("brew") and self.sys.run(f"brew list {pkg}", shell=True)
         return False
 
-    def install(self):
-        """Generic installation logic."""
-        pkg = self.get_package_name()
-        if not pkg and self.manager == "system": return True
+    def install(self, override=None):
+        """Generic installation logic supporting user overrides."""
+        pkg = override['pkg_name'] if override else self.get_package_name()
+        manager = override['manager'] if override else self.get_manager()
+        
+        if not pkg and manager == "system": return True
 
-        if self.manager == "system":
+        if manager == "system":
             return self.sys.install_package(pkg if self.sys.is_arch else None, 
                                           pkg if self.sys.is_debian else None)
-        elif self.manager == "cargo":
+        elif manager == "cargo":
             return self.sys.run(f"cargo install {pkg}", shell=True)
-        elif self.manager == "bob":
+        elif manager == "bob":
             return self.sys.run(f"bob use stable", shell=True)
         return True
 
-    def configure(self):
-        """Auto-stow if stow_pkg is defined."""
+    def configure(self, override=None):
+        """Auto-stow if stow_pkg is defined, supporting user overrides."""
         if self.stow_pkg:
             self.run_stow(self.stow_pkg, self.stow_target)
 

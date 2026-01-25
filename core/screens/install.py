@@ -6,8 +6,9 @@ class InstallScreen(Screen):
     """
     Manages the installation progress screen, including progress bars and live logs.
     """
-    def __init__(self, modules, selected_ids):
+    def __init__(self, modules, selected_ids, overrides=None):
         self.queue = [m for m in modules if m.id in selected_ids]
+        self.overrides = overrides or {}
         self.total = len(self.queue)
         self.current = 0
         self.logs = []
@@ -31,24 +32,36 @@ class InstallScreen(Screen):
             print(f"  > {log}")
             
     def run(self):
-        """Orchestrates the sequential installation of queued modules."""
+        """Orchestrates the sequential installation of queued modules with overrides."""
         for mod in self.queue:
             self.current += 1
+            ovr = self.overrides.get(mod.id)
+            
+            # Resolve execution flags from overrides
+            do_pkg = ovr.get('install_pkg', True) if ovr else True
+            do_dots = ovr.get('install_dots', True) if ovr else True
+            
             self.render_progress(mod.label)
             
-            self.logs.append(f"Installing {mod.id}...")
-            
             try:
-                if mod.install():
-                    self.logs.append(f"{mod.id} installed.")
-                    mod.configure()
-                    self.logs.append(f"{mod.id} configured.")
-                else:
-                    self.logs.append(f"ERROR: {mod.id} installation failed.")
-            except Exception as e:
-                self.logs.append(f"EXCEPTION: {e}")
+                # 1. Binary/Package Installation
+                if do_pkg:
+                    self.logs.append(f"Installing package: {mod.id}...")
+                    if not mod.install(ovr):
+                        self.logs.append(f"ERROR: {mod.id} installation failed.")
+                        continue # Skip configuration if package fails
+                    self.logs.append(f"Package {mod.id} installed.")
                 
-            # Controlled pause for visual feedback
+                # 2. Configuration Deployment
+                if do_dots and mod.stow_pkg:
+                    self.logs.append(f"Configuring {mod.id}...")
+                    mod.configure(ovr)
+                    self.logs.append(f"{mod.id} configuration applied.")
+                    
+            except Exception as e:
+                self.logs.append(f"EXCEPTION in {mod.id}: {e}")
+                
+            # Final pause for visual feedback
             time.sleep(0.5)
         
         # Final summary screen

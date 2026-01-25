@@ -3,6 +3,8 @@ import time
 from collections import defaultdict
 from core.tui import TUI, Keys, Style
 from core.screens.welcome import Screen
+from core.screens.overrides import OverrideModal
+from core.screens.summary import SummaryModal
 
 class MenuScreen(Screen):
     """
@@ -25,10 +27,14 @@ class MenuScreen(Screen):
         # State tracking
         self.selected = set()      # Manually selected modules
         self.auto_locked = set()   # Modules forced by dependencies (read-only in UI)
+        self.overrides = {}        # Custom config for specific modules
         
+        # UI State
         self.cursor_idx = 0
         self.list_offset = 0       # Automatic scroll for the list
         self.info_offset = 0       # Manual scroll for the info panel
+        self.modal = None          # Current active modal
+        
         self.flat_items = [] 
         self.exit_pending = False
         self.last_esc_time = 0
@@ -64,6 +70,49 @@ class MenuScreen(Screen):
     def is_active(self, mod_id):
         """Returns True if module is either selected or locked by dependency."""
         return (mod_id in self.selected) or (mod_id in self.auto_locked)
+
+    def _build_bg_line(self, i, visible_list, visible_info, available_height, split_width, safe_width, list_lines, info_lines):
+        """Helper to build a single background row for side-by-side view."""
+        left = visible_list[i] if i < len(visible_list) else ""
+        right = visible_info[i] if i < len(visible_info) else ""
+        
+        # Left column + Scrollbar L
+        l_len = TUI.visible_len(left)
+        l_padding = " " * (split_width - 2 - l_len)
+        if len(list_lines) > available_height:
+            l_prog = self.list_offset / (len(list_lines) - available_height)
+            l_indicator_pos = int(l_prog * (available_height - 1))
+            scroll_l = f"{Style.hex('#89B4FA')}┃{Style.RESET}" if i == l_indicator_pos else f"{Style.DIM}│{Style.RESET}"
+        else:
+            scroll_l = " "
+
+        central_sep = f"{Style.DIM}│{Style.RESET}"
+        
+        # Right column + Scrollbar R
+        r_content_width = safe_width - split_width - 4
+        r_len = TUI.visible_len(right)
+        r_padding = " " * max(0, r_content_width - 2 - r_len)
+        if len(info_lines) > available_height:
+            r_prog = self.info_offset / (len(info_lines) - available_height)
+            r_indicator_pos = int(r_prog * (available_height - 1))
+            scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}" if i == r_indicator_pos else f"{Style.DIM}│{Style.RESET}"
+        else:
+            scroll_r = " "
+
+        return f"{left}{l_padding} {scroll_l} {central_sep} {right}{r_padding} {scroll_r}"
+
+    def _overlay_string(self, bg, fg, start_x):
+        """Simple overlay that centers the modal line."""
+        # Instead of real overlay, we'll just build a new line:
+        # [PADDING_X] [MODAL_LINE] [REMAINING_PADDING]
+        # This effectively "hides" the background where the modal is.
+        term_width = shutil.get_terminal_size().columns
+        fg_visible_len = TUI.visible_len(fg)
+        
+        left_pad = " " * start_x
+        right_pad = " " * (term_width - start_x - fg_visible_len)
+        
+        return f"{left_pad}{fg}{right_pad}"
 
     def render(self):
         """Draws the menu interface to the terminal."""
@@ -102,6 +151,7 @@ class MenuScreen(Screen):
         left_pad = " " * padding
         right_pad = " " * (term_width - padding - len(title_text))
         
+        # Render Bar: [BG_BLUE + BLACK]   TITLE   [RESET]
         header_bar = f"{bg_blue}{text_black}{left_pad}{title_text}{right_pad}{Style.RESET}"
         
         print("\n" + header_bar + "\n")
@@ -147,16 +197,23 @@ class MenuScreen(Screen):
             elif item['type'] == 'module':
                 mod = item['obj']
                 installed = mod.is_installed()
+                has_override = mod.id in self.overrides
                 
-                # Determine visual state based on selection and installation
+                # Determine visual state based on selection, overrides and installation
                 if mod.id in self.auto_locked:
                     mark = "[■]"        # Locked by dependency
                     color = Style.hex("FF6B6B")  # Pastel Red
                     suffix = " "       # Lock icon suffix
                 elif mod.id in self.selected:
-                    mark = "[■]"        # User selected
-                    color = Style.hex("55E6C1") # Pastel Green
-                    suffix = ""
+                    ovr = self.overrides.get(mod.id)
+                    if ovr:
+                        # Full if both are selected, or if one is selected and the other doesn't exist
+                        is_full = ovr['install_pkg'] and (not mod.stow_pkg or ovr['install_dots'])
+                        mark = "[■]" if is_full else "[-]"
+                    else:
+                        mark = "[■]"
+                    color = Style.hex("FDCB6E") if has_override else Style.hex("55E6C1") # Yellow if custom, else Green
+                    suffix = "*" if has_override else ""
                 elif installed:
                     mark = "[ ]"        # Not selected but installed
                     color = Style.hex("89B4FA") # Pastel Blue
@@ -184,6 +241,8 @@ class MenuScreen(Screen):
         
         if current_item['type'] == 'module':
             mod = current_item['obj']
+            ovr = self.overrides.get(mod.id, {})
+            
             # Header
             is_installed = mod.is_installed()
             status_str = "Installed" if is_installed else "Not Installed"
@@ -195,7 +254,23 @@ class MenuScreen(Screen):
                 info_lines.append(f"{Style.DIM}{mod.description}{Style.RESET}")
             info_lines.append("")
             info_lines.append(f"{Style.BOLD}Status:  {status_color}{status_icon} {status_str}{Style.RESET}")
-            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{mod.manager}")
+            
+            # Info Panel values: Only yellow if specifically modified
+            # Manager detection
+            current_mgr = mod.get_manager()
+            ovr_mgr = ovr.get('manager', current_mgr)
+            is_mgr_mod = 'manager' in ovr and ovr_mgr != current_mgr
+            mgr_color = Style.hex("#FDCB6E") if is_mgr_mod else ""
+            mgr_suffix = "*" if is_mgr_mod else ""
+            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{mgr_color}{ovr_mgr}{mgr_suffix}{Style.RESET}")
+            
+            # Package Name detection
+            current_pkg = mod.get_package_name()
+            ovr_pkg = ovr.get('pkg_name', current_pkg)
+            is_pkg_mod = 'pkg_name' in ovr and ovr_pkg != current_pkg
+            pkg_color = Style.hex("#FDCB6E") if is_pkg_mod else ""
+            pkg_suffix = "*" if is_pkg_mod else ""
+            info_lines.append(f"{Style.BOLD}Package: {Style.RESET}{pkg_color}{ovr_pkg}{pkg_suffix}{Style.RESET}")
             
             # Config Tree
             tree = mod.get_config_tree()
@@ -217,6 +292,8 @@ class MenuScreen(Screen):
             self.info_offset = max(0, len(info_lines) - available_height)
 
         # --- FINAL RENDER (Side-by-side) ---
+        term_height = shutil.get_terminal_size().lines
+        
         if term_width > 100:
             # Leave a safety margin to prevent line wrapping
             safe_width = term_width - 2
@@ -228,53 +305,26 @@ class MenuScreen(Screen):
             
             max_rows = max(len(visible_list), len(visible_info))
             
-            for i in range(max_rows):
-                # Get current lines or empty strings
-                left = visible_list[i] if i < len(visible_list) else ""
-                right = visible_info[i] if i < len(visible_info) else ""
-                
-                # --- LEFT COLUMN (List) ---
-                l_len = TUI.visible_len(left)
-                l_padding = " " * (split_width - 2 - l_len)
-                
-                # Scrollbar Left (List) with proportional indicator
-                if len(list_lines) > available_height:
-                    max_l_off = len(list_lines) - available_height
-                    l_prog = self.list_offset / max_l_off
-                    l_indicator_pos = int(l_prog * (available_height - 1))
-                    scroll_l = f"{Style.hex('#89B4FA')}┃{Style.RESET}" if i == l_indicator_pos else f"{Style.DIM}│{Style.RESET}"
-                else:
-                    scroll_l = " "
+            # Prepare modal data if active
+            modal_lines, m_y, m_x = (None, 0, 0)
+            if self.modal:
+                modal_lines, m_y, m_x = self.modal.render()
 
-                # Central Separator
-                central_sep = f"{Style.DIM}│{Style.RESET}"
+            for i in range(available_height):
+                bg_line = self._build_bg_line(i, visible_list, visible_info, available_height, split_width, safe_width, list_lines, info_lines)
                 
-                # --- RIGHT COLUMN (Info) ---
-                # Calculate remaining width for info text, leaving 2 spaces for scrollbar
-                r_content_width = safe_width - split_width - 4
-                r_len = TUI.visible_len(right)
-                r_padding = " " * max(0, r_content_width - 2 - r_len)
+                if self.modal:
+                    m_lines, m_y, m_x = self.modal.render()
+                    # Calculate current absolute line in the terminal
+                    # Offset accounts for Header (1), Subtitle (2) and Spacers
+                    terminal_line = i + 6 
+                    
+                    if m_y <= terminal_line < (m_y + len(m_lines)):
+                        m_idx = terminal_line - m_y
+                        modal_line = m_lines[m_idx]
+                        bg_line = self._overlay_string(bg_line, modal_line, m_x)
                 
-                # Scrollbar Right (Info) with proportional indicator
-                if len(info_lines) > available_height:
-                    max_r_off = len(info_lines) - available_height
-                    r_prog = self.info_offset / max_r_off
-                    r_indicator_pos = int(r_prog * (available_height - 1))
-                    scroll_r = f"{Style.hex('#89B4FA')}┃{Style.RESET}" if i == r_indicator_pos else f"{Style.DIM}│{Style.RESET}"
-                else:
-                    scroll_r = " "
-
-                # Final Row Construction
-                print(f"{left}{l_padding} {scroll_l} {central_sep} {right}{r_padding} {scroll_r}")
-            
-            # Fill remaining height
-            remaining = available_height - max_rows
-            for _ in range(remaining):
-                s_l = f"{Style.DIM}│{Style.RESET}" if len(list_lines) > available_height else " "
-                s_r = f"{Style.DIM}│{Style.RESET}" if len(info_lines) > available_height else " "
-                empty_l = " " * (split_width - 2)
-                empty_r = " " * (safe_width - split_width - 4 - 2)
-                print(f"{empty_l} {s_l} {Style.DIM}│{Style.RESET} {empty_r}  {s_r}")
+                print(bg_line)
         else:
             # Fallback to simple list for narrow terminals
             visible_list = list_lines[self.list_offset : self.list_offset + available_height]
@@ -295,7 +345,7 @@ class MenuScreen(Screen):
         f_move   = TUI.pill("↑/↓/k/j", "Move", "81ECEC") # Cyan
         f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", "89B4FA") # Blue
         f_space  = TUI.pill("SPACE", "Select", "89B4FA") # Blue
-        f_tab    = TUI.pill("TAB", "Group", "CBA6F7")    # Mauve
+        f_tab    = TUI.pill("TAB", "Overrides", "CBA6F7") # Mauve
         f_enter  = TUI.pill("ENTER", "Install", "a6e3a1")# Green
         f_back   = TUI.pill("R", "Back", "f9e2af")       # Yellow
         f_quit   = TUI.pill("Q", "Exit", "f38ba8")       # Red
@@ -310,8 +360,14 @@ class MenuScreen(Screen):
         # User interface command hints
         print(f"{' ' * p_padding}{pills_line}")
 
+        # Render active modal as an overlay
+        if self.modal:
+            # Modal drawing is handled within the viewport loop
+            pass
+
+        # Display exit confirmation message
         if self.exit_pending:
-            print(f"\n  {Style.hex('FF5555')}Press ESC again to exit...{Style.RESET}")
+            print(f"\n  {Style.hex('FF6B6B')}Press ESC again to exit...{Style.RESET}")
 
     def toggle_selection(self, item):
         """Handles item selection and group toggling."""
@@ -346,25 +402,77 @@ class MenuScreen(Screen):
 
     def handle_input(self, key):
         """Processes keyboard input and returns navigation actions."""
+        # Global Exit Keys (Priority when no modal is blocking)
+        if not self.modal:
+            if key == Keys.Q:
+                return "EXIT"
+                
+            # Double ESC safety mechanism
+            if key == Keys.ESC:
+                now = time.time()
+                if now - self.last_esc_time < 1.0: 
+                    return "EXIT"
+                self.last_esc_time = now
+                self.exit_pending = True
+                return None
+            
+            if key != Keys.ESC and self.exit_pending:
+                self.exit_pending = False 
+
         self.flat_items = self._build_flat_list() 
         
-        # Double ESC safety mechanism
-        if key == Keys.ESC:
-            now = time.time()
-            if now - self.last_esc_time < 1.0: 
-                return "EXIT"
-            self.last_esc_time = now
-            self.exit_pending = True
+        # Priority 1: Handle Active Modal
+        if self.modal:
+            action = self.modal.handle_input(key)
+            
+            # Handling OverrideModal
+            if isinstance(self.modal, OverrideModal):
+                if action == "ACCEPT":
+                    mod = self.flat_items[self.cursor_idx]['obj']
+                    mod_id = mod.id
+                    ovr = self.modal.get_overrides()
+                    
+                    # Validation based on real module capabilities
+                    can_install_pkg = ovr['install_pkg']
+                    can_install_dots = ovr['install_dots'] if mod.stow_pkg else False
+                    
+                    # Intelligent comparison: check if anything actually changed from defaults
+                    is_modified = (
+                        ovr['pkg_name'] != mod.get_package_name() or
+                        ovr['manager'] != mod.get_manager() or
+                        not ovr['install_pkg'] or
+                        (mod.stow_pkg and not ovr['install_dots'])
+                    )
+                    
+                    # Sincronize selection state
+                    if not can_install_pkg and not can_install_dots:
+                        # Nothing real to install
+                        self.selected.discard(mod_id)
+                        self.overrides.pop(mod_id, None)
+                    else:
+                        self.selected.add(mod_id)
+                        if is_modified:
+                            self.overrides[mod_id] = ovr
+                        else:
+                            self.overrides.pop(mod_id, None)
+                    
+                    self.modal = None
+                elif action == "CANCEL":
+                    self.modal = None
+                    
+            # Handling SummaryModal
+            elif isinstance(self.modal, SummaryModal):
+                if action == "INSTALL":
+                    self.modal = None
+                    return "CONFIRM"
+                elif action == "CANCEL":
+                    self.modal = None
+                    
             return None
-        
-        if key != Keys.ESC and self.exit_pending:
-            self.exit_pending = False 
-
-        if key == Keys.Q:
-            return "EXIT"
 
         if key == Keys.R or key == Keys.BACKSPACE:
             return "BACK"
+
 
         # List Quick Navigation
         if key == Keys.CTRL_K:
@@ -396,6 +504,9 @@ class MenuScreen(Screen):
             current = self.flat_items[self.cursor_idx]
             if current['type'] == 'header':
                 self.expanded[current['obj']] = not self.expanded[current['obj']]
+            elif current['type'] == 'module':
+                mod = current['obj']
+                self.modal = OverrideModal(mod, self.overrides.get(mod.id))
             
         elif key == Keys.H:
              current = self.flat_items[self.cursor_idx]
@@ -408,8 +519,9 @@ class MenuScreen(Screen):
                  self.expanded[current['obj']] = True
         
         elif key == Keys.ENTER:
-            if len(self.selected.union(self.auto_locked)) > 0:
-                self.selected.update(self.auto_locked)
-                return "CONFIRM"
+            # Show summary modal before proceeding
+            total_selection = self.selected.union(self.auto_locked)
+            if len(total_selection) > 0:
+                self.modal = SummaryModal(self.modules, total_selection, self.overrides)
         
         return None
