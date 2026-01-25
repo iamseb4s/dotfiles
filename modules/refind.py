@@ -18,7 +18,7 @@ class RefindModule(Module):
         """Checks for rEFInd configuration in the EFI partition."""
         return os.path.exists("/boot/EFI/refind/refind.conf")
 
-    def configure(self):
+    def configure(self, override=None):
         """Performs custom rEFInd deployment, including theme installation and PARTUUID resolution."""
         print("[refind] Executing custom configuration sequence...")
         repo_root = os.getcwd()
