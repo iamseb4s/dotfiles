@@ -7,6 +7,7 @@ import re
 import shutil
 
 class Keys:
+    """Keyboard scan code mapping for terminal navigation."""
     UP = 65
     DOWN = 66
     RIGHT = 67
@@ -31,6 +32,7 @@ class Keys:
     R = 114 # Refresh/Back
 
 class Style:
+    """ANSI TrueColor and text attribute escape sequences."""
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -38,7 +40,7 @@ class Style:
 
     @staticmethod
     def hex(hex_color, bg=False):
-        """Converts HEX to ANSI TrueColor."""
+        """Converts a HEX string to a 24-bit ANSI escape sequence."""
         hex_color = hex_color.lstrip('#')
         if len(hex_color) == 3:
             hex_color = ''.join([c*2 for c in hex_color])
@@ -53,12 +55,12 @@ class Style:
 
 class TUI:
     """
-    Advanced Terminal User Interface with State Management.
+    Core utility for low-level terminal manipulation and input capture.
     """
     
     @staticmethod
     def get_key():
-        """Reads a single keypress from stdin."""
+        """Captures a single keypress, handling multi-byte escape sequences."""
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -69,7 +71,6 @@ class TUI:
             
             if ch == '\x1b':  # ESC sequence
                 import select
-                # Determine if ESC or multi-byte sequence
                 r, w, x = select.select([fd], [], [], 0.2)
                 if r:
                     ch2_bytes = os.read(fd, 1)
@@ -96,23 +97,25 @@ class TUI:
 
     @staticmethod
     def hide_cursor():
+        """Hides the terminal cursor."""
         sys.stdout.write("\033[?25l")
         sys.stdout.flush()
 
     @staticmethod
     def show_cursor():
+        """Restores terminal cursor visibility."""
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
 
     @staticmethod
     def clear_screen():
-        # Clear entire screen and move cursor to home (0,0)
+        """Clears the entire terminal window and resets cursor position."""
         sys.stdout.write("\033[2J\033[H")
         sys.stdout.flush()
 
     @staticmethod
     def draw_box(lines, title="", center=False):
-        """Draws a bordered box around text lines with bold labels."""
+        """Renders a bordered container with optional centering and bold titles."""
         if not lines: return
         
         term_width = shutil.get_terminal_size().columns
@@ -137,7 +140,6 @@ class TUI:
             if ":" in line:
                 label, value = line.split(":", 1)
                 formatted_line = f"{Style.BOLD}{label}:{Style.RESET}{value}"
-                # Padding must account for invisible ANSI codes from Style
                 padding_needed = width - 4 - len(line)
                 print(f"{indent}│ {formatted_line}{' ' * padding_needed} │")
             else:
@@ -146,7 +148,7 @@ class TUI:
 
     @staticmethod
     def visible_len(text):
-        """Calculates visible character count, excluding ANSI control codes."""
+        """Calculates character count excluding ANSI control codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         return len(ansi_escape.sub('', text))
 
@@ -162,71 +164,3 @@ class TUI:
         fg = Style.hex(color_hex, bg=False)
         # Structure: [BG_COLOR][BLACK_TEXT] KEY [RESET] [COLOR_TEXT] Action
         return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}"
-
-
-class Screen:
-    def render(self):
-        raise NotImplementedError
-    
-    def handle_input(self, key):
-        raise NotImplementedError
-
-class WelcomeScreen(Screen):
-    def __init__(self, sys_mgr=None):
-        self.sys_mgr = sys_mgr
-
-    def render(self):
-        TUI.clear_screen()
-        term_width = shutil.get_terminal_size().columns
-        print("\n\n")
-        
-        banner = [
-            "▄▄                             ▄▄                                     ",
-            "▀▀                             ██                      ██             ",
-            "██   ▀▀█▄ ███▄███▄ ▄█▀▀▀ ▄█▀█▄ ████▄  ▀▀█▄ ▄█▀▀▀    ▄████ ▄█▀█▄ ██ ██ ",
-            "██  ▄█▀██ ██ ██ ██ ▀███▄ ██▄█▀ ██ ██ ▄█▀██ ▀███▄    ██ ██ ██▄█▀ ██▄██ ",
-            "██▄ ▀█▄██ ██ ██ ██ ▄▄▄█▀ ▀█▄▄▄ ████▀ ▀█▄██ ▄▄▄█▀ ██ ▀████ ▀█▄▄▄  ▀█▀  "
-        ]
-        
-        # System Info
-        import platform
-        os_name = self.sys_mgr.get_os_pretty_name() if self.sys_mgr else f"{platform.system()} {platform.release()}"
-        
-        sys_info = [
-            f"OS: {os_name}",
-            f"Host: {platform.node()}",
-            f"User: {os.getenv('USER', 'unknown')}"
-        ]
-        
-        # Render Centered Banner
-        print(f"{Style.hex('#81ECEC')}") # Cyan
-        for line in banner:
-            padding = (term_width - len(line)) // 2
-            padding = max(0, padding)
-            print(f"{' ' * padding}{line}")
-        print(f"{Style.RESET}")
-        
-        # Render Polished Subtitle
-        subtitle = "─ Dotfiles & Packages Installer ─"
-        s_padding = (term_width - len(subtitle)) // 2
-        print(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}\n\n")
-        
-        # Render Centered Box
-        TUI.draw_box(sys_info, "SYSTEM INFORMATION", center=True)
-        
-        # Footer Centered Pills
-        p_enter = TUI.pill("ENTER", "Start Installation", "a6e3a1") # Green
-        p_quit  = TUI.pill("Q", "Exit", "f38ba8")               # Red
-        
-        pills_line = f"{p_enter}     {p_quit}"
-        p_padding = (term_width - TUI.visible_len(pills_line)) // 2
-        p_padding = max(0, p_padding)
-        
-        print(f"\n\n{' ' * p_padding}{pills_line}")
-        
-    def handle_input(self, key):
-        if key == Keys.ENTER:
-            return "MENU"
-        if key == Keys.ESC or key == Keys.Q:
-            return "EXIT"
-        return None
