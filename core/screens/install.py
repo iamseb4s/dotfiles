@@ -309,12 +309,9 @@ class InstallScreen(Screen):
             if self.modal:
                 action = self.modal.handle_input(key)
                 if action == "FINISH": return "WELCOME"
-                if action == "CLOSE": self.modal = None
+                if action in ["CLOSE", "NO"]: self.modal = None
                 if action == "CANCEL" and not self.is_finished:
                     self.modal = None
-                # If in summary modal and user press Q, let it exit
-                if key in [Keys.Q, Keys.Q_UPPER] and self.is_finished:
-                    sys.exit(0)
             else:
                 if key == Keys.ENTER: return "WELCOME"
                 if key in [Keys.Q, Keys.Q_UPPER]:
