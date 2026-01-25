@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import shutil
 import importlib
 import time
 from collections import defaultdict
@@ -82,12 +83,27 @@ class MenuScreen:
         if self.cursor_idx >= len(self.flat_items):
             self.cursor_idx = len(self.flat_items) - 1
 
-        print("\n                INSTALLATION MENU")
-        print("  " + "="*45)
-        print("  [↑/↓/k/j]: Move     [ TAB ]: Expand/Collapse")
-        print("  [   R   ]: Back     [  Q  ]: Exit")
-        print("  [ SPACE ]: Select   [ENTER]: Install")
-        print("  " + "="*45 + "\n")
+        # --- MODERN HEADER ---
+        term_width = shutil.get_terminal_size().columns
+        title = "DOTFILES INSTALLER"
+        
+        # Colors
+        bg_blue = Style.hex("89B4FA", bg=True)
+        text_black = "\033[30m"
+        
+        # Center the title
+        padding = (term_width - len(title)) // 2
+        # Ensure padding isn't negative
+        padding = max(0, padding)
+        
+        left_pad = " " * padding
+        right_pad = " " * (term_width - padding - len(title))
+        
+        # Render Bar: [BG_BLUE + BLACK]   TITLE   [RESET]
+        header_bar = f"{bg_blue}{text_black}{left_pad}{title}{right_pad}{Style.RESET}"
+        
+        print("\n" + header_bar + "\n")
+        print(f"  {Style.DIM}Select packages to configure:{Style.RESET}\n")
 
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
@@ -152,10 +168,29 @@ class MenuScreen:
                 else:
                     sys.stdout.write(f"{color}{line}{Style.RESET}\n")
         
-        # Footer information
-        print("\n  " + "-"*45)
+        # --- FOOTER (Pills) ---
+        print("\n")
+        
+        def pill(key, action, color_hex):
+            bg = Style.hex(color_hex, bg=True)
+            fg = Style.hex(color_hex, bg=False)
+            # Pill: [Colored BG + Black Text] KEY [Reset] [Colored Text] Action
+            return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}  "
+
+        # Footer Content
+        f_move  = TUI.pill("↑/↓/k/j", "Move", "81ECEC") # Cyan
+        f_space = TUI.pill("SPACE", "Select", "89B4FA") # Blue
+        f_tab   = TUI.pill("TAB", "Group", "CBA6F7")    # Mauve
+        f_enter = TUI.pill("ENTER", "Install", "a6e3a1")# Green
+        f_back  = TUI.pill("R", "Back", "f9e2af")       # Yellow
+        f_quit  = TUI.pill("Q", "Exit", "f38ba8")       # Red
+        
+        # Status Line
         total_active = len(self.selected.union(self.auto_locked))
-        print(f"  Selected: {total_active} packages")
+        status_text = f"  Selected: {total_active} packages"
+        
+        print(f"{status_text}\n")
+        print(f"  {f_move}{f_space}{f_tab}{f_enter}{f_back}{f_quit}")
         
         if self.exit_pending:
             print(f"\n  {Style.hex('FF5555')}Press ESC again to exit...{Style.RESET}")

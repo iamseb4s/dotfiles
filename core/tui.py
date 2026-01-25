@@ -116,6 +116,19 @@ class TUI:
             print(f"  │ {line:<{width-4}} │")
         print("  └" + "─" * (width - 2) + "┘")
 
+    @staticmethod
+    def hex_to_ansi(hex_color, bg=False):
+        # Legacy mapping just in case, or alias to Style.hex
+        return Style.hex(hex_color, bg)
+
+    @staticmethod
+    def pill(key, action, color_hex):
+        """Creates a styled pill for key bindings."""
+        bg = Style.hex(color_hex, bg=True)
+        fg = Style.hex(color_hex, bg=False)
+        # Pill: [Colored BG + Black Text] KEY [Reset] [Colored Text] Action
+        return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}  "
+
 class Screen:
     def render(self):
         raise NotImplementedError
@@ -157,8 +170,11 @@ class WelcomeScreen(Screen):
         
         TUI.draw_box(sys_info, "System Information")
         
-        print("\n\n   [ ENTER ]  Start Installation")
-        print("   [  ESC  ]  Exit")
+        # Footer Pills
+        p_enter = TUI.pill("ENTER", "Start", "a6e3a1") # Green
+        p_quit  = TUI.pill("Q", "Exit", "f38ba8")      # Red
+        
+        print(f"\n\n   {p_enter}   {p_quit}")
         
     def handle_input(self, key):
         if key == Keys.ENTER:
