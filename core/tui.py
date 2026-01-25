@@ -192,14 +192,16 @@ class TUI:
         sys.stdout.flush()
 
     @staticmethod
-    def draw_box(lines, title="", center=False):
+    def draw_box(lines, title="", center=False, width=None):
         """Renders a bordered container with optional centering and bold titles."""
         if not lines: return
         
         term_width = shutil.get_terminal_size().columns
-        # Calculate width based on content
-        content_width = max(len(line) for line in lines)
-        width = max(content_width + 4, len(title) + 6)
+        # Calculate width based on content if not provided
+        if width is None:
+            content_width = max(len(line) for line in lines)
+            # Increased default padding for a more spacious look
+            width = max(content_width + 12, len(title) + 14)
         
         # Centering margin
         margin = (term_width - width) // 2 if center else 2
@@ -214,14 +216,18 @@ class TUI:
             print(f"{indent}├" + "─" * (width - 2) + "┤")
             
         for line in lines:
-            # Check if line has a label (contains ':')
+            # Calculate visible length to handle padding correctly
+            v_len = TUI.visible_len(line)
+            padding_total = (width - 4) - v_len
+            left_pad = padding_total // 2
+            right_pad = padding_total - left_pad
+            
             if ":" in line:
                 label, value = line.split(":", 1)
                 formatted_line = f"{Style.BOLD}{label}:{Style.RESET}{value}"
-                padding_needed = width - 4 - len(line)
-                print(f"{indent}│ {formatted_line}{' ' * padding_needed} │")
+                print(f"{indent}│ {' ' * left_pad}{formatted_line}{' ' * right_pad} │")
             else:
-                print(f"{indent}│ {line:<{width-4}} │")
+                print(f"{indent}│ {' ' * left_pad}{line}{' ' * right_pad} │")
         print(f"{indent}└" + "─" * (width - 2) + "┘")
 
     @staticmethod

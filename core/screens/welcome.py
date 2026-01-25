@@ -23,11 +23,11 @@ class WelcomeScreen(Screen):
 
     def render(self):
         """Displays the splash screen with centered logo and system metrics."""
-        term_width = shutil.get_terminal_size().columns
+        term_size = shutil.get_terminal_size()
+        term_width = term_size.columns
+        term_height = term_size.lines
         
-        buffer = []
-        buffer.append("\n\n")
-        
+        # 1. Content Generation
         banner = [
             "▄▄                             ▄▄                                     ",
             "▀▀                             ██                      ██             ",
@@ -45,18 +45,21 @@ class WelcomeScreen(Screen):
             f"User: {os.getenv('USER', 'unknown')}"
         ]
         
-        # Visual branding
-        buffer.append(f"{Style.hex('#81ECEC')}") # Cyan accent
+        content = []
+        # Banner
+        content.append(f"{Style.hex('#81ECEC')}") # Cyan accent
         for line in banner:
             padding = (term_width - len(line)) // 2
             padding = max(0, padding)
-            buffer.append(f"{' ' * padding}{line}")
-        buffer.append(f"{Style.RESET}")
+            content.append(f"{' ' * padding}{line}")
+        content.append(f"{Style.RESET}")
         
         # Subtitle
         subtitle = "─ Dotfiles & Packages Installer ─"
         s_padding = (term_width - len(subtitle)) // 2
-        buffer.append(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}\n\n")
+        content.append("")
+        content.append(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}")
+        content.append("")
         
         # Information Box
         import io
@@ -64,7 +67,7 @@ class WelcomeScreen(Screen):
         f = io.StringIO()
         with redirect_stdout(f):
             TUI.draw_box(sys_info, "SYSTEM INFORMATION", center=True)
-        buffer.append(f.getvalue())
+        content.append(f.getvalue().strip("\n"))
         
         # Navigation Hints
         p_enter = TUI.pill("ENTER", "Start Installation", "a6e3a1") # Success Green
@@ -74,8 +77,19 @@ class WelcomeScreen(Screen):
         p_padding = (term_width - TUI.visible_len(pills_line)) // 2
         p_padding = max(0, p_padding)
         
-        buffer.append(f"\n\n{' ' * p_padding}{pills_line}")
-        buffer.append("")
+        content.append("")
+        content.append(f"{' ' * p_padding}{pills_line}")
+
+        # 2. Vertical Centering
+        real_lines = []
+        for item in content:
+            real_lines.extend(item.split("\n"))
+            
+        content_height = len(real_lines)
+        top_pad = max(0, (term_height - content_height) // 2)
+        
+        buffer = [""] * top_pad
+        buffer.extend(real_lines)
 
         # Atomic Draw
         sys.stdout.write("\033[H" + "\n".join(buffer) + "\n\033[J")
