@@ -3,27 +3,31 @@ from core.tui import TUI, Keys, Style
 
 class SummaryModal:
     """
-    Final confirmation modal listing all selected modules and their configurations.
+    Final confirmation modal listing all selected modules and their configurations
+    using a tree-like hierarchical structure.
+    Supports 'Audit' mode (pre-install) and 'Results' mode (post-install).
     """
-    def __init__(self, modules, selected_ids, overrides):
-        # Filter modules that are active (selected or locked)
+    def __init__(self, modules, selected_ids, overrides, results=None):
         self.active_modules = [m for m in modules if m.id in selected_ids]
         self.overrides = overrides
+        self.results = results # { 'mod_id': {'pkg': True, 'dots': True} }
+        self.is_results_mode = results is not None
         
         # Build the flat list of content lines once
         self.max_visible_rows = 12
         self.content_lines = self._build_content()
         
         # UI State
-        self.focus_idx = 0 # 0: Install, 1: Cancel
+        self.focus_idx = 0 # 0: Install/Finish, 1: Cancel/Logs
         self.scroll_offset = 0
 
     def _build_content(self):
-        """Constructs the tree-like representation of the installation plan."""
+        """Constructs the tree-like representation of the installation plan or results."""
         lines = []
         for mod in self.active_modules:
             ovr = self.overrides.get(mod.id)
             is_custom = ovr is not None
+            res = self.results.get(mod.id, {}) if self.results else {}
             
             # Root Node: - Package Label
             label = mod.label
@@ -43,20 +47,41 @@ class SummaryModal:
             
             has_config = mod.stow_pkg is not None
             
+            # Icons and colors based on mode
+            if self.is_results_mode:
+                # Package result icon
+                if not do_pkg: 
+                    pkg_icon, pkg_color = "○", Style.DIM
+                else: 
+                    success = res.get('pkg')
+                    pkg_icon = "✔" if success else "✘"
+                    pkg_color = Style.hex("#55E6C1") if success else Style.hex("#FF6B6B")
+                
+                # Dots result icon
+                if not do_dots or not has_config: 
+                    dots_icon, dots_color = "○", Style.DIM
+                else: 
+                    success = res.get('dots')
+                    dots_icon = "✔" if success else "✘"
+                    dots_color = Style.hex("#55E6C1") if success else Style.hex("#FF6B6B")
+            else:
+                pkg_icon = "■" if do_pkg else " "
+                dots_icon = "■" if do_dots else " "
+                pkg_color = dots_color = Style.RESET
+
             # Child 1: Package/Binary
-            mark = "■" if do_pkg else " "
-            # Use '├' if there's a second child (config), otherwise '└'
             connector = " ├" if has_config else " └"
-            lines.append({'text': f"{connector}[{mark}] Package: '{pkg_name}', Manager: '{manager}'", 'color': Style.RESET})
+            text_pkg = f"{connector}[{pkg_icon}] Package: '{pkg_name}', Manager: '{manager}'"
+            lines.append({'text': text_pkg, 'color': pkg_color})
             
             # Child 2: Configuration (Optional)
             if has_config:
-                mark = "■" if do_dots else " "
                 label_dots = "Configuration files" if mod.id == "refind" else "Dotfiles (Stow)"
-                lines.append({'text': f" └[{mark}] {label_dots}", 'color': Style.RESET})
+                text_dots = f" └[{dots_icon}] {label_dots}"
+                lines.append({'text': text_dots, 'color': dots_color})
                 
-                # Info: Target path (Only if dots are active)
-                if do_dots:
+                # Info: Target path (Only in audit mode and if dots are active)
+                if not self.is_results_mode and do_dots:
                     target = mod.stow_target or "~/"
                     lines.append({'text': f"     Target: {Style.hex('#89B4FA')}{target}", 'color': ""})
                 
@@ -69,12 +94,11 @@ class SummaryModal:
         
         # Modal dimensions
         width = 64
-        # Calculate dynamic height based on the tree content to prevent border overflow
         content_rows = min(len(self.content_lines), self.max_visible_rows)
         
         lines = []
         lines.append(f"╔{'═' * (width-2)}╗")
-        title = " INSTALLATION SUMMARY "
+        title = " INSTALLATION RESULTS " if self.is_results_mode else " INSTALLATION SUMMARY "
         lines.append(f"║{title.center(width-2)}║")
         lines.append(f"╠{'═' * (width-2)}╣")
         lines.append(f"║{' ' * (width-2)}║")
@@ -85,17 +109,13 @@ class SummaryModal:
         for item in visible_content:
             text = item['text']
             color = item['color']
-            
-            # Use visible_len to ensure proper border alignment with ANSI codes
             v_len = TUI.visible_len(text)
             padding = " " * (width - 6 - v_len)
             lines.append(f"║  {color}{text}{Style.RESET}{padding}  ║")
             
-        # Fill empty space only up to current visible rows, not fixed maximum
         for _ in range(content_rows - len(visible_content)):
             lines.append(f"║{' ' * (width-2)}║")
 
-        # Scroll / Pagination indicators
         if len(self.content_lines) > self.max_visible_rows:
             remaining = len(self.content_lines) - self.max_visible_rows - self.scroll_offset
             scroll_text = f"--- {max(0, remaining)} more entries ---" if remaining > 0 else "--- End of list ---"
@@ -103,16 +123,19 @@ class SummaryModal:
         else:
             lines.append(f"║{' ' * (width-2)}║")
             
-        lines.append(f"║{Style.DIM}{'Confirm and start installation?'.center(width-2)}{Style.RESET}║")
+        footer_msg = "Process finished." if self.is_results_mode else "Confirm and start installation?"
+        lines.append(f"║{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}║")
         
-        # Bottom Buttons
-        btn_ins = "  INSTALL  "
-        btn_can = "  CANCEL  "
+        # Buttons
+        if self.is_results_mode:
+            btn_left, btn_right = "  FINISH  ", "  VIEW LOGS  "
+        else:
+            btn_left, btn_right = "  START INSTALL  ", "  CANCEL  "
         
-        ins_styled = f"{Style.INVERT}{btn_ins}{Style.RESET}" if self.focus_idx == 0 else f"[{btn_ins.strip()}]"
-        can_styled = f"{Style.INVERT}{btn_can}{Style.RESET}" if self.focus_idx == 1 else f"[{btn_can.strip()}]"
+        l_styled = f"{Style.INVERT}{btn_left}{Style.RESET}" if self.focus_idx == 0 else f"[{btn_left.strip()}]"
+        r_styled = f"{Style.INVERT}{btn_right}{Style.RESET}" if self.focus_idx == 1 else f"[{btn_right.strip()}]"
         
-        btn_row = f"{ins_styled}     {can_styled}"
+        btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
         left_p = " " * padding
@@ -121,7 +144,6 @@ class SummaryModal:
         lines.append(f"║{left_p}{btn_row}{right_p}║")
         lines.append(f"╚{'═' * (width-2)}╝")
         
-        # Calculate real vertical position
         height = len(lines)
         start_x = (term_width - width) // 2
         start_y = (term_height - height) // 2
@@ -131,13 +153,11 @@ class SummaryModal:
     def handle_input(self, key):
         """Manages modal navigation and confirmation."""
         if key == Keys.ESC or key == Keys.Q:
-            return "CANCEL"
+            return "CLOSE" if self.is_results_mode else "CANCEL"
             
-        # Horizontal button selection
         if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
             
-        # Vertical Scrolling for long summaries
         elif key in [Keys.UP, Keys.K]:
             if self.scroll_offset > 0:
                 self.scroll_offset -= 1
@@ -147,6 +167,9 @@ class SummaryModal:
                 self.scroll_offset += 1
                 
         elif key == Keys.ENTER:
-            return "INSTALL" if self.focus_idx == 0 else "CANCEL"
+            if self.is_results_mode:
+                return "FINISH" if self.focus_idx == 0 else "CLOSE"
+            else:
+                return "INSTALL" if self.focus_idx == 0 else "CANCEL"
             
         return None
