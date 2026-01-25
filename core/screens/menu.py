@@ -142,8 +142,9 @@ class MenuScreen(Screen):
         padding = (term_width - len(title_text)) // 2
         header_bar = f"{bg_blue}{text_black}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
         
-        # Layout overhead calculation
-        available_height = term_height - 7
+        # Available space for boxes
+        # Overhead calculation: Header(1) + Spacer(1) + Spacer(1) + Pills(1) = 4 lines
+        available_height = term_height - 5
         if self.exit_pending: available_height -= 1
         available_height = max(10, available_height)
         
@@ -194,7 +195,13 @@ class MenuScreen(Screen):
                 if is_cursor: list_lines.append(f"{Style.INVERT}{line} {Style.RESET}")
                 else: list_lines.append(f"{cursor_char} {Style.DIM}│{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}")
 
-        visible_list = list_lines[self.list_offset : self.list_offset + (available_height - 2)]
+        visible_list = list_lines[self.list_offset : self.list_offset + (available_height - 3)]
+
+        while len(visible_list) < (available_height - 3):
+            visible_list.append("")
+        
+        status_text = f" {Style.DIM}Selected: {len(self.selected.union(self.auto_locked))} packages{Style.RESET}"
+        visible_list.append(status_text)
 
         # Build Right Content
         info_lines = self._get_info_lines(right_width)
@@ -240,8 +247,6 @@ class MenuScreen(Screen):
         
         buffer = [header_bar, ""]
         buffer.extend(main_content)
-        buffer.append("")
-        buffer.append(f"  Selected: {len(self.selected.union(self.auto_locked))} packages")
         buffer.append("")
         
         # Footer
