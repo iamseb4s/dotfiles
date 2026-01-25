@@ -3,51 +3,76 @@ import shutil
 import os
 
 class Module:
+    """
+    Base class for all modules. Designed to be data-driven.
+    """
+    # Override these in child classes
+    id = None
+    label = None
+    description = ""
+    category = "Uncategorized"
+    dependencies = []
+    
+    # Package Management: 'system', 'cargo', 'bob', 'brew', 'git', 'wget'
+    manager = "system"
+    package_name = None 
+    
+    # Dotfiles Configuration
+    stow_pkg = None      
+    stow_target = None   
+
     def __init__(self, sys_manager: System):
         self.sys = sys_manager
-    
-    @property
-    def id(self):
-        """Unique identifier (e.g. 'git')"""
-        raise NotImplementedError
-        
-    @property
-    def label(self):
-        """Human readable name (e.g. 'Git & GitHub CLI')"""
-        raise NotImplementedError
 
-    @property
-    def category(self):
-        """Returns category name (e.g. 'System', 'Dev Tools', 'Apps'). Default: 'Uncategorized'"""
-        return "Uncategorized"
+    def get_package_name(self):
+        """Resolves package name based on OS if a dict is provided."""
+        if isinstance(self.package_name, dict):
+            if self.sys.is_arch: return self.package_name.get("arch")
+            if self.sys.is_debian: return self.package_name.get("debian")
+        return self.package_name or self.id
 
-    @property
-    def dependencies(self):
-        """List of module IDs that this module depends on."""
-        return []
+    def is_installed(self):
+        """Generic installation check."""
+        pkg = self.get_package_name()
+        if self.manager == "system":
+            return shutil.which(pkg) is not None
+        elif self.manager == "cargo":
+            return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
+        elif self.manager == "brew":
+            return shutil.which("brew") and self.sys.run(f"brew list {pkg}", shell=True)
+        return False
 
     def install(self):
-        """Installs binaries/dependencies."""
-        raise NotImplementedError
-    
-    def configure(self):
-        """Sets up configuration files (Stow or Copy)."""
-        pass # Optional
+        """Generic installation logic."""
+        pkg = self.get_package_name()
+        if not pkg and self.manager == "system": return True
 
-    def run_stow(self, package_name):
-        """Helper to run GNU stow."""
-        # Check if stow is installed?
+        if self.manager == "system":
+            return self.sys.install_package(pkg if self.sys.is_arch else None, 
+                                          pkg if self.sys.is_debian else None)
+        elif self.manager == "cargo":
+            return self.sys.run(f"cargo install {pkg}", shell=True)
+        elif self.manager == "bob":
+            return self.sys.run(f"bob use stable", shell=True)
+        return True
+
+    def configure(self):
+        """Auto-stow if stow_pkg is defined."""
+        if self.stow_pkg:
+            self.run_stow(self.stow_pkg, self.stow_target)
+
+    def run_stow(self, package_name, target=None):
+        """Standard GNU Stow wrapper."""
         dotfiles_dir = os.path.join(os.getcwd(), "dots")
-        target_dir = os.path.expanduser("~")
+        target_dir = os.path.expanduser(target or "~")
         
-        # Only print log, don't use print() directly if we want to capture output later
-        # For now we use print, but TUI will handle this later.
-        print(f"[{self.id}] Stowing {package_name}...")
+        if target and not os.path.exists(target_dir):
+            os.makedirs(target_dir, exist_ok=True)
+
+        print(f"[{self.id}] Stowing {package_name} to {target_dir}...")
         try:
-            # We assume we are in the root of the repo
-            self.sys.run(
-                ["stow", "--dir", dotfiles_dir, "--target", target_dir, "-R", package_name]
-            )
-            print(f"[{self.id}] Symlinks created.")
-        except Exception:
-            print(f"[{self.id}] Error running stow.")
+            cmd = ["stow", "--dir", dotfiles_dir, "--target", target_dir, "-R", package_name]
+            return self.sys.run(cmd)
+        except Exception as e:
+            print(f"[{self.id}] Error: {e}")
+            return False
