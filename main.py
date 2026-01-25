@@ -66,8 +66,8 @@ def main():
                     state = "INSTALL"
             
             elif state == "INSTALL":
-                # Transfer control to the installation runner
-                installer = InstallScreen(modules, menu_screen.selected)
+                # Transfer control to the installation runner with user overrides
+                installer = InstallScreen(modules, menu_screen.selected, menu_screen.overrides)
                 installer.run()
                 sys.exit(0)
     finally:
