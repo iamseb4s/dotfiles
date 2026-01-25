@@ -52,45 +52,52 @@ class System:
         
         try:
             if callback:
+                # Use binary mode to avoid TextIOWrapper buffering issues
                 process = subprocess.Popen(
                     command, 
                     shell=shell, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.STDOUT, 
-                    text=True,
-                    bufsize=0, # Unbuffered for real-time
-                    universal_newlines=True
+                    text=False,
+                    bufsize=0
                 )
                 
                 TUI.set_raw_mode(enable=True)
-                output_buffer = ""
+                output_buffer = b""
                 try:
                     while True:
                         finished = process.poll() is not None
                         
                         # Monitor process and keyboard via select
-                        readable, _, _ = select.select([process.stdout, sys.stdin], [], [], 0.05)
+                        readable, _, _ = select.select([process.stdout, sys.stdin], [], [], 0.02)
                         
                         for source in readable:
-                            if source == process.stdout:
+                            if source == process.stdout and process.stdout:
                                 try:
-                                    # Use direct OS read to bypass Python buffering
-                                    chunk = os.read(process.stdout.fileno(), 4096).decode('utf-8', errors='ignore')
+                                    # Direct binary read
+                                    chunk = os.read(process.stdout.fileno(), 4096)
                                     if chunk:
-                                        lines = (output_buffer + chunk).split('\n')
+                                        lines = (output_buffer + chunk).split(b'\n')
                                         output_buffer = lines.pop()
                                         for line in lines:
-                                            callback(line.rstrip())
+                                            # Decode here, ignoring errors for weird terminal sequences
+                                            callback(line.decode('utf-8', errors='ignore').rstrip())
                                 except (OSError, EOFError):
                                     pass
                             elif source == sys.stdin:
                                 if input_callback:
                                     input_callback()
-                                    # Force a UI refresh even if no new log line arrived
-                                    if callback: callback(None)
                         
                         if finished:
-                            if output_buffer: callback(output_buffer.rstrip())
+                            # Final flush of output
+                            remaining = output_buffer.decode('utf-8', errors='ignore').strip()
+                            if remaining: callback(remaining)
+                            
+                            # CRITICAL: Check if there's pending input one last time 
+                            # before returning, to avoid leaking keys to the next screen.
+                            r, _, _ = select.select([sys.stdin], [], [], 0.01)
+                            if r and input_callback:
+                                input_callback()
                             break
                 finally:
                     TUI.set_raw_mode(enable=False)

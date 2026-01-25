@@ -29,6 +29,7 @@ class Keys:
     H = 104 # Collapse/Left
     L = 108 # Expand/Right
     Q = 113 # q
+    Q_UPPER = 81 # Q
     R = 114 # Refresh/Back
 
 class Style:
@@ -58,38 +59,79 @@ class TUI:
     Core utility for low-level terminal manipulation and input capture.
     """
     _old_settings = None
+    _raw_ref_count = 0
 
     @staticmethod
     def set_raw_mode(enable=True):
         """Toggles terminal RAW mode globally and disables echo."""
+        if not sys.stdin.isatty():
+            return
         fd = sys.stdin.fileno()
+        
         if enable:
+            TUI._raw_ref_count += 1
+            if TUI._raw_ref_count > 1:
+                return # Already in raw mode
+                
             if TUI._old_settings is None:
                 TUI._old_settings = termios.tcgetattr(fd)
-            # Set raw mode and ensure ECHO is off
-            tty.setraw(fd)
-            os.system("stty -echo")
+            
+            # Create raw mode settings
+            raw = termios.tcgetattr(fd)
+            # lflags: Disable ICANON (buffered), ECHO, and ISIG
+            raw[3] &= ~(termios.ICANON | termios.ECHO | termios.IEXTEN | termios.ISIG)
+            # iflags: Disable flow control and translation of CR to NL
+            raw[0] &= ~(termios.IXON | termios.ICRNL)
+            # oflags: Keep OPOST for standard \n -> \r\n conversion
+            raw[1] |= (termios.OPOST)
+            # cflags: 8-bit chars
+            raw[2] &= ~(termios.CSIZE | termios.PARENB)
+            raw[2] |= termios.CS8
+            # cc: Blocking read (wait for at least 1 byte)
+            raw[6][termios.VMIN] = 1
+            raw[6][termios.VTIME] = 0
+            
+            termios.tcsetattr(fd, termios.TCSADRAIN, raw)
         else:
-            if TUI._old_settings is not None:
+            TUI._raw_ref_count = max(0, TUI._raw_ref_count - 1)
+            if TUI._raw_ref_count == 0 and TUI._old_settings is not None:
                 termios.tcsetattr(fd, termios.TCSADRAIN, TUI._old_settings)
-                os.system("stty echo")
                 TUI._old_settings = None
 
     @staticmethod
-    def get_key():
+    def get_key(blocking=False):
         """Captures a single keypress, handling multi-byte escape sequences."""
-        fd = sys.stdin.fileno()
-        # If we are already in raw mode (managed externally), just read
-        if TUI._old_settings is not None:
-            return TUI._read_key_internal(fd)
+        if not sys.stdin.isatty():
+            return None
             
-        # Otherwise, toggle raw mode just for this read
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
+        fd = sys.stdin.fileno()
+        
+        # If not blocking, check if there is data to read
+        if not blocking:
+            import select
+            r, _, _ = select.select([fd], [], [], 0)
+            if not r:
+                return None
+
+        # If we are NOT in global raw mode, we MUST toggle it for this read
+        # to ensure ECHO is off and ICANON is off.
+        is_global = TUI._old_settings is not None
+        
+        if not is_global:
+            old = termios.tcgetattr(fd)
+            raw = termios.tcgetattr(fd)
+            raw[3] &= ~(termios.ICANON | termios.ECHO)
+            raw[6][termios.VMIN] = 1
+            raw[6][termios.VTIME] = 0
+            termios.tcsetattr(fd, termios.TCSANOW, raw)
+            try:
+                return TUI._read_key_internal(fd)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        else:
+            # Already in raw mode, just read
             return TUI._read_key_internal(fd)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
 
     @staticmethod
     def _read_key_internal(fd):
@@ -135,6 +177,12 @@ class TUI:
     def show_cursor():
         """Restores terminal cursor visibility."""
         sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
+
+    @staticmethod
+    def reset_cursor():
+        """Moves the cursor to the top-left corner without clearing the screen."""
+        sys.stdout.write("\033[H")
         sys.stdout.flush()
 
     @staticmethod
