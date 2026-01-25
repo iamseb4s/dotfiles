@@ -133,8 +133,18 @@ class SummaryModal:
         else:
             btn_left, btn_right = "  INSTALL  ", "  CANCEL  "
         
-        l_styled = f"{Style.INVERT}{btn_left}{Style.RESET}" if self.focus_idx == 0 else f"[{btn_left.strip()}]"
-        r_styled = f"{Style.INVERT}{btn_right}{Style.RESET}" if self.focus_idx == 1 else f"[{btn_right.strip()}]"
+        purple_bg = Style.hex("#CBA6F7", bg=True)
+        text_black = "\033[30m"
+        
+        if self.focus_idx == 0:
+            l_styled = f"{purple_bg}{text_black}{btn_left}{Style.RESET}"
+        else:
+            l_styled = f"[{btn_left.strip()}]"
+            
+        if self.focus_idx == 1:
+            r_styled = f"{purple_bg}{text_black}{btn_right}{Style.RESET}"
+        else:
+            r_styled = f"[{btn_right.strip()}]"
         
         btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)

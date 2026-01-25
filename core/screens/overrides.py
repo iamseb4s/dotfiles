@@ -60,7 +60,9 @@ class OverrideModal:
             is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
 
             if is_focused:
-                mgr_styled_items.append(f"{Style.BOLD}> {Style.RESET}{mark} {mgr}")
+                # Purple + BOLD for selection
+                style = Style.hex("#CBA6F7") + Style.BOLD
+                mgr_styled_items.append(f"{style}{mark} {mgr}{Style.RESET}")
             else:
                 mgr_styled_items.append(f"{mark} {mgr}")
         
@@ -77,10 +79,15 @@ class OverrideModal:
         
         # Option 0: Package Toggle
         pkg_mark = "■" if self.install_pkg else " "
-        cursor = ">" if self.focus_idx == 0 else " "
-        label = f" {cursor} [{pkg_mark}] Install Package: '{self.pkg_name}'"
+        is_focused = (self.focus_idx == 0)
+        label = f"  [{pkg_mark}] Install Package: '{self.pkg_name}'"
         if self.editing_name: label += " ✎"
-        inner_lines.append(label)
+        
+        if is_focused:
+            style = Style.hex("#CBA6F7") + Style.BOLD
+            inner_lines.append(f"{style}{label}{Style.RESET}")
+        else:
+            inner_lines.append(label)
         
         # Option 1: Managers
         if self.install_pkg:
@@ -98,8 +105,14 @@ class OverrideModal:
             if self.mod.id == "refind": label_text = "Copy Configuration files"
             
             dot_mark = "■" if self.install_dots else " "
-            cursor = ">" if self.focus_idx == 2 else " "
-            inner_lines.append(f" {cursor} [{dot_mark}] {label_text}")
+            is_focused = (self.focus_idx == 2)
+            label = f"  [{dot_mark}] {label_text}"
+            
+            if is_focused:
+                style = Style.hex("#CBA6F7") + Style.BOLD
+                inner_lines.append(f"{style}{label}{Style.RESET}")
+            else:
+                inner_lines.append(label)
             inner_lines.append("")
         
         # Instructions
@@ -109,8 +122,19 @@ class OverrideModal:
         # Buttons
         btn_acc = "  ACCEPT  "
         btn_can = "  CANCEL  "
-        acc_styled = f"{Style.INVERT}{btn_acc}{Style.RESET}" if self.focus_idx == 3 else f"[{btn_acc.strip()}]"
-        can_styled = f"{Style.INVERT}{btn_can}{Style.RESET}" if self.focus_idx == 4 else f"[{btn_can.strip()}]"
+        
+        purple_bg = Style.hex("#CBA6F7", bg=True)
+        text_black = "\033[30m"
+        
+        if self.focus_idx == 3:
+            acc_styled = f"{purple_bg}{text_black}{btn_acc}{Style.RESET}"
+        else:
+            acc_styled = f"[{btn_acc.strip()}]"
+            
+        if self.focus_idx == 4:
+            can_styled = f"{purple_bg}{text_black}{btn_can}{Style.RESET}"
+        else:
+            can_styled = f"[{btn_can.strip()}]"
         
         btn_row = f"{acc_styled}     {can_styled}"
         v_len = TUI.visible_len(btn_row)

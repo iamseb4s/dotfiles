@@ -162,7 +162,6 @@ class MenuScreen(Screen):
         list_lines = []
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
-            cursor_char = ">" if is_cursor else " "
             
             if item['type'] == 'header':
                 cat_name = item['obj']
@@ -174,9 +173,13 @@ class MenuScreen(Screen):
                 elif active_count == len(mods_in_cat): sel_mark, header_color = "[■]", Style.hex("55E6C1")
                 else: sel_mark, header_color = "[-]", Style.hex("FDCB6E")
                 
-                line = f"{cursor_char} {icon} {sel_mark} {cat_name.upper()}"
-                if is_cursor: list_lines.append(f"{Style.BOLD}{Style.INVERT}{line} {Style.RESET}")
-                else: list_lines.append(f"{Style.BOLD}{header_color}{line}{Style.RESET}")
+                line = f"  {icon} {sel_mark} {cat_name.upper()}"
+                # If cursor is here, use Purple + BOLD
+                if is_cursor: 
+                    style = Style.hex("#CBA6F7") + Style.BOLD
+                    list_lines.append(f"{style}{line}{Style.RESET}")
+                else: 
+                    list_lines.append(f"{Style.BOLD}{header_color}{line}{Style.RESET}")
 
             elif item['type'] == 'module':
                 mod = item['obj']
@@ -191,9 +194,13 @@ class MenuScreen(Screen):
                 elif installed: mark, color, suffix = "[ ]", Style.hex("89B4FA"), " ●"
                 else: mark, color, suffix = "[ ]", "", ""
                 
-                line = f"{cursor_char} │     {mark} {mod.label}{suffix}"
-                if is_cursor: list_lines.append(f"{Style.INVERT}{line} {Style.RESET}")
-                else: list_lines.append(f"{cursor_char} {Style.DIM}│{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}")
+                line = f"    │     {mark} {mod.label}{suffix}"
+                # If cursor is here, use Purple + BOLD
+                if is_cursor: 
+                    style = Style.hex("#CBA6F7") + Style.BOLD
+                    list_lines.append(f"{style}{line}{Style.RESET}")
+                else: 
+                    list_lines.append(f"    {Style.DIM}│{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}")
 
         visible_list = list_lines[self.list_offset : self.list_offset + (available_height - 3)]
 

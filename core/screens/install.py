@@ -23,10 +23,19 @@ class ConfirmModal:
         
         btn_y = "  YES  "
         btn_n = "  NO   "
-        if self.focus_idx == 0: btn_y = f"{Style.INVERT}{btn_y}{Style.RESET}"
-        else: btn_y = f"[{btn_y.strip()}]"
-        if self.focus_idx == 1: btn_n = f"{Style.INVERT}{btn_n}{Style.RESET}"
-        else: btn_n = f"[{btn_n.strip()}]"
+        
+        purple_bg = Style.hex("#CBA6F7", bg=True)
+        text_black = "\033[30m"
+        
+        if self.focus_idx == 0:
+            btn_y = f"{purple_bg}{text_black}{btn_y}{Style.RESET}"
+        else:
+            btn_y = f"[{btn_y.strip()}]"
+            
+        if self.focus_idx == 1:
+            btn_n = f"{purple_bg}{text_black}{btn_n}{Style.RESET}"
+        else:
+            btn_n = f"[{btn_n.strip()}]"
         
         btn_row = f"{btn_y}     {btn_n}"
         v_len = TUI.visible_len(btn_row)
