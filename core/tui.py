@@ -202,6 +202,103 @@ class TUI:
             return None
 
     @staticmethod
+    def truncate_ansi(text, max_len):
+        """Truncates a string containing ANSI codes without breaking them."""
+        if TUI.visible_len(text) <= max_len:
+            return text
+            
+        # Pattern to match ANSI escape sequences
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        
+        result = ""
+        current_visible_len = 0
+        last_match_end = 0
+        
+        for match in ansi_escape.finditer(text):
+            # Text before the ANSI code
+            pre_ansi = text[last_match_end:match.start()]
+            for char in pre_ansi:
+                if current_visible_len < max_len - 3: # Leave room for "..."
+                    result += char
+                    current_visible_len += 1
+                else:
+                    return result + Style.RESET + "..."
+            
+            # The ANSI code itself (doesn't count toward length)
+            result += match.group()
+            last_match_end = match.end()
+            
+        # Final bit of text after last ANSI code
+        post_ansi = text[last_match_end:]
+        for char in post_ansi:
+            if current_visible_len < max_len - 3:
+                result += char
+                current_visible_len += 1
+            else:
+                return result + Style.RESET + "..."
+                
+        return result
+
+    @staticmethod
+    def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
+        """Wraps a list of lines in a rounded box with an optional title and integrated scrollbar."""
+        base_border_color = color if color else (Style.hex("#CBA6F7") if is_focused else Style.hex("#585B70"))
+        thumb_color = Style.hex("#CBA6F7") if is_focused else Style.hex("#89B4FA")
+        reset = Style.RESET
+        
+        # 1. Top border with title
+        top = "╭─"
+        if title:
+            display_title = title.upper()
+            max_title_len = width - 6
+            if len(display_title) > max_title_len:
+                display_title = display_title[:max_title_len-1] + "…"
+            top += f" {Style.BOLD}{display_title}{Style.RESET}{base_border_color} ─"
+        remaining = width - TUI.visible_len(top) - 1
+        top += "─" * max(0, remaining) + "╮"
+        output = [f"{base_border_color}{top}{reset}"]
+        
+        # 2. Content lines
+        internal_width = width - 2
+        for i in range(height - 2):
+            content = lines[i] if i < len(lines) else ""
+            
+            # Truncate safely if it exceeds internal width
+            if TUI.visible_len(content) > internal_width:
+                content = TUI.truncate_ansi(content, internal_width)
+            
+            v_len = TUI.visible_len(content)
+            padding = " " * max(0, internal_width - v_len)
+            
+            # Integrated Scrollbar logic
+            r_char = "│"
+            r_color = base_border_color
+            if scroll_pos is not None and scroll_size is not None:
+                if scroll_pos <= i < scroll_pos + scroll_size:
+                    r_char = "┃"
+                    r_color = thumb_color
+            output.append(f"{base_border_color}│{reset}{content}{padding}{r_color}{r_char}{reset}")
+            
+        # 3. Bottom border
+        bottom = "╰" + "─" * (width - 2) + "╯"
+        output.append(f"{base_border_color}{bottom}{reset}")
+        return output
+
+    @staticmethod
+    def stitch_containers(left_box, right_box, gap=1):
+        """Combines two container buffers line by line with a gap."""
+        max_lines = max(len(left_box), len(right_box))
+        combined = []
+        spacer = " " * gap
+        
+        for i in range(max_lines):
+            l_line = left_box[i] if i < len(left_box) else " " * TUI.visible_len(left_box[0])
+            r_line = right_box[i] if i < len(right_box) else " " * TUI.visible_len(right_box[0])
+            combined.append(f"{l_line}{spacer}{r_line}")
+            
+        return combined
+
+    @staticmethod
     def wrap_text(text, width):
         """Wraps text to a specific width using textwrap."""
         import textwrap

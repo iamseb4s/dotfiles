@@ -130,7 +130,7 @@ class SummaryModal:
         if self.is_results_mode:
             btn_left, btn_right = "  FINISH  ", "  VIEW LOGS  "
         else:
-            btn_left, btn_right = "  START INSTALL  ", "  CANCEL  "
+            btn_left, btn_right = "  INSTALL  ", "  CANCEL  "
         
         l_styled = f"{Style.INVERT}{btn_left}{Style.RESET}" if self.focus_idx == 0 else f"[{btn_left.strip()}]"
         r_styled = f"{Style.INVERT}{btn_right}{Style.RESET}" if self.focus_idx == 1 else f"[{btn_right.strip()}]"
