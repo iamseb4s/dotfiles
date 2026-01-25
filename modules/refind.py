@@ -18,9 +18,12 @@ class RefindModule(Module):
         """Checks for rEFInd configuration in the EFI partition."""
         return os.path.exists("/boot/EFI/refind/refind.conf")
 
-    def configure(self, override=None):
+    def configure(self, override=None, callback=None, input_callback=None):
         """Performs custom rEFInd deployment, including theme installation and PARTUUID resolution."""
-        print("[refind] Executing custom configuration sequence...")
+        msg = "Executing custom configuration sequence..."
+        if callback: callback(msg)
+        else: print(f"[refind] {msg}")
+        
         repo_root = os.getcwd()
         theme_source = os.path.join(repo_root, "dots", "refind", "themes")
         conf_template = os.path.join(repo_root, "dots", "refind", "refind.conf")
@@ -30,7 +33,7 @@ class RefindModule(Module):
 
         # Core installation via system tools
         if not os.path.exists(efi_base):
-            self.sys.run("refind-install", needs_root=True)
+            self.sys.run("refind-install", needs_root=True, callback=callback, input_callback=input_callback)
 
         # Config generation and deployment
         try:
@@ -43,11 +46,14 @@ class RefindModule(Module):
             tmp_conf = "/tmp/refind.conf.generated"
             with open(tmp_conf, 'w') as f: f.write(config_content)
             
-            self.sys.run(f"mv {tmp_conf} {conf_dest}", needs_root=True, shell=True)
+            self.sys.run(f"mv {tmp_conf} {conf_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback)
         except Exception as e:
-            print(f"[refind] Error config: {e}")
+            err = f"Error config: {e}"
+            if callback: callback(err)
+            else: print(f"[refind] {err}")
 
         # 3. Copy Themes
         if os.path.exists(theme_source):
-            self.sys.run(f"rm -rf {theme_dest}", needs_root=True, shell=True)
-            self.sys.run(f"cp -r {theme_source} {theme_dest}", needs_root=True, shell=True)
+            self.sys.run(f"rm -rf {theme_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback)
+            return self.sys.run(f"cp -r {theme_source} {theme_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback)
+        return True

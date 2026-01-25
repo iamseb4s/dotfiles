@@ -1,6 +1,7 @@
 import shutil
 import platform
 import os
+import sys
 from core.tui import TUI, Keys, Style
 
 class Screen:
@@ -22,9 +23,10 @@ class WelcomeScreen(Screen):
 
     def render(self):
         """Displays the splash screen with centered logo and system metrics."""
-        TUI.clear_screen()
         term_width = shutil.get_terminal_size().columns
-        print("\n\n")
+        
+        buffer = []
+        buffer.append("\n\n")
         
         banner = [
             "▄▄                             ▄▄                                     ",
@@ -44,20 +46,25 @@ class WelcomeScreen(Screen):
         ]
         
         # Visual branding
-        print(f"{Style.hex('#81ECEC')}") # Cyan accent
+        buffer.append(f"{Style.hex('#81ECEC')}") # Cyan accent
         for line in banner:
             padding = (term_width - len(line)) // 2
             padding = max(0, padding)
-            print(f"{' ' * padding}{line}")
-        print(f"{Style.RESET}")
+            buffer.append(f"{' ' * padding}{line}")
+        buffer.append(f"{Style.RESET}")
         
         # Subtitle
         subtitle = "─ Dotfiles & Packages Installer ─"
         s_padding = (term_width - len(subtitle)) // 2
-        print(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}\n\n")
+        buffer.append(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}\n\n")
         
         # Information Box
-        TUI.draw_box(sys_info, "SYSTEM INFORMATION", center=True)
+        import io
+        from contextlib import redirect_stdout
+        f = io.StringIO()
+        with redirect_stdout(f):
+            TUI.draw_box(sys_info, "SYSTEM INFORMATION", center=True)
+        buffer.append(f.getvalue())
         
         # Navigation Hints
         p_enter = TUI.pill("ENTER", "Start Installation", "a6e3a1") # Success Green
@@ -67,12 +74,18 @@ class WelcomeScreen(Screen):
         p_padding = (term_width - TUI.visible_len(pills_line)) // 2
         p_padding = max(0, p_padding)
         
-        print(f"\n\n{' ' * p_padding}{pills_line}")
+        buffer.append(f"\n\n{' ' * p_padding}{pills_line}")
+        buffer.append("")
+
+        # Atomic Draw
+        sys.stdout.write("\033[H" + "\n".join(buffer) + "\n\033[J")
+        sys.stdout.flush()
+
         
     def handle_input(self, key):
         """Maps key events to screen transitions."""
         if key == Keys.ENTER:
             return "MENU"
-        if key == Keys.ESC or key == Keys.Q:
+        if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
             return "EXIT"
         return None

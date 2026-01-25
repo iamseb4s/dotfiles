@@ -36,7 +36,9 @@ def load_modules(sys_manager):
 def main():
     """Main execution loop controlling application state."""
     try:
+        TUI.set_raw_mode(True)
         TUI.hide_cursor()
+        TUI.clear_screen()
         sys_mgr = System()
         modules = load_modules(sys_mgr)
         
@@ -48,7 +50,7 @@ def main():
             if state == "WELCOME":
                 scr = WelcomeScreen(sys_mgr)
                 scr.render()
-                action = scr.handle_input(TUI.get_key())
+                action = scr.handle_input(TUI.get_key(blocking=True))
                 if action == "MENU": 
                     TUI.clear_screen()
                     state = "MENU"
@@ -56,7 +58,7 @@ def main():
                 
             elif state == "MENU":
                 menu_screen.render()
-                action = menu_screen.handle_input(TUI.get_key())
+                action = menu_screen.handle_input(TUI.get_key(blocking=True))
                 if action == "EXIT": sys.exit(0)
                 if action == "BACK": 
                     TUI.clear_screen()
@@ -68,10 +70,18 @@ def main():
             elif state == "INSTALL":
                 # Transfer control to the installation runner with user overrides
                 installer = InstallScreen(modules, menu_screen.selected, menu_screen.overrides)
-                installer.run()
-                sys.exit(0)
+                result = installer.run()
+                
+                if result == "WELCOME":
+                    # Reset state and menu for a clean start
+                    state = "WELCOME"
+                    TUI.clear_screen()
+                    menu_screen = MenuScreen(modules)
+                else:
+                    sys.exit(0)
     finally:
         # Restore terminal state on exit
+        TUI.set_raw_mode(False)
         TUI.clear_screen()
         TUI.show_cursor()
 
