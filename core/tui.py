@@ -16,6 +16,12 @@ class Keys:
     ESC = 27
     TAB = 9
     BACKSPACE = 127
+    # Scroll keys
+    PGUP = 53
+    PGDN = 54
+    # Ctrl keys
+    CTRL_K = 11
+    CTRL_J = 10
     # Vim keys
     K = 107 # Up
     J = 106 # Down
@@ -63,7 +69,7 @@ class TUI:
             
             if ch == '\x1b':  # ESC sequence
                 import select
-                # Wait up to 0.2s to distinguish single ESC from escape sequences
+                # Determine if ESC or multi-byte sequence
                 r, w, x = select.select([fd], [], [], 0.2)
                 if r:
                     ch2_bytes = os.read(fd, 1)
@@ -72,6 +78,12 @@ class TUI:
                     if ch2 == '[' or ch2 == 'O':
                          ch3_bytes = os.read(fd, 1)
                          ch3 = ch3_bytes.decode('utf-8', errors='ignore')
+                         
+                         # Capture extended sequences like PageUp/PageDown
+                         if ch3 in ['5', '6']:
+                             os.read(fd, 1) # consume terminator
+                             return ord(ch3)
+                             
                          return ord(ch3) 
                     
                     return Keys.ESC 
@@ -134,22 +146,23 @@ class TUI:
 
     @staticmethod
     def visible_len(text):
-        """Returns the length of the string without ANSI escape codes."""
+        """Calculates visible character count, excluding ANSI control codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         return len(ansi_escape.sub('', text))
 
     @staticmethod
     def hex_to_ansi(hex_color, bg=False):
-        # Legacy mapping just in case, or alias to Style.hex
+        """Interface for HEX to ANSI conversion."""
         return Style.hex(hex_color, bg)
 
     @staticmethod
     def pill(key, action, color_hex):
-        """Creates a styled pill for key bindings."""
+        """Renders a styled command shortcut pill."""
         bg = Style.hex(color_hex, bg=True)
         fg = Style.hex(color_hex, bg=False)
-        # Pill: [Colored BG + Black Text] KEY [Reset] [Colored Text] Action
+        # Structure: [BG_COLOR][BLACK_TEXT] KEY [RESET] [COLOR_TEXT] Action
         return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}"
+
 
 class Screen:
     def render(self):
@@ -217,6 +230,3 @@ class WelcomeScreen(Screen):
         if key == Keys.ESC or key == Keys.Q:
             return "EXIT"
         return None
-
-# We will implement MenuScreen and others in install.py or separate files
-# but for now, TUI class provides the primitives.
