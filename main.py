@@ -111,7 +111,7 @@ def main():
                 
                 action = menu_screen.handle_input(key)
                 if action == "EXIT": sys.exit(0)
-                if action == "BACK": 
+                if action in ["WELCOME"]: 
                     TUI.clear_screen()
                     state = "WELCOME"
                 if action == "CONFIRM": 

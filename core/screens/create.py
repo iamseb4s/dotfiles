@@ -83,7 +83,9 @@ class DependencyModal:
             else: self.selected.add(mid)
         elif key == Keys.ENTER:
             return "CONFIRM"
-        elif key in [Keys.ESC, ord('q'), ord('Q')]:
+        elif key == Keys.ESC:
+            return "CANCEL"
+        elif key in [Keys.Q, Keys.Q_UPPER]:
             return "CANCEL"
         return None
 
@@ -140,14 +142,17 @@ class WizardSummaryModal:
         btn_s = "  SAVE  "
         btn_c = "  CANCEL  "
         
-        if self.focus_idx == 0: btn_s = f"{purple_bg}{Style.crust()}{btn_s}{Style.RESET}"
-        else: btn_s = f"[ {btn_s.strip()} ]"
-        if self.focus_idx == 1: btn_c = f"{purple_bg}{Style.crust()}{btn_c}{Style.RESET}"
-        else: btn_c = f"[ {btn_c.strip()} ]"
+        if self.focus_idx == 0:
+            s_styled = f"{purple_bg}{Style.crust()}{btn_s}{Style.RESET}"
+            c_styled = f"[{btn_c.strip().center(len(btn_c)-2)}]"
+        else:
+            s_styled = f"[{btn_s.strip().center(len(btn_s)-2)}]"
+            c_styled = f"{purple_bg}{Style.crust()}{btn_c}{Style.RESET}"
         
-        btn_row = f"{btn_s}     {btn_c}"
+        btn_row = f"{s_styled}     {c_styled}"
         pad = (width - 2 - TUI.visible_len(btn_row)) // 2
         inner_lines.append(f"{' ' * pad}{btn_row}")
+
 
         # Scroll
         scroll_pos, scroll_size = None, None
@@ -174,7 +179,12 @@ class WizardSummaryModal:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
         elif key == Keys.ENTER:
             return "SAVE" if self.focus_idx == 0 else "CANCEL"
-        elif key in [Keys.ESC, ord('q'), ord('Q')]:
+        elif key == Keys.ESC:
+            if self.focus_idx != 1:
+                self.focus_idx = 1 # Focus CANCEL
+            else:
+                return "CANCEL"
+        elif key in [Keys.Q, Keys.Q_UPPER]:
             return "CANCEL"
         return None
 
@@ -255,7 +265,12 @@ class DraftSelectionModal:
         elif key in [ord('x'), ord('X'), Keys.DEL]:
             if self.focus_idx < len(self.drafts):
                 return ("DELETE_REQ", self.drafts[self.focus_idx])
-        elif key in [Keys.ESC, ord('q'), ord('Q')]:
+        elif key == Keys.ESC:
+            if self.focus_idx != options_len - 1:
+                self.focus_idx = options_len - 1 # Focus "Start Fresh"
+            else:
+                return "FRESH"
+        elif key in [Keys.Q, Keys.Q_UPPER]:
             return "FRESH"
         return None
 
@@ -620,7 +635,6 @@ class CreateScreen(Screen):
             p_line = f"{TUI.pill('ENTER', 'Finish', Theme.GREEN)}    {TUI.pill('ESC', 'Cancel', Theme.RED)}"
         else:
             f_pills = [
-                TUI.pill('ESC', 'Discard', Theme.YELLOW),
                 TUI.pill('h/j/k/l', 'Navigate', Theme.SKY),
                 TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE),
                 TUI.pill('ENTER', 'Summary & Save', Theme.GREEN),
@@ -629,7 +643,7 @@ class CreateScreen(Screen):
             
             if self.active_draft_path:
                 f_pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
-            f_pills.append(TUI.pill('Q', 'Exit', Theme.RED))
+            f_pills.append(TUI.pill('Q', 'Back', Theme.RED))
             
             p_line = "    ".join(f_pills)
         
@@ -780,7 +794,6 @@ class CreateScreen(Screen):
             return None
 
         # --- NAVIGATION MODE ---
-        if key in [ord('q'), ord('Q')]: return "EXIT"
         if key in [ord('d'), ord('D')]:
             self.modal = ConfirmModal("SAVE DRAFT", "Do you want to save the current progress as a draft?")
             self.modal_type = "DRAFT"
@@ -792,8 +805,8 @@ class CreateScreen(Screen):
             self.modal_type = "DELETE_DRAFT"
             return None
 
-        # --- IMPORTANT: Standalone ESC check ---
-        if key == Keys.ESC:
+        # --- NAVIGATION MODE ---
+        if key in [Keys.Q, Keys.Q_UPPER]:
             is_dirty = any(v for k, v in self.form.items() if k not in ['manager', 'category', 'stow_target', 'dependencies', 'is_incomplete', 'custom_category']) or self.form['stow_target'] != "~"
             if is_dirty:
                 self.modal = ConfirmModal("DISCARD CHANGES", "Are you sure you want to discard all changes?")

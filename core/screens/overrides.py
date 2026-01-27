@@ -127,13 +127,13 @@ class OverrideModal:
         
         if self.focus_idx == 3:
             acc_styled = f"{purple_bg}{Style.crust()}{btn_acc}{Style.RESET}"
-        else:
-            acc_styled = f"[{btn_acc.strip()}]"
-            
-        if self.focus_idx == 4:
+            can_styled = f"[{btn_can.strip().center(len(btn_can)-2)}]"
+        elif self.focus_idx == 4:
+            acc_styled = f"[{btn_acc.strip().center(len(btn_acc)-2)}]"
             can_styled = f"{purple_bg}{Style.crust()}{btn_can}{Style.RESET}"
         else:
-            can_styled = f"[{btn_can.strip()}]"
+            acc_styled = f"[{btn_acc.strip().center(len(btn_acc)-2)}]"
+            can_styled = f"[{btn_can.strip().center(len(btn_can)-2)}]"
         
         btn_row = f"{acc_styled}     {can_styled}"
         v_len = TUI.visible_len(btn_row)
@@ -154,6 +154,8 @@ class OverrideModal:
         if self.editing_name:
             if key == Keys.ENTER:
                 self.editing_name = False
+            elif key == Keys.ESC:
+                self.editing_name = False
             elif key == Keys.BACKSPACE:
                 self.pkg_name = self.pkg_name[:-1]
             elif 32 <= key <= 126: # Printable chars
@@ -161,9 +163,15 @@ class OverrideModal:
             return None
 
         # Modal close keys
-        if key == Keys.ESC or key == Keys.Q:
+        if key in [Keys.Q, Keys.Q_UPPER]:
             return "CANCEL"
             
+        if key == Keys.ESC:
+            if self.focus_idx != 4:
+                self.focus_idx = 4
+            else:
+                return "CANCEL"
+
         # Vertical Navigation
         if key in [Keys.UP, Keys.K]:
             if self.focus_idx in [3, 4]: # From buttons row

@@ -180,13 +180,10 @@ class SummaryModal:
         
         if self.focus_idx == 0:
             l_styled = f"{purple_bg}{Style.crust()}{btn_left}{Style.RESET}"
+            r_styled = f"[{btn_right.strip().center(len(btn_right)-2)}]"
         else:
-            l_styled = f"[{btn_left.strip()}]"
-            
-        if self.focus_idx == 1:
+            l_styled = f"[{btn_left.strip().center(len(btn_left)-2)}]"
             r_styled = f"{purple_bg}{Style.crust()}{btn_right}{Style.RESET}"
-        else:
-            r_styled = f"[{btn_right.strip()}]"
         
         btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)
@@ -213,11 +210,17 @@ class SummaryModal:
 
     def handle_input(self, key):
         """Manages modal navigation and confirmation."""
-        if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
+        if key in [Keys.Q, Keys.Q_UPPER]:
             if self.is_results_mode:
                 return "CLOSE"
             return "CANCEL"
             
+        if key == Keys.ESC:
+            if self.focus_idx != 1:
+                self.focus_idx = 1
+            else:
+                return "CLOSE" if self.is_results_mode else "CANCEL"
+
         if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
             

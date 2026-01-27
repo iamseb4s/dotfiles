@@ -103,6 +103,6 @@ class WelcomeScreen(Screen):
             return "MENU"
         if key in [ord('n'), ord('N')]:
             return "CREATE"
-        if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
+        if key in [Keys.Q, Keys.Q_UPPER]:
             return "EXIT"
         return None

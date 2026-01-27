@@ -38,8 +38,6 @@ class MenuScreen(Screen):
         self.modal = None          # Current active modal
         
         self.flat_items = [] 
-        self.exit_pending = False
-        self.last_esc_time = 0
 
     def _resolve_dependencies(self):
         """
@@ -144,7 +142,6 @@ class MenuScreen(Screen):
         # Available space for boxes
         # Overhead calculation: Header(1) + Spacer(1) + Spacer(1) + Pills(1) = 4 lines
         available_height = term_height - 5
-        if self.exit_pending: available_height -= 1
         available_height = max(10, available_height)
         
         # Box Widths
@@ -256,15 +253,14 @@ class MenuScreen(Screen):
         buffer.append("")
         
         # Footer
-        f_move = TUI.pill("↑↓←→", "Navigate", Theme.SKY)
+        f_move = TUI.pill("h/j/k/l", "Navigate", Theme.SKY)
         f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE)
         f_space = TUI.pill("SPACE", "Select", Theme.BLUE)
         f_tab = TUI.pill("TAB", "Overrides", Theme.MAUVE)
         f_enter = TUI.pill("ENTER", "Install", Theme.GREEN)
-        f_quit = TUI.pill("Q", "Exit", Theme.RED)
+        f_quit = TUI.pill("Q", "Back", Theme.RED)
         pills_line = f"{f_move}    {f_scroll}    {f_space}    {f_tab}    {f_enter}    {f_quit}"
         buffer.append(f"{' ' * ((term_width - TUI.visible_len(pills_line)) // 2)}{pills_line}")
-        if self.exit_pending: buffer.append(f"  {Style.red()}Press ESC again to exit...{Style.RESET}")
 
         # Modal Overlay
         if self.modal:
@@ -274,43 +270,30 @@ class MenuScreen(Screen):
                 if 0 <= target_y < len(buffer):
                     buffer[target_y] = self._overlay_string(buffer[target_y], m_line, m_x)
 
-        # Final buffer management to prevent terminal scroll
+        # Final buffer management
         final_output = "\n".join(buffer[:term_height])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
-
-
     def toggle_selection(self, item):
         """Handles item selection and group toggling."""
         self._resolve_dependencies()
-        
         if item['type'] == 'module':
             mod_id = item['obj'].id
-            
-            # Prevent manual toggle if locked by dependency
-            if mod_id in self.auto_locked:
-                return 
-
+            if mod_id in self.auto_locked: return 
             if mod_id in self.selected:
                 self.selected.remove(mod_id)
-                # Clear overrides when manually deselecting
                 self.overrides.pop(mod_id, None)
             else:
                 self.selected.add(mod_id)
-                
         elif item['type'] == 'header':
             cat = item['obj']
             mods = self.categories[cat]
-            
-            # Toggle group state
             all_active = all(self.is_active(m.id) for m in mods)
-            
             if all_active:
                 for m in mods: 
                     if m.id in self.selected: 
                         self.selected.remove(m.id)
-                        # Clear overrides when mass-deselecting
                         self.overrides.pop(m.id, None)
             else:
                 for m in mods: 
@@ -319,25 +302,6 @@ class MenuScreen(Screen):
 
     def handle_input(self, key):
         """Processes keyboard input and returns navigation actions."""
-        # Global Exit Keys (Priority when no modal is blocking)
-        if not self.modal:
-            if key in [Keys.Q, Keys.Q_UPPER]:
-                return "EXIT"
-                
-            # Double ESC safety mechanism
-            if key == Keys.ESC:
-                now = time.time()
-                if now - self.last_esc_time < 1.0: 
-                    return "EXIT"
-                self.last_esc_time = now
-                self.exit_pending = True
-                return None
-            
-            if key != Keys.ESC and self.exit_pending:
-                self.exit_pending = False 
-
-        self.flat_items = self._build_flat_list() 
-        
         # Priority 1: Handle Active Modal
         if self.modal:
             action = self.modal.handle_input(key)
@@ -346,7 +310,6 @@ class MenuScreen(Screen):
             if isinstance(self.modal, OverrideModal):
                 if action == "ACCEPT":
                     mod = self.flat_items[self.cursor_idx]['obj']
-                    mod_id = mod.id
                     ovr = self.modal.get_overrides()
                     if not ovr['install_pkg'] and not (mod.stow_pkg and ovr['install_dots']):
                         self.selected.discard(mod.id)
@@ -363,28 +326,29 @@ class MenuScreen(Screen):
                 if action == "INSTALL":
                     self.modal = None
                     return "CONFIRM"
-                elif action == "CANCEL":
+                elif action in ["CANCEL", "CLOSE"]:
                     self.modal = None
-                    
             return None
 
-        if key == Keys.R or key == Keys.BACKSPACE:
-            return "BACK"
+        # Global Back Key
+        if key in [Keys.Q, Keys.Q_UPPER]:
+            return "WELCOME"
+
 
         # --- PANEL-SPECIFIC LOGIC ---
         
         # Determine info panel scroll limit for shared use
         term_height = shutil.get_terminal_size().lines
-        available_height = max(10, term_height - 7 - (1 if self.exit_pending else 0))
+        available_height = max(10, term_height - 5)
         right_width = int((shutil.get_terminal_size().columns - 2) * 0.5)
         info_lines = self._get_info_lines(right_width)
         max_info_off = max(0, len(info_lines) - (available_height - 2))
 
         if self.active_panel == 1:
             # INFORMATION PANEL FOCUS
-            if key in [Keys.UP, Keys.K, 65]:
+            if key in [Keys.UP, Keys.K]:
                 self.info_offset = max(0, self.info_offset - 1)
-            elif key in [Keys.DOWN, Keys.J, 66]:
+            elif key in [Keys.DOWN, Keys.J]:
                 self.info_offset = min(max_info_off, self.info_offset + 1)
             elif key in [Keys.H, Keys.LEFT]:
                 self.active_panel = 0
@@ -392,15 +356,14 @@ class MenuScreen(Screen):
                 self.info_offset = max(0, self.info_offset - 5)
             elif key == Keys.PGDN:
                 self.info_offset = min(max_info_off, self.info_offset + 5)
-            # SPACE, TAB, ENTER, L/RIGHT are blocked here
             return None
 
         # PACKAGES PANEL FOCUS (active_panel == 0)
-        if key in [Keys.UP, Keys.K, 65]: 
+        if key in [Keys.UP, Keys.K]: 
             self.cursor_idx = max(0, self.cursor_idx - 1)
             self.info_offset = 0
         
-        elif key in [Keys.DOWN, Keys.J, 66]: 
+        elif key in [Keys.DOWN, Keys.J]: 
             self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 1)
             self.info_offset = 0
 
@@ -409,7 +372,6 @@ class MenuScreen(Screen):
             self.info_offset = max(0, self.info_offset - 5)
         elif key == Keys.PGDN:
             self.info_offset = min(max_info_off, self.info_offset + 5)
-
         elif key == Keys.CTRL_K: self.cursor_idx = max(0, self.cursor_idx - 5)
         elif key == Keys.CTRL_J: self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 5)
         elif key == Keys.SPACE: self.toggle_selection(self.flat_items[self.cursor_idx])

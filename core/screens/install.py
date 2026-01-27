@@ -27,19 +27,20 @@ class ConfirmModal:
         inner_lines.append("")
         
         # Button labels
-        txt_y = "YES"
-        txt_n = "NO"
+        btn_y = "  YES  "
+        btn_n = "  NO  "
         
         purple_bg = Style.mauve(bg=True)
         
         if self.focus_idx == 0:
-            btn_y = f"{purple_bg}{Style.crust()}  YES  {Style.RESET}"
-            btn_n = "[  NO  ]" # Matches 7-char width
+            y_styled = f"{purple_bg}{Style.crust()}{btn_y}{Style.RESET}"
+            n_styled = f"[{btn_n.strip().center(len(btn_n)-2)}]"
         else:
-            btn_y = "[ YES ]"
-            btn_n = f"{purple_bg}{Style.crust()}   NO   {Style.RESET}"
+            y_styled = f"[{btn_y.strip().center(len(btn_y)-2)}]"
+            n_styled = f"{purple_bg}{Style.crust()}{btn_n}{Style.RESET}"
         
-        btn_row = f"{btn_y}    {btn_n}"
+        btn_row = f"{y_styled}     {n_styled}"
+
 
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
@@ -60,7 +61,12 @@ class ConfirmModal:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
         elif key == Keys.ENTER:
             return "YES" if self.focus_idx == 0 else "NO"
-        elif key in [Keys.ESC, Keys.Q, Keys.Q_UPPER]:
+        elif key == Keys.ESC:
+            if self.focus_idx != 1:
+                self.focus_idx = 1 # Focus NO
+            else:
+                return "NO"
+        elif key in [Keys.Q, Keys.Q_UPPER]:
             return "NO"
         return None
 
@@ -210,9 +216,9 @@ class InstallScreen(Screen):
         bar_color = Style.green() if not self.is_cancelled else Style.red()
         bar_content = f"{bar_color}█" * filled + f"{Style.DIM}░" * (bar_len - filled) + Style.RESET
         
-        if self.is_finished: footer = f"{TUI.pill('ENTER', 'Finish', Theme.GREEN)}    {TUI.pill('R', 'Summary', Theme.YELLOW)}    {TUI.pill('Q', 'Quit', Theme.RED)}"
+        if self.is_finished: footer = f"{TUI.pill('ENTER', 'Results', Theme.GREEN)}    {TUI.pill('Q', 'Finish', Theme.RED)}"
         elif self.is_cancelled: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', Theme.YELLOW)}"
-        else: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', Theme.YELLOW)}    {TUI.pill('Q/ESC', 'Stop', Theme.RED)}"
+        else: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', Theme.YELLOW)}    {TUI.pill('Q', 'Stop', Theme.RED)}"
 
         buffer = [header_bar, ""]
         buffer.extend(main_content)
@@ -260,7 +266,6 @@ class InstallScreen(Screen):
                 def live_callback(line):
                     self.add_log(line)
                     self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
-                    # Every log line triggers a keyboard poll for instant Q/ESC detection
                     input_handler()
                 
                 def input_handler():
@@ -274,7 +279,7 @@ class InstallScreen(Screen):
                         return
 
                     if not self.modal:
-                        if key in [Keys.Q, Keys.Q_UPPER, Keys.ESC]:
+                        if key in [Keys.Q, Keys.Q_UPPER]:
                             self.modal = ConfirmModal("STOP INSTALLATION", "Finish current task and stop?")
                     else:
                         res = self.modal.handle_input(key)
@@ -311,19 +316,18 @@ class InstallScreen(Screen):
             if self.modal:
                 action = self.modal.handle_input(key)
                 if action == "FINISH": return "WELCOME"
-                if action in ["CLOSE", "NO"]: self.modal = None
-                if action == "CANCEL" and not self.is_finished:
+                if action in ["CLOSE", "NO", "CANCEL"]:
                     self.modal = None
             else:
-                if key == Keys.ENTER: return "WELCOME"
+                if key == Keys.ENTER:
+                    if not self.modal:
+                        self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
+                    continue
                 if key in [Keys.Q, Keys.Q_UPPER]:
                     if self.is_finished:
-                        sys.exit(0)
+                        return "WELCOME"
                     else:
-                        self.modal = ConfirmModal("EXIT", "Are you sure you want to exit?")
-                
-                if key == Keys.R:
-                    self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
+                        self.modal = ConfirmModal("EXIT", "Are you sure you want to stop?")
                 
                 # Manual Scroll
                 term_height = shutil.get_terminal_size().lines
