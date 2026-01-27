@@ -6,6 +6,7 @@ from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
 from core.screens.overrides import OverrideModal
 from core.screens.summary import SummaryModal
+from core.screens.install import ConfirmModal
 
 class MenuScreen(Screen):
     """
@@ -324,10 +325,24 @@ class MenuScreen(Screen):
                     return "CONFIRM"
                 elif action in ["CANCEL", "CLOSE"]:
                     self.modal = None
+
+            # Handling ConfirmModal (Discard)
+            elif isinstance(self.modal, ConfirmModal):
+                if action == "YES":
+                    self.selected.clear()
+                    self.overrides.clear()
+                    self.modal = None
+                    TUI.push_notification("Changes discarded", type="INFO")
+                    return "WELCOME"
+                elif action == "NO":
+                    self.modal = None
             return None
 
         # Global Back Key
         if key in [Keys.Q, Keys.Q_UPPER]:
+            if self.selected:
+                self.modal = ConfirmModal("DISCARD CHANGES", "Are you sure you want to discard all changes?")
+                return None
             return "WELCOME"
 
 
