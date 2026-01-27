@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import re
+import json
+from datetime import datetime
 from core.tui import TUI, Keys, Style
 from core.screens.welcome import Screen
 from core.screens.install import ConfirmModal
@@ -176,6 +178,87 @@ class WizardSummaryModal:
             return "CANCEL"
         return None
 
+class DraftSelectionModal:
+    """Modal to select an existing draft or start fresh."""
+    def __init__(self, drafts, delete_callback=None):
+        self.drafts = drafts # List of (filename, data, mtime)
+        self.focus_idx = 0
+        self.scroll_offset = 0
+        self.delete_callback = delete_callback
+
+    def render(self):
+        term_width = shutil.get_terminal_size().columns
+        term_height = shutil.get_terminal_size().lines
+        width = 60
+        
+        # Max rows based on terminal height
+        available_content_height = term_height - 11
+        max_rows = min(len(self.drafts) + 1, available_content_height)
+        max_rows = max(3, max_rows)
+        
+        inner_lines = [""] # Top spacer
+        
+        # Options: Drafts + "Start Fresh"
+        options = self.drafts + [("fresh", None, None)]
+        
+        for i in range(max_rows):
+            idx = self.scroll_offset + i
+            if idx < len(options):
+                fname, data, mtime = options[idx]
+                is_focused = (self.focus_idx == idx)
+                color = Style.hex("#CBA6F7") + Style.BOLD if is_focused else ""
+                
+                if fname == "fresh":
+                    label = " [ Start Fresh / New ] "
+                else:
+                    d_id = data.get('id', 'unnamed')
+                    d_time = datetime.fromtimestamp(mtime).strftime("%d %b %H:%M")
+                    label = f" {d_id} ({d_time})"
+                
+                inner_lines.append(f"  {color}{label}{Style.RESET}")
+
+        inner_lines.append("")
+        hint = f"{Style.DIM}ENTER to select, X to delete{Style.RESET}"
+        inner_lines.append(f"{' ' * ((width - 2 - TUI.visible_len(hint)) // 2)}{hint}")
+        
+        # Scroll calculation
+        scroll_pos, scroll_size = None, None
+        if len(options) > max_rows:
+            thumb_size = max(1, int(max_rows**2 / len(options)))
+            max_off = len(options) - max_rows
+            prog = self.scroll_offset / max_off if max_off > 0 else 0
+            scroll_pos = 1 + int(prog * (max_rows - thumb_size))
+            scroll_size = thumb_size
+
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title="RESUME DRAFT?", is_focused=True, scroll_pos=scroll_pos, scroll_size=scroll_size)
+        
+        return lines, (term_height - height) // 2, (term_width - width) // 2
+
+    def handle_input(self, key):
+        options_len = len(self.drafts) + 1
+        if key in [Keys.UP, Keys.K, 65]:
+            self.focus_idx = max(0, self.focus_idx - 1)
+            if self.focus_idx < self.scroll_offset:
+                self.scroll_offset = self.focus_idx
+        elif key in [Keys.DOWN, Keys.J, 66]:
+            self.focus_idx = min(options_len - 1, self.focus_idx + 1)
+            term_height = shutil.get_terminal_size().lines
+            max_rows = min(options_len, term_height - 11)
+            max_rows = max(3, max_rows)
+            if self.focus_idx >= self.scroll_offset + max_rows:
+                self.scroll_offset = self.focus_idx - max_rows + 1
+        elif key == Keys.ENTER:
+            if self.focus_idx < len(self.drafts):
+                return ("LOAD", self.drafts[self.focus_idx])
+            return "FRESH"
+        elif key in [ord('x'), ord('X'), Keys.DEL]:
+            if self.focus_idx < len(self.drafts):
+                return ("DELETE_REQ", self.drafts[self.focus_idx])
+        elif key in [Keys.ESC, ord('q'), ord('Q')]:
+            return "FRESH"
+        return None
+
 class CreateScreen(Screen):
     """
     Interactive wizard for creating package modules.
@@ -184,19 +267,11 @@ class CreateScreen(Screen):
     def __init__(self, modules):
         self.modules = modules
         self.categories = self._get_categories()
+        self.drafts_dir = "modules/.drafts"
+        self.active_draft_path = None
         
         # Form data with default values
-        self.form = {
-            'id': '',
-            'label': '',
-            'manager': 'system',
-            'pkg_name': '',
-            'category': self.categories[0] if self.categories else 'General',
-            'custom_category': '',
-            'stow_target': '~',
-            'dependencies': [],
-            'is_incomplete': False
-        }
+        self._reset_form()
         
         # Available options
         self.managers = ['system', 'cargo', 'brew', 'bob', 'custom']
@@ -208,7 +283,9 @@ class CreateScreen(Screen):
         self.text_cursor_pos = 0 # Cursor position within string
         self.old_value = ""     # To restore on ESC
         self.modal = None
-        self.modal_type = None # "DISCARD", "SAVE", "DRAFT"
+        self.modal_type = None # "DISCARD", "SAVE", "DRAFT", "LOAD_DRAFT", "DELETE_DRAFT"
+        self.status_msg = ""
+        self.status_time = 0
         
         self.fields = [
             {'id': 'id', 'label': 'ID', 'type': 'text', 'help': 'Unique identifier. Used for filename and dots/ folder.'},
@@ -221,6 +298,65 @@ class CreateScreen(Screen):
             {'id': 'is_incomplete', 'label': 'Manual Mode', 'type': 'check', 'help': 'Mark as incomplete for custom Python logic.'},
             {'id': 'files', 'label': 'Files', 'type': 'placeholder', 'help': '[Future] file picker.'}
         ]
+
+        # Check for drafts
+        self._check_for_drafts()
+
+    def _reset_form(self):
+        """Resets the form to initial clean state."""
+        self.form = {
+            'id': '',
+            'label': '',
+            'manager': 'system',
+            'pkg_name': '',
+            'category': self.categories[0] if self.categories else 'General',
+            'custom_category': '',
+            'stow_target': '~',
+            'dependencies': [],
+            'is_incomplete': False
+        }
+        self.active_draft_path = None
+
+    def _check_for_drafts(self):
+        """Scans .drafts/ folder and opens selection modal if any exist."""
+        if not os.path.exists(self.drafts_dir):
+            return
+            
+        draft_files = []
+        for f in os.listdir(self.drafts_dir):
+            if f.endswith(".json"):
+                path = os.path.join(self.drafts_dir, f)
+                try:
+                    with open(path, 'r') as j:
+                        data = json.load(j)
+                        mtime = os.path.getmtime(path)
+                        draft_files.append((f, data, mtime))
+                except:
+                    continue
+        
+        if draft_files:
+            # Sort by mtime descending (newest first)
+            draft_files.sort(key=lambda x: x[2], reverse=True)
+            self.modal = DraftSelectionModal(draft_files)
+            self.modal_type = "LOAD_DRAFT"
+
+    def save_draft(self):
+        """Saves current form data to a JSON draft."""
+        if not os.path.exists(self.drafts_dir):
+            os.makedirs(self.drafts_dir)
+            
+        name = self.form['id'] if self.form['id'] else f"draft_temp_{int(time.time())}"
+        path = os.path.join(self.drafts_dir, f"{name}.json")
+        
+        try:
+            with open(path, 'w') as f:
+                json.dump(self.form, f, indent=4)
+            self.active_draft_path = path
+            self.status_msg = f"{Style.hex('#a6e3a1')}Draft saved: {name}.json{Style.RESET}"
+            self.status_time = time.time()
+        except Exception as e:
+            self.status_msg = f"{Style.hex('#f38ba8')}Error saving draft: {str(e)}{Style.RESET}"
+            self.status_time = time.time()
 
     def _get_categories(self):
         """Extracts existing categories from loaded modules."""
@@ -252,6 +388,7 @@ class CreateScreen(Screen):
         
         # 3. Build Right Content (Help & Preview)
         help_content = []
+        
         if self.focus_idx < len(self.fields):
             field = self.fields[self.focus_idx]
             help_text = field['help']
@@ -268,6 +405,11 @@ class CreateScreen(Screen):
                 # 2. Existing ID validation
                 elif any(m.id == self.form['id'] for m in self.modules):
                     help_content.append(f"  {Style.hex('#f38ba8')}ERROR: This ID already exists!{Style.RESET}")
+        
+        # Show status message if recent (AT THE BOTTOM)
+        if self.status_msg and time.time() - self.status_time < 3:
+            if help_content: help_content.append("")
+            help_content.append(f"  {self.status_msg}")
         
         # Help height is dynamic
         help_height = len(help_content) + 2
@@ -383,8 +525,11 @@ class CreateScreen(Screen):
                 TUI.pill('PgUp/Dn', 'Scroll Script', '89B4FA'),
                 TUI.pill('ENTER', 'Summary & Save', 'a6e3a1'),
                 TUI.pill('D', 'Draft', 'CBA6F7'),
-                TUI.pill('Q', 'Exit', 'f38ba8')
             ]
+            if self.active_draft_path:
+                f_pills.append(TUI.pill('X', 'Delete Draft', 'f38ba8'))
+            f_pills.append(TUI.pill('Q', 'Exit', 'f38ba8'))
+            
             p_line = "    ".join(f_pills)
         
         buffer = [header_bar, ""]
@@ -427,13 +572,49 @@ class CreateScreen(Screen):
             res = self.modal.handle_input(key)
             if res == "YES":
                 if self.modal_type == "DISCARD": return "WELCOME"
+                elif self.modal_type == "DRAFT":
+                    self.save_draft()
+                    self.modal = None
+                    return "WELCOME"
+                elif self.modal_type == "DELETE_DRAFT":
+                    if self.active_draft_path and os.path.exists(self.active_draft_path):
+                        os.remove(self.active_draft_path)
+                        d_name = os.path.basename(self.active_draft_path)
+                        self._reset_form()
+                        self.status_msg = f"{Style.hex('#f38ba8')}Deleted: {d_name}. Form reset.{Style.RESET}"
+                        self.status_time = time.time()
+                    self.modal = None
+                elif self.modal_type == "DELETE_MODAL_DRAFT":
+                    # Delete from within DraftSelectionModal
+                    path = os.path.join(self.drafts_dir, self.pending_delete[0])
+                    if os.path.exists(path):
+                        os.remove(path)
+                    self.modal = None
+                    self._check_for_drafts() # Refresh list
+                    return None
             elif res == "CONFIRM":
                 if isinstance(self.modal, DependencyModal):
                     self.form['dependencies'] = self.modal.get_selected()
                 self.modal = None
+            elif isinstance(res, tuple):
+                if res[0] == "LOAD":
+                    filename, data, mtime = res[1]
+                    self.form.update(data)
+                    self.active_draft_path = os.path.join(self.drafts_dir, filename)
+                    self.modal = None
+                elif res[0] == "DELETE_REQ":
+                    self.pending_delete = res[1] # (filename, data, mtime)
+                    self.modal = ConfirmModal("DELETE DRAFT?", f"Are you sure you want to permanently delete '{res[1][1].get('id', 'unnamed')}' draft?")
+                    self.modal_type = "DELETE_MODAL_DRAFT"
+            elif res == "FRESH":
+                self.modal = None
             elif res == "SAVE":
                 self.modal = None # Phase 4 target
-            elif res in ["NO", "CLOSE", "CANCEL"]: self.modal = None
+            elif res in ["NO", "CLOSE", "CANCEL"]:
+                if self.modal_type == "DELETE_MODAL_DRAFT":
+                    self._check_for_drafts() # Return to selection modal
+                else:
+                    self.modal = None
             return None
 
         field = self.fields[self.focus_idx]
@@ -465,7 +646,17 @@ class CreateScreen(Screen):
 
         # --- NAVIGATION MODE ---
         if key in [ord('q'), ord('Q')]: return "EXIT"
+        if key in [ord('d'), ord('D')]:
+            self.modal = ConfirmModal("SAVE DRAFT", "Do you want to save the current progress as a draft?")
+            self.modal_type = "DRAFT"
+            return None
         
+        if key in [ord('x'), ord('X')] and self.active_draft_path:
+            d_id = self.form['id'] or "unnamed"
+            self.modal = ConfirmModal("DELETE ACTIVE DRAFT?", f"Are you sure you want to permanently delete '{d_id}' draft?")
+            self.modal_type = "DELETE_DRAFT"
+            return None
+
         if key == Keys.ESC:
             is_dirty = any(v for k, v in self.form.items() if k not in ['manager', 'category', 'stow_target', 'dependencies', 'is_incomplete', 'custom_category']) or self.form['stow_target'] != "~"
             if is_dirty:
