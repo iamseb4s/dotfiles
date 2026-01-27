@@ -17,6 +17,7 @@ class Keys:
     ESC = 27
     TAB = 9
     BACKSPACE = 127
+    DEL = 301
     # Scroll keys
     PGUP = 53
     PGDN = 54
@@ -186,6 +187,19 @@ class TUI:
                          ch3_bytes = os.read(fd, 1)
                          ch3 = ch3_bytes.decode('utf-8', errors='ignore')
                          
+                         # DEL key sequence: \x1b[3~
+                         if ch3 == '3':
+                             try:
+                                 # Use a tiny timeout select to check for the trailing '~'
+                                 r, _, _ = select.select([fd], [], [], 0.05)
+                                 if r:
+                                     next_byte = os.read(fd, 1)
+                                     if next_byte == b'~':
+                                         return Keys.DEL
+                             except Exception:
+                                 pass
+                             return ord(ch3)
+
                          # Capture extended sequences like PageUp/PageDown
                          if ch3 in ['5', '6']:
                              os.read(fd, 1) # consume terminator
