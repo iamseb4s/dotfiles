@@ -115,9 +115,10 @@ class InstallScreen(Screen):
         self.logs.append(message)
         if self.auto_scroll:
             term_height = shutil.get_terminal_size().lines
-            available_height = term_height - self.reserved_height
-            if len(self.logs) > available_height:
-                self.log_offset = len(self.logs) - available_height
+            available_height = max(10, term_height - 7)
+            log_window_size = available_height - 4 # Margin top(1) + bottom(1)
+            if len(self.logs) > log_window_size:
+                self.log_offset = len(self.logs) - log_window_size
 
         # Throttled render during high-volume logs
         now = time.time()
@@ -145,7 +146,7 @@ class InstallScreen(Screen):
         right_width = safe_width - left_width - 1
         
         # 2. Build Left Content (Task Tree)
-        left_lines = []
+        left_lines = [""]
         for mod in self.queue:
             state = self.status[mod.id]
             is_current = (self.current_idx >= 0 and self.queue[self.current_idx].id == mod.id)
@@ -160,7 +161,7 @@ class InstallScreen(Screen):
             else: icon = "○"
             
             color = Style.blue() if is_current else (Style.green() if icon == "✔" else (Style.red() if icon == "✘" else ""))
-            left_lines.append(f" {color}{icon} {mod.label}{Style.RESET}")
+            left_lines.append(f"  {color}{icon} {mod.label}{Style.RESET}")
             
             ovr = self.overrides.get(mod.id, {})
             has_dots = mod.stow_pkg is not None
@@ -170,43 +171,34 @@ class InstallScreen(Screen):
                 return "✔" if s == 'success' else ("✘" if s == 'error' else "○")
 
             if ovr.get('install_pkg', True):
-                left_lines.append(f" {Style.DIM}{'├' if has_dots else '└'}{Style.RESET} {get_icon(state['pkg'])} Package")
+                left_lines.append(f"  {Style.DIM}{'├' if has_dots else '└'}{Style.RESET} {get_icon(state['pkg'])} Package")
             if has_dots and ovr.get('install_dots', True):
-                left_lines.append(f" {Style.DIM}└{Style.RESET} {get_icon(state['dots'])} Dotfiles")
+                left_lines.append(f"  {Style.DIM}└{Style.RESET} {get_icon(state['dots'])} Dotfiles")
+
 
         # 3. Build Right Content (Logs)
+        log_window_size = available_height - 4
         if self.auto_scroll:
-            if len(self.logs) > (available_height - 2):
-                self.log_offset = len(self.logs) - (available_height - 2)
+            if len(self.logs) > log_window_size:
+                self.log_offset = len(self.logs) - log_window_size
         
-        visible_logs = self.logs[self.log_offset : self.log_offset + (available_height - 2)]
+        visible_logs = [""] + [f"  {l}" for l in self.logs[self.log_offset : self.log_offset + log_window_size]] + [""]
         
         # 4. Generate Boxes
-        # Focus: Left during installation, Right if scrolling
-        # Background boxes lose focus if a modal is visible
-        left_box = TUI.create_container(left_lines, left_width, available_height, title="TASKS", is_focused=(not self.is_finished and not self.modal))
-        right_box = TUI.create_container(visible_logs, right_width, available_height, title="LOGS", is_focused=(self.is_finished and not self.modal))
-        
-        # Integrated Scrollbar for Logs
-        if len(self.logs) > (available_height - 2):
-            max_off = len(self.logs) - (available_height - 2)
+        # Calculate Scroll Parameters for Logs
+        l_scroll_pos, l_scroll_size = None, None
+        if len(self.logs) > log_window_size:
+            thumb_size = max(1, int((available_height - 2)**2 / (len(self.logs) + 2)))
+            max_off = len(self.logs) - log_window_size
             prog = self.log_offset / max_off
-            thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(self.logs)))
-            start_pos = int(prog * (available_height - 2 - thumb_size))
-            
-            # Inject thumb into the right border of the right box
-            for i in range(available_height - 2):
-                is_focus = self.is_finished and not self.modal
-                border_color = Style.mauve() if is_focus else Style.surface2()
-                thumb_color = Style.mauve() if is_focus else Style.blue()
-                
-                char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
-                
-                # Replace the last character of the content line (the border)
-                line = right_box[i+1]
-                right_box[i+1] = line[:-10] + char + Style.RESET
+            l_scroll_pos = int(prog * (available_height - 2 - thumb_size))
+            l_scroll_size = thumb_size
 
+        left_box = TUI.create_container(left_lines, left_width, available_height, title="TASKS", is_focused=(not self.is_finished and not self.modal))
+        right_box = TUI.create_container(visible_logs, right_width, available_height, title="LOGS", is_focused=(self.is_finished and not self.modal), scroll_pos=l_scroll_pos, scroll_size=l_scroll_size)
+        
         main_content = TUI.stitch_containers(left_box, right_box, gap=1)
+
         
         # 5. Progress Bar & Footer
         progress_val = self.current_idx / self.total if self.total > 0 else 0
@@ -333,7 +325,7 @@ class InstallScreen(Screen):
                 term_height = shutil.get_terminal_size().lines
                 available_height = term_height - 7
                 available_height = max(10, available_height)
-                max_off = max(0, len(self.logs) - (available_height - 2))
+                max_off = max(0, len(self.logs) - (available_height - 4))
                 
                 if key == Keys.PGUP:
                     self.auto_scroll = False

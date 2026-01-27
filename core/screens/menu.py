@@ -77,8 +77,8 @@ class MenuScreen(Screen):
 
     def _get_info_lines(self, right_width):
         """Helper to pre-calculate info lines for scroll limits."""
-        info_lines = []
-        if not self.flat_items: return []
+        info_lines = [""]
+        if not self.flat_items: return info_lines
         
         current_item = self.flat_items[self.cursor_idx]
         r_content_width = right_width - 4
@@ -89,37 +89,37 @@ class MenuScreen(Screen):
             is_inst = mod.is_installed()
             status_color = Style.blue() if is_inst else ""
             
-            info_lines.append(f"{Style.BOLD}{Style.blue()}{mod.label.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}{Style.blue()}{mod.label.upper()}{Style.RESET}")
             if mod.description:
                 for l in TUI.wrap_text(mod.description, r_content_width):
-                    info_lines.append(f"{Style.DIM}{l}{Style.RESET}")
+                    info_lines.append(f"  {Style.DIM}{l}{Style.RESET}")
             info_lines.append("")
-            info_lines.append(f"{Style.BOLD}Status:  {status_color}{('●' if is_inst else '○')} {('Installed' if is_inst else 'Not Installed')}{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}Status:  {status_color}{('●' if is_inst else '○')} {('Installed' if is_inst else 'Not Installed')}{Style.RESET}")
             
             cur_mgr = mod.get_manager()
             ovr_mgr = ovr.get('manager', cur_mgr)
             is_mgr_mod = 'manager' in ovr and ovr_mgr != cur_mgr
-            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{Style.yellow() if is_mgr_mod else ''}{ovr_mgr}{'*' if is_mgr_mod else ''}{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}Manager: {Style.RESET}{Style.yellow() if is_mgr_mod else ''}{ovr_mgr}{'*' if is_mgr_mod else ''}{Style.RESET}")
             
             cur_pkg = mod.get_package_name()
             ovr_pkg = ovr.get('pkg_name', cur_pkg)
             is_pkg_mod = 'pkg_name' in ovr and ovr_pkg != cur_pkg
-            info_lines.append(f"{Style.BOLD}Package: {Style.RESET}{Style.yellow() if is_pkg_mod else ''}{ovr_pkg}{'*' if is_pkg_mod else ''}{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}Package: {Style.RESET}{Style.yellow() if is_pkg_mod else ''}{ovr_pkg}{'*' if is_pkg_mod else ''}{Style.RESET}")
             
             tree = mod.get_config_tree()
             if tree:
                 info_lines.append("")
-                info_lines.append(f"{Style.BOLD}CONFIG TREE:{Style.RESET}")
+                info_lines.append(f"  {Style.BOLD}CONFIG TREE:{Style.RESET}")
                 for l in tree:
                     for wl in TUI.wrap_text(l, r_content_width - 2):
-                        info_lines.append(f"  {wl}")
+                        info_lines.append(f"    {wl}")
         else:
             cat_name = current_item['obj']
-            info_lines.append(f"{Style.BOLD}{Style.yellow()}{cat_name.upper()}{Style.RESET}")
-            info_lines.append(f"{Style.DIM}Packages in this group:{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}{Style.yellow()}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.DIM}Packages in this group:{Style.RESET}")
             info_lines.append("")
             for m in self.categories[cat_name]:
-                info_lines.append(f"  {('●' if m.is_installed() else '○')} {m.label}")
+                info_lines.append(f"    {('●' if m.is_installed() else '○')} {m.label}")
         return info_lines
 
     def render(self):
@@ -150,12 +150,17 @@ class MenuScreen(Screen):
         right_width = safe_width - left_width - 1
         
         # Build Left Content
-        if self.cursor_idx < self.list_offset:
-            self.list_offset = self.cursor_idx
-        elif self.cursor_idx >= self.list_offset + (available_height - 2):
-            self.list_offset = self.cursor_idx - (available_height - 2) + 1
+        # Window size for items is available_height - 3 (excluding header, footer, pills, and status line)
+        window_size = available_height - 3
+        # First item is at list_lines[1] due to top spacer
+        item_line_idx = self.cursor_idx + 1
+        
+        if item_line_idx < self.list_offset + 1:
+            self.list_offset = max(0, item_line_idx - 1)
+        elif item_line_idx >= self.list_offset + window_size:
+            self.list_offset = item_line_idx - window_size + 1
 
-        list_lines = []
+        list_lines = [""]
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
             
@@ -203,7 +208,7 @@ class MenuScreen(Screen):
         while len(visible_list) < (available_height - 3):
             visible_list.append("")
         
-        status_text = f" {Style.DIM}Selected: {len(self.selected.union(self.auto_locked))} packages{Style.RESET}"
+        status_text = f"  {Style.DIM}Selected: {len(self.selected.union(self.auto_locked))} packages{Style.RESET}"
         visible_list.append(status_text)
 
         # Build Right Content
@@ -212,39 +217,26 @@ class MenuScreen(Screen):
             self.info_offset = max(0, len(info_lines) - (available_height - 2))
         visible_info = info_lines[self.info_offset : self.info_offset + (available_height - 2)]
 
-        # Generate Boxes
-        left_box = TUI.create_container(visible_list, left_width, available_height, title="PACKAGES", is_focused=(self.active_panel == 0 and not self.modal))
-        right_box = TUI.create_container(visible_info, right_width, available_height, title="INFORMATION", is_focused=(self.active_panel == 1 and not self.modal))
-        
-        # Integrated Scrollbars
-        # Left Box
+        # 4. Generate Boxes
+        # Calculate Scroll Parameters
+        l_scroll_pos, l_scroll_size = None, None
         if len(list_lines) > (available_height - 2):
+            thumb_size = max(1, int((available_height - 2)**2 / len(list_lines)))
             max_off = len(list_lines) - (available_height - 2)
             prog = self.list_offset / max_off
-            thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(list_lines)))
-            start_pos = int(prog * (available_height - 2 - thumb_size))
-            for i in range(available_height - 2):
-                is_focus = (self.active_panel == 0 and not self.modal)
-                border_color = Style.mauve() if is_focus else Style.surface2()
-                thumb_color = Style.mauve() if is_focus else Style.blue()
-                char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
-                line = left_box[i+1]
-                left_box[i+1] = line[:-10] + char + Style.RESET
+            l_scroll_pos = int(prog * (available_height - 2 - thumb_size))
+            l_scroll_size = thumb_size
 
-        # Right Box
+        r_scroll_pos, r_scroll_size = None, None
         if len(info_lines) > (available_height - 2):
+            thumb_size = max(1, int((available_height - 2)**2 / len(info_lines)))
             max_off = len(info_lines) - (available_height - 2)
             prog = self.info_offset / max_off
-            thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(info_lines)))
-            start_pos = int(prog * (available_height - 2 - thumb_size))
-            for i in range(available_height - 2):
-                is_focus = (self.active_panel == 1 and not self.modal)
-                border_color = Style.mauve() if is_focus else Style.surface2()
-                thumb_color = Style.mauve() if is_focus else Style.blue()
-                
-                char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
-                line = right_box[i+1]
-                right_box[i+1] = line[:-10] + char + Style.RESET
+            r_scroll_pos = int(prog * (available_height - 2 - thumb_size))
+            r_scroll_size = thumb_size
+
+        left_box = TUI.create_container(visible_list, left_width, available_height, title="PACKAGES", is_focused=(self.active_panel == 0 and not self.modal), scroll_pos=l_scroll_pos, scroll_size=l_scroll_size)
+        right_box = TUI.create_container(visible_info, right_width, available_height, title="INFORMATION", is_focused=(self.active_panel == 1 and not self.modal), scroll_pos=r_scroll_pos, scroll_size=r_scroll_size)
  
         main_content = TUI.stitch_containers(left_box, right_box, gap=1)
         
