@@ -14,30 +14,35 @@ class ConfirmModal:
         self.focus_idx = 1 # Default to NO (Cancel)
 
     def render(self):
-        width = 50
+        width = 54 # Increased width
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # 1. Build Inner Lines
-        inner_lines = ["", self.message.center(48), ""]
+        # 1. Build Inner Lines with padding
+        # Wrap message to ensure it doesn't hit edges
+        wrapped = TUI.wrap_text(self.message, width - 6)
+        inner_lines = [""]
+        for line in wrapped:
+            inner_lines.append(line.center(width - 2))
+        inner_lines.append("")
         
-        btn_y = "  YES  "
-        btn_n = "  NO   "
+        # Button labels
+        txt_y = "YES"
+        txt_n = "NO"
         
         purple_bg = Style.hex("#CBA6F7", bg=True)
         text_black = "\033[30m"
         
         if self.focus_idx == 0:
-            btn_y = f"{purple_bg}{text_black}{btn_y}{Style.RESET}"
+            btn_y = f"{purple_bg}{text_black}  YES  {Style.RESET}"
+            btn_n = "[  NO  ]" # Matches 7-char width
         else:
-            btn_y = f"[{btn_y.strip()}]"
-            
-        if self.focus_idx == 1:
-            btn_n = f"{purple_bg}{text_black}{btn_n}{Style.RESET}"
-        else:
-            btn_n = f"[{btn_n.strip()}]"
+            btn_y = "[ YES ]"
+
+            btn_n = f"{purple_bg}{text_black}   NO   {Style.RESET}"
         
-        btn_row = f"{btn_y}     {btn_n}"
+        btn_row = f"{btn_y}    {btn_n}"
+
         v_len = TUI.visible_len(btn_row)
         padding = (width - 2 - v_len) // 2
         inner_lines.append(f"{' ' * padding}{btn_row}")

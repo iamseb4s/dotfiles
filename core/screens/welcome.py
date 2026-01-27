@@ -70,10 +70,11 @@ class WelcomeScreen(Screen):
         content.append(f.getvalue().strip("\n"))
         
         # Navigation Hints
-        p_enter = TUI.pill("ENTER", "Start Installation", "a6e3a1") # Success Green
-        p_quit  = TUI.pill("Q", "Exit", "f38ba8")               # Danger Red
+        p_enter = TUI.pill("ENTER", "Install", "a6e3a1") # Success Green
+        p_new   = TUI.pill("N", "New Package", "CBA6F7") # Purple Pastel
+        p_quit  = TUI.pill("Q", "Exit", "f38ba8")      # Danger Red
         
-        pills_line = f"{p_enter}     {p_quit}"
+        pills_line = f"{p_enter}     {p_new}     {p_quit}"
         p_padding = (term_width - TUI.visible_len(pills_line)) // 2
         p_padding = max(0, p_padding)
         
@@ -100,6 +101,8 @@ class WelcomeScreen(Screen):
         """Maps key events to screen transitions."""
         if key == Keys.ENTER:
             return "MENU"
+        if key in [ord('n'), ord('N')]:
+            return "CREATE"
         if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
             return "EXIT"
         return None

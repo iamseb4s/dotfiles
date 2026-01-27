@@ -8,18 +8,19 @@ import shutil
 
 class Keys:
     """Keyboard scan code mapping for terminal navigation."""
-    UP = 65
-    DOWN = 66
-    RIGHT = 67
-    LEFT = 68
+    UP = 1001
+    DOWN = 1002
+    RIGHT = 1003
+    LEFT = 1004
     SPACE = 32
     ENTER = 13
     ESC = 27
     TAB = 9
     BACKSPACE = 127
+    DEL = 301
     # Scroll keys
-    PGUP = 53
-    PGDN = 54
+    PGUP = 1005
+    PGDN = 1006
     # Ctrl keys
     CTRL_K = 11
     CTRL_J = 10
@@ -177,25 +178,46 @@ class TUI:
             
             if ch == '\x1b':  # ESC sequence
                 import select
-                r, w, x = select.select([fd], [], [], 0.2)
-                if r:
-                    ch2_bytes = os.read(fd, 1)
-                    ch2 = ch2_bytes.decode('utf-8', errors='ignore')
+                # Wait for the next byte (like '[')
+                r, _, _ = select.select([fd], [], [], 0.1)
+                if not r: return Keys.ESC # standalone ESC
+                
+                ch2_bytes = os.read(fd, 1)
+                ch2 = ch2_bytes.decode('utf-8', errors='ignore')
+                
+                if ch2 == '[' or ch2 == 'O':
+                    # Wait for the sequence specifier (like 'A', 'B', etc.)
+                    r, _, _ = select.select([fd], [], [], 0.1)
+                    if not r: return ord(ch2)
                     
-                    if ch2 == '[' or ch2 == 'O':
-                         ch3_bytes = os.read(fd, 1)
-                         ch3 = ch3_bytes.decode('utf-8', errors='ignore')
-                         
-                         # Capture extended sequences like PageUp/PageDown
-                         if ch3 in ['5', '6']:
-                             os.read(fd, 1) # consume terminator
-                             return ord(ch3)
-                             
-                         return ord(ch3) 
+                    ch3_bytes = os.read(fd, 1)
+                    ch3 = ch3_bytes.decode('utf-8', errors='ignore')
                     
-                    return Keys.ESC 
-                else:
-                    return Keys.ESC
+                    # Arrow keys: \x1b[A, B, C, D
+                    if ch3 == 'A': return Keys.UP
+                    if ch3 == 'B': return Keys.DOWN
+                    if ch3 == 'C': return Keys.RIGHT
+                    if ch3 == 'D': return Keys.LEFT
+
+                    # DEL key sequence: \x1b[3~
+                    if ch3 == '3':
+                        r, _, _ = select.select([fd], [], [], 0.05)
+                        if r: os.read(fd, 1) # consume ~
+                        return Keys.DEL
+
+                    # Capture extended sequences like PageUp/PageDown: \x1b[5~, \x1b[6~
+                    if ch3 == '5':
+                        r, _, _ = select.select([fd], [], [], 0.05)
+                        if r: os.read(fd, 1) # consume ~
+                        return Keys.PGUP
+                    if ch3 == '6':
+                        r, _, _ = select.select([fd], [], [], 0.05)
+                        if r: os.read(fd, 1) # consume ~
+                        return Keys.PGDN
+                              
+                    return ord(ch3) 
+                
+                return Keys.ESC 
             
             return ord(ch)
         except Exception:
