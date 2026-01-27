@@ -79,6 +79,7 @@ class WelcomeScreen(Screen):
         p_padding = max(0, p_padding)
         
         content.append("")
+        content.append("")
         content.append(f"{' ' * p_padding}{pills_line}")
 
         # 2. Vertical Centering
