@@ -5,14 +5,15 @@ import time
 import re
 import json
 from datetime import datetime
+from modules.base import Module
 from core.tui import TUI, Keys, Style
 from core.screens.welcome import Screen
 from core.screens.install import ConfirmModal
 
 class DependencyModal:
     """Multi-select modal for module dependencies."""
-    def __init__(self, modules, current_deps):
-        self.modules = sorted(modules, key=lambda m: m.label)
+    def __init__(self, modules: list[Module], current_deps):
+        self.modules = sorted(modules, key=lambda m: str(m.label or m.id or ""))
         self.selected = set(current_deps)
         self.focus_idx = 0
         self.scroll_offset = 0
@@ -68,11 +69,11 @@ class DependencyModal:
         return lines, (term_height - height) // 2, (term_width - width) // 2
 
     def handle_input(self, key):
-        if key in [Keys.UP, Keys.K, 65]:
+        if key in [Keys.UP, Keys.K]:
             self.focus_idx = max(0, self.focus_idx - 1)
             if self.focus_idx < self.scroll_offset:
                 self.scroll_offset = self.focus_idx
-        elif key in [Keys.DOWN, Keys.J, 66]:
+        elif key in [Keys.DOWN, Keys.J]:
             self.focus_idx = min(len(self.modules) - 1, self.focus_idx + 1)
             if self.focus_idx >= self.scroll_offset + self.max_visible_rows:
                 self.scroll_offset = self.focus_idx - self.max_visible_rows + 1
@@ -164,16 +165,16 @@ class WizardSummaryModal:
         return lines, (term_height - height) // 2, (term_width - width) // 2
 
     def handle_input(self, key):
-        if key in [Keys.UP, Keys.K, 65]:
+        if key in [Keys.UP, Keys.K]:
             self.scroll_offset = max(0, self.scroll_offset - 1)
-        elif key in [Keys.DOWN, Keys.J, 66]:
+        elif key in [Keys.DOWN, Keys.J]:
             max_off = len(self.content_lines) - max(5, shutil.get_terminal_size().lines - 12)
             if self.scroll_offset < max_off:
                 self.scroll_offset += 1
         elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L, Keys.TAB]:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
         elif key == Keys.ENTER:
-            return "SAVE"
+            return "SAVE" if self.focus_idx == 0 else "CANCEL"
         elif key in [Keys.ESC, ord('q'), ord('Q')]:
             return "CANCEL"
         return None
@@ -237,11 +238,11 @@ class DraftSelectionModal:
 
     def handle_input(self, key):
         options_len = len(self.drafts) + 1
-        if key in [Keys.UP, Keys.K, 65]:
+        if key in [Keys.UP, Keys.K]:
             self.focus_idx = max(0, self.focus_idx - 1)
             if self.focus_idx < self.scroll_offset:
                 self.scroll_offset = self.focus_idx
-        elif key in [Keys.DOWN, Keys.J, 66]:
+        elif key in [Keys.DOWN, Keys.J]:
             self.focus_idx = min(options_len - 1, self.focus_idx + 1)
             term_height = shutil.get_terminal_size().lines
             max_rows = min(options_len, term_height - 11)
@@ -264,7 +265,7 @@ class CreateScreen(Screen):
     Interactive wizard for creating package modules.
     Provides a triple-box interface (Form, Help, Preview).
     """
-    def __init__(self, modules):
+    def __init__(self, modules: list[Module]):
         self.modules = modules
         self.categories = self._get_categories()
         self.drafts_dir = "modules/.drafts"
@@ -278,6 +279,7 @@ class CreateScreen(Screen):
         
         # UI State
         self.focus_idx = 0
+        self.form_offset = 0    # Scroll for form fields
         self.preview_offset = 0 # Scroll for preview
         self.is_editing = False # Text input mode
         self.text_cursor_pos = 0 # Cursor position within string
@@ -286,6 +288,7 @@ class CreateScreen(Screen):
         self.modal_type = None # "DISCARD", "SAVE", "DRAFT", "LOAD_DRAFT", "DELETE_DRAFT"
         self.status_msg = ""
         self.status_time = 0
+        self.show_validation_errors = False
         
         self.fields = [
             {'id': 'id', 'label': 'ID', 'type': 'text', 'help': 'Unique identifier. Used for filename and dots/ folder.'},
@@ -309,7 +312,7 @@ class CreateScreen(Screen):
             'label': '',
             'manager': 'system',
             'pkg_name': '',
-            'category': self.categories[0] if self.categories else 'General',
+            'category': self.categories[0] if hasattr(self, 'categories') and self.categories else 'General',
             'custom_category': '',
             'stow_target': '~',
             'dependencies': [],
@@ -365,6 +368,52 @@ class CreateScreen(Screen):
             cats.append("Custom...")
         return cats
 
+    def _get_field_errors(self, field_id):
+        """Returns a list of error messages for a specific field."""
+        errors = []
+        val = self.form.get(field_id, "")
+        
+        if field_id == 'id':
+            if not val:
+                errors.append("ID cannot be empty.")
+            elif not re.match(r'^[a-zA-Z0-9_-]+$', val):
+                errors.append("Invalid format! Use letters, numbers, - or _ only.")
+            elif any(m.id == val for m in self.modules):
+                errors.append("This ID already exists!")
+        
+        elif field_id == 'label':
+            if not val:
+                errors.append("Label cannot be empty.")
+        
+        elif field_id == 'category':
+            if val == "Custom..." and not self.form['custom_category']:
+                errors.append("Custom category name cannot be empty.")
+
+        return errors
+
+    def _ensure_focus_visible(self):
+        """Adjusts form_offset to keep the focused field in view."""
+        field_top = 1 + (self.focus_idx * 3)
+        field_bottom = field_top + 2
+
+        if self.focus_idx == 0:
+            self.form_offset = 0
+            return
+
+        term_height = shutil.get_terminal_size().lines
+        available_height = max(10, term_height - 5)
+        content_height = available_height - 2
+        
+        if field_top - 1 < self.form_offset:
+            self.form_offset = max(0, field_top - 1)
+            
+        # Scroll down if field bottom (spacer) is hidden
+        if field_bottom >= self.form_offset + content_height:
+            self.form_offset = field_bottom - content_height + 1
+            
+        # Safety bound
+        self.form_offset = max(0, self.form_offset)
+
     def render(self):
         """Draws the triple-box layout (40/60 vertical split on right)."""
         term_width = shutil.get_terminal_size().columns
@@ -392,19 +441,22 @@ class CreateScreen(Screen):
         if self.focus_idx < len(self.fields):
             field = self.fields[self.focus_idx]
             help_text = field['help']
+            val = self.form.get(field['id'], "")
             
             wrapped_help = TUI.wrap_text(help_text, right_width - 4)
             for l in wrapped_help:
                 help_content.append(f"  {l}")
             
-            # Special validation help for ID
-            if field['id'] == 'id' and self.form['id']:
-                # 1. Regex validation (No dots, no special chars except - and _)
-                if not re.match(r'^[a-zA-Z0-9_-]+$', self.form['id']):
-                    help_content.append(f"  {Style.hex('#f38ba8')}ERROR: Invalid format! Use letters, numbers, - or _ only.{Style.RESET}")
-                # 2. Existing ID validation
-                elif any(m.id == self.form['id'] for m in self.modules):
-                    help_content.append(f"  {Style.hex('#f38ba8')}ERROR: This ID already exists!{Style.RESET}")
+            # Show errors in HELP box
+            f_errors = self._get_field_errors(field['id'])
+            for err in f_errors:
+                is_empty_err = "empty" in err.lower()
+                # Special Case: Custom Category error always shows if selected
+                is_custom_cat_empty = field['id'] == 'category' and val == "Custom..." and not self.form['custom_category']
+                
+                should_show = self.show_validation_errors or not is_empty_err or self.is_editing or is_custom_cat_empty
+                if should_show:
+                    help_content.append(f"  {Style.hex('#f38ba8')}ERROR: {err}{Style.RESET}")
         
         # Show status message if recent (AT THE BOTTOM)
         if self.status_msg and time.time() - self.status_time < 3:
@@ -428,20 +480,45 @@ class CreateScreen(Screen):
         max_preview_off = max(0, len(preview_raw_lines) - (preview_height - 2))
         if self.preview_offset > max_preview_off: self.preview_offset = max_preview_off
         visible_preview = preview_raw_lines[self.preview_offset : self.preview_offset + (preview_height - 2)]
-
+ 
         # 4. Build Left Content (Form)
         form_lines = [""]
         for i, field in enumerate(self.fields):
             is_focused = (self.focus_idx == i and not self.modal)
-            
-            # Label Row
-            color = Style.hex("#CBA6F7") if is_focused else ""
-            bold = Style.BOLD if is_focused else ""
-            form_lines.append(f"  {color}{bold}{field['label']}:{Style.RESET}")
-            
-            # Value Row
-            value_line = "  "
+            f_errors = self._get_field_errors(field['id'])
+            has_error = len(f_errors) > 0
             val = self.form.get(field['id'], "")
+            
+            # --- COLOR LOGIC ---
+            # Default state: Dimmed if not focused
+            base_color = ""
+            if is_focused:
+                base_color = Style.hex("#CBA6F7") # Pastel Purple
+            
+            # Error state (Red)
+            # Show red label if global validation triggered or it's a "live" error
+            show_label_red = self.show_validation_errors
+            if field['id'] == 'id' and val and has_error: show_label_red = True
+            if field['id'] == 'category' and val == "Custom..." and not self.form['custom_category']: show_label_red = True
+            
+            label_color = base_color
+            if has_error and show_label_red:
+                label_color = Style.hex("#f38ba8") # Pastel Red
+            
+            bold = Style.BOLD if is_focused else ""
+            
+            # 1. Append Label
+            form_lines.append(f"  {label_color}{bold}{field['label']}:{Style.RESET}")
+            
+            # 2. Build Value Line
+            value_line = "" # Start clean
+            
+            # Text Color for the value itself
+            value_color = ""
+            if field['id'] == 'id' and val and has_error:
+                value_color = Style.hex("#f38ba8")
+            elif is_focused:
+                value_color = label_color # Match label (Morado or Red)
             
             if field['type'] == 'text':
                 # Text Input style: [ value ] ✎
@@ -451,64 +528,88 @@ class CreateScreen(Screen):
                     pre = display_val[:self.text_cursor_pos]
                     char = display_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
                     post = display_val[self.text_cursor_pos+1:]
-                    display_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{color if is_focused else ''}{bold if is_focused else ''}{post}"
-                
-                # Validation color for ID (Regex or Duplicated)
-                txt_color = ""
-                if field['id'] == 'id' and val:
-                    if not re.match(r'^[a-zA-Z0-9_-]+$', val) or any(m.id == val for m in self.modules):
-                        txt_color = Style.hex("#f38ba8")
+                    display_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{value_color}{bold}{post}"
                 
                 hint = f" {Style.DIM}(ENTER to edit){Style.RESET}" if is_focused and not self.is_editing else ""
-                value_line += f"[{txt_color}{display_val}{Style.RESET}{color if is_focused else ''}{bold if is_focused else ''}] ✎{hint}"
+                value_line = f"{value_color}{bold}[{Style.RESET}{value_color}{display_val}{Style.RESET}{value_color}{bold}]{Style.RESET} ✎{hint}"
                 
             elif field['type'] == 'select':
                 # Horizontal Selector style: ○ opt1   ● opt2
                 styled_opts = []
                 for opt in field['options']:
-                    mark = "●" if val == opt else "○"
+                    is_sel = (val == opt)
+                    mark = "●" if is_sel else "○"
                     
+                    # Determine option color
+                    opt_color = ""
+                    if is_sel:
+                        if opt == "Custom..." and not self.form['custom_category']:
+                            opt_color = Style.hex("#f38ba8") # RED IMMEDIATELY
+                        elif is_focused:
+                            opt_color = Style.hex("#CBA6F7")
+                        else:
+                            opt_color = "" # Default White
+                    else:
+                        opt_color = Style.DIM
+
                     # Special case for Custom...
                     if opt == "Custom...":
                         c_val = self.form['custom_category']
                         custom_txt = f"Custom: '{c_val}'" if c_val else "Custom..."
-                        if val == "Custom..." and self.is_editing:
+                        
+                        if is_sel and self.is_editing:
                             pre = c_val[:self.text_cursor_pos]
                             char = c_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
                             post = c_val[self.text_cursor_pos+1:]
-                            custom_txt = f"Custom: '{pre}{Style.INVERT}{char}{Style.RESET}{color if is_focused else ''}{bold if is_focused else ''}{post}'"
-                        styled_opts.append(f"{mark} {custom_txt} ✎")
+                            # Nested colors for cursor during editing
+                            custom_txt = f"Custom: '{pre}{Style.INVERT}{char}{Style.RESET}{opt_color}{post}'"
+                        
+                        styled_opts.append(f"{opt_color}{mark} {custom_txt} ✎{Style.RESET}")
                     else:
-                        styled_opts.append(f"{mark} {opt}")
+                        styled_opts.append(f"{opt_color}{mark} {opt}{Style.RESET}")
                 
                 hint_txt = "(ENTER to edit)" if val == "Custom..." and not self.is_editing else "(h/l to select)"
                 hint = f" {Style.DIM}{hint_txt}{Style.RESET}" if is_focused else ""
-                value_line += "   ".join(styled_opts) + hint
+                value_line = "   ".join(styled_opts) + hint
                 
             elif field['type'] == 'check':
-                value_line += f"[{'■' if val else ' '}] {'Yes' if val else 'No'} {Style.DIM}(SPACE to toggle){Style.RESET}" if is_focused else f"[{'■' if val else ' '}] {'Yes' if val else 'No'}"
-            elif field['type'] == 'multi':
-                value_line += f"{len(val)} selected {Style.DIM}(ENTER to select){Style.RESET}" if is_focused else f"{len(val)} selected"
-            elif field['type'] == 'placeholder':
-                value_line += f"{Style.DIM}[Not implemented]{Style.RESET}"
-
-            # Apply focus color to value line too if focused
-            if is_focused:
-                form_lines.append(f"{color}{bold}{value_line}{Style.RESET}")
-            else:
-                form_lines.append(value_line)
+                mark = '■' if val else ' '
+                label_txt = 'Yes' if val else 'No'
+                hint = f" {Style.DIM}(SPACE to toggle){Style.RESET}" if is_focused else ""
+                value_line = f"{value_color}{bold}[{mark}] {label_txt}{Style.RESET}{hint}"
                 
-            form_lines.append("") # Spacer between fields
+            elif field['type'] == 'multi':
+                hint = f" {Style.DIM}(ENTER to select){Style.RESET}" if is_focused else ""
+                value_line = f"{value_color}{bold}{len(val)} selected{Style.RESET}{hint}"
+                
+            elif field['type'] == 'placeholder':
+                value_line = f"{Style.DIM}[Not implemented]{Style.RESET}"
+ 
+            # 3. Append Value Line (Indented)
+            form_lines.append(f"    {value_line}")
+            form_lines.append("") # Spacer
 
         # 5. Generate Boxes
-        left_box = TUI.create_container(form_lines, left_width, available_height, title="FORM", is_focused=(not self.modal))
+        # Calculate Form Scroll
+        content_height = available_height - 2
+        visible_form = form_lines[self.form_offset : self.form_offset + content_height]
+        
+        f_scroll_pos, f_scroll_size = None, None
+        if len(form_lines) > content_height:
+            thumb_size = max(1, int(content_height**2 / len(form_lines)))
+            max_off = len(form_lines) - content_height
+            prog = self.form_offset / max_off if max_off > 0 else 0
+            f_scroll_pos = int(prog * (content_height - thumb_size))
+            f_scroll_size = thumb_size
+
+        left_box = TUI.create_container(visible_form, left_width, available_height, title="FORM", is_focused=(not self.modal), scroll_pos=f_scroll_pos, scroll_size=f_scroll_size)
         help_box = TUI.create_container(help_content, right_width, help_height, title="HELP", is_focused=False)
         
         # Preview Scrollbar calculation
         p_scroll_pos, p_scroll_size = None, None
         if len(preview_raw_lines) > (preview_height - 2):
             thumb_size = max(1, int((preview_height - 2)**2 / len(preview_raw_lines)))
-            prog = self.preview_offset / max_preview_off
+            prog = self.preview_offset / max_preview_off if max_preview_off > 0 else 0
             p_scroll_pos = int(prog * (preview_height - 2 - thumb_size))
             p_scroll_size = thumb_size
 
@@ -526,6 +627,7 @@ class CreateScreen(Screen):
                 TUI.pill('ENTER', 'Summary & Save', 'a6e3a1'),
                 TUI.pill('D', 'Draft', 'CBA6F7'),
             ]
+            
             if self.active_draft_path:
                 f_pills.append(TUI.pill('X', 'Delete Draft', 'f38ba8'))
             f_pills.append(TUI.pill('Q', 'Exit', 'f38ba8'))
@@ -579,13 +681,9 @@ class CreateScreen(Screen):
                 elif self.modal_type == "DELETE_DRAFT":
                     if self.active_draft_path and os.path.exists(self.active_draft_path):
                         os.remove(self.active_draft_path)
-                        d_name = os.path.basename(self.active_draft_path)
                         self._reset_form()
-                        self.status_msg = f"{Style.hex('#f38ba8')}Deleted: {d_name}. Form reset.{Style.RESET}"
-                        self.status_time = time.time()
                     self.modal = None
                 elif self.modal_type == "DELETE_MODAL_DRAFT":
-                    # Delete from within DraftSelectionModal
                     path = os.path.join(self.drafts_dir, self.pending_delete[0])
                     if os.path.exists(path):
                         os.remove(path)
@@ -608,8 +706,6 @@ class CreateScreen(Screen):
                     self.modal_type = "DELETE_MODAL_DRAFT"
             elif res == "FRESH":
                 self.modal = None
-            elif res == "SAVE":
-                self.modal = None # Phase 4 target
             elif res in ["NO", "CLOSE", "CANCEL"]:
                 if self.modal_type == "DELETE_MODAL_DRAFT":
                     self._check_for_drafts() # Return to selection modal
@@ -639,7 +735,7 @@ class CreateScreen(Screen):
                 self.text_cursor_pos = max(0, self.text_cursor_pos - 1)
             elif key == Keys.RIGHT:
                 self.text_cursor_pos = min(len(curr_val), self.text_cursor_pos + 1)
-            elif 32 <= key <= 126 and key not in [65, 66, 67, 68]:
+            elif 32 <= key <= 126:
                 self.form[target] = curr_val[:self.text_cursor_pos] + chr(key) + curr_val[self.text_cursor_pos:]
                 self.text_cursor_pos += 1
             return None
@@ -657,6 +753,7 @@ class CreateScreen(Screen):
             self.modal_type = "DELETE_DRAFT"
             return None
 
+        # --- IMPORTANT: Standalone ESC check ---
         if key == Keys.ESC:
             is_dirty = any(v for k, v in self.form.items() if k not in ['manager', 'category', 'stow_target', 'dependencies', 'is_incomplete', 'custom_category']) or self.form['stow_target'] != "~"
             if is_dirty:
@@ -664,14 +761,18 @@ class CreateScreen(Screen):
                 self.modal_type = "DISCARD"
             else: return "WELCOME"
                 
-        if key in [Keys.UP, Keys.K, 65]: self.focus_idx = (self.focus_idx - 1) % len(self.fields)
-        elif key in [Keys.DOWN, Keys.J, 66]: self.focus_idx = (self.focus_idx + 1) % len(self.fields)
+        if key in [Keys.UP, Keys.K]:
+            self.focus_idx = (self.focus_idx - 1) % len(self.fields)
+            self._ensure_focus_visible()
+        elif key in [Keys.DOWN, Keys.J]:
+            self.focus_idx = (self.focus_idx + 1) % len(self.fields)
+            self._ensure_focus_visible()
         
-        elif key in [Keys.LEFT, Keys.H, 68]:
+        elif key in [Keys.LEFT, Keys.H]:
             if field['type'] == 'select':
                 opts = field['options']
                 self.form[field['id']] = opts[(opts.index(self.form[field['id']]) - 1) % len(opts)]
-        elif key in [Keys.RIGHT, Keys.L, 67]:
+        elif key in [Keys.RIGHT, Keys.L]:
             if field['type'] == 'select':
                 opts = field['options']
                 self.form[field['id']] = opts[(opts.index(self.form[field['id']]) + 1) % len(opts)]
@@ -686,8 +787,19 @@ class CreateScreen(Screen):
                 self.text_cursor_pos = len(self.old_value)
             elif field['type'] == 'multi':
                 self.modal = DependencyModal(self.modules, self.form['dependencies'])
-            elif key == Keys.ENTER:
-                self.modal = WizardSummaryModal(self.form)
+            else:
+                # GLOBAL SUMMARY TRIGGER (When pressing ENTER on non-editable field)
+                all_errors = []
+                for f in self.fields:
+                    all_errors.extend(self._get_field_errors(f['id']))
+                
+                if all_errors:
+                    self.show_validation_errors = True
+                    self.status_msg = f"{Style.hex('#f38ba8')}Cannot proceed: Please fix errors.{Style.RESET}"
+                    self.status_time = time.time()
+                else:
+                    self.modal = WizardSummaryModal(self.form)
+            return None
 
         elif key == Keys.PGUP: self.preview_offset = max(0, self.preview_offset - 5)
         elif key == Keys.PGDN: self.preview_offset += 5 
