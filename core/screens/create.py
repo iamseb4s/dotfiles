@@ -7,6 +7,175 @@ from core.tui import TUI, Keys, Style
 from core.screens.welcome import Screen
 from core.screens.install import ConfirmModal
 
+class DependencyModal:
+    """Multi-select modal for module dependencies."""
+    def __init__(self, modules, current_deps):
+        self.modules = sorted(modules, key=lambda m: m.label)
+        self.selected = set(current_deps)
+        self.focus_idx = 0
+        self.scroll_offset = 0
+        self.max_visible_rows = 10 # Adjusted in render
+
+    def render(self):
+        term_width = shutil.get_terminal_size().columns
+        term_height = shutil.get_terminal_size().lines
+        
+        width = 60
+        # Dynamic height calculation
+        content_len = len(self.modules)
+        # Margin: 3 lines top + 3 lines bottom = 6.
+        available_content_height = term_height - 11
+        
+        self.max_visible_rows = min(content_len, available_content_height)
+        self.max_visible_rows = max(3, self.max_visible_rows)
+        
+        inner_lines = [""] # Top spacer
+        
+        for i in range(self.max_visible_rows):
+            idx = self.scroll_offset + i
+            if idx < content_len:
+                mod = self.modules[idx]
+                is_focused = (self.focus_idx == idx)
+                is_selected = (mod.id in self.selected)
+                
+                mark = "[■]" if is_selected else "[ ]"
+                label = f"{mod.label} ({mod.id})"
+                
+                # Colors
+                color = Style.hex("#CBA6F7") + Style.BOLD if is_focused else ""
+                sel_color = Style.hex("#55E6C1") if is_selected else ""
+                
+                inner_lines.append(f"  {color}{mark} {sel_color if not is_focused else ''}{label}{Style.RESET}")
+
+        inner_lines.append("")
+        hint = f"{Style.DIM}SPACE to toggle, ENTER to confirm{Style.RESET}"
+        inner_lines.append(f"{' ' * ((width - 2 - TUI.visible_len(hint)) // 2)}{hint}")
+        
+        # Scroll calculation
+        scroll_pos, scroll_size = None, None
+        if content_len > self.max_visible_rows:
+            thumb_size = max(1, int(self.max_visible_rows**2 / content_len))
+            max_off = content_len - self.max_visible_rows
+            prog = self.scroll_offset / max_off if max_off > 0 else 0
+            scroll_pos = 1 + int(prog * (self.max_visible_rows - thumb_size))
+            scroll_size = thumb_size
+
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title="SELECT DEPENDENCIES", is_focused=True, scroll_pos=scroll_pos, scroll_size=scroll_size)
+        
+        return lines, (term_height - height) // 2, (term_width - width) // 2
+
+    def handle_input(self, key):
+        if key in [Keys.UP, Keys.K, 65]:
+            self.focus_idx = max(0, self.focus_idx - 1)
+            if self.focus_idx < self.scroll_offset:
+                self.scroll_offset = self.focus_idx
+        elif key in [Keys.DOWN, Keys.J, 66]:
+            self.focus_idx = min(len(self.modules) - 1, self.focus_idx + 1)
+            if self.focus_idx >= self.scroll_offset + self.max_visible_rows:
+                self.scroll_offset = self.focus_idx - self.max_visible_rows + 1
+        elif key == Keys.SPACE:
+            mid = self.modules[self.focus_idx].id
+            if mid in self.selected: self.selected.remove(mid)
+            else: self.selected.add(mid)
+        elif key == Keys.ENTER:
+            return "CONFIRM"
+        elif key in [Keys.ESC, ord('q'), ord('Q')]:
+            return "CANCEL"
+        return None
+
+    def get_selected(self):
+        return list(self.selected)
+
+class WizardSummaryModal:
+    """Final vertical summary modal before saving."""
+    def __init__(self, form_data):
+        self.form = form_data
+        self.focus_idx = 0 # 0: SAVE, 1: CANCEL
+        self.scroll_offset = 0
+        self.content_lines = self._build_content()
+
+    def _build_content(self):
+        lines = []
+        lines.append(f"{Style.BOLD}ID:{Style.RESET} {self.form['id']}")
+        lines.append(f"{Style.BOLD}Label:{Style.RESET} {self.form['label']}")
+        lines.append(f"{Style.BOLD}Manager:{Style.RESET} {self.form['manager']}")
+        cat = self.form['custom_category'] if self.form['category'] == "Custom..." else self.form['category']
+        lines.append(f"{Style.BOLD}Category:{Style.RESET} {cat}")
+        lines.append(f"{Style.BOLD}Target:{Style.RESET} {self.form['stow_target']}")
+        lines.append(f"{Style.BOLD}Manual Mode:{Style.RESET} {'Yes' if self.form['is_incomplete'] else 'No'}")
+        
+        lines.append("")
+        lines.append(f"{Style.BOLD}Dependencies:{Style.RESET}")
+        if not self.form['dependencies']:
+            lines.append(f"  {Style.DIM}None{Style.RESET}")
+        else:
+            for dep in sorted(self.form['dependencies']):
+                lines.append(f"  - {dep}")
+        return lines
+
+    def render(self):
+        term_width = shutil.get_terminal_size().columns
+        term_height = shutil.get_terminal_size().lines
+        width = 64
+        
+        # Max rows based on terminal height
+        available_content_height = term_height - 11
+        max_rows = min(len(self.content_lines), available_content_height)
+        max_rows = max(3, max_rows)
+        
+        inner_lines = [""] # Top spacer
+        for i in range(max_rows):
+            idx = self.scroll_offset + i
+            if idx < len(self.content_lines):
+                inner_lines.append(f"  {self.content_lines[idx]}")
+            
+        inner_lines.append("")
+        
+        # Buttons
+        purple_bg = Style.hex("#CBA6F7", bg=True)
+        text_black = "\033[30m"
+        btn_s = "  SAVE  "
+        btn_c = "  CANCEL  "
+        
+        if self.focus_idx == 0: btn_s = f"{purple_bg}{text_black}{btn_s}{Style.RESET}"
+        else: btn_s = f"[ {btn_s.strip()} ]"
+        if self.focus_idx == 1: btn_c = f"{purple_bg}{text_black}{btn_c}{Style.RESET}"
+        else: btn_c = f"[ {btn_c.strip()} ]"
+        
+        btn_row = f"{btn_s}     {btn_c}"
+        pad = (width - 2 - TUI.visible_len(btn_row)) // 2
+        inner_lines.append(f"{' ' * pad}{btn_row}")
+
+        # Scroll
+        scroll_pos, scroll_size = None, None
+        if len(self.content_lines) > max_rows:
+            thumb_size = max(1, int(max_rows**2 / len(self.content_lines)))
+            max_off = len(self.content_lines) - max_rows
+            prog = self.scroll_offset / max_off if max_off > 0 else 0
+            scroll_pos = 1 + int(prog * (max_rows - thumb_size))
+            scroll_size = thumb_size
+
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, width, height, title="FINAL SUMMARY", is_focused=True, scroll_pos=scroll_pos, scroll_size=scroll_size)
+        
+        return lines, (term_height - height) // 2, (term_width - width) // 2
+
+    def handle_input(self, key):
+        if key in [Keys.UP, Keys.K, 65]:
+            self.scroll_offset = max(0, self.scroll_offset - 1)
+        elif key in [Keys.DOWN, Keys.J, 66]:
+            max_off = len(self.content_lines) - max(5, shutil.get_terminal_size().lines - 12)
+            if self.scroll_offset < max_off:
+                self.scroll_offset += 1
+        elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L, Keys.TAB]:
+            self.focus_idx = 1 if self.focus_idx == 0 else 0
+        elif key == Keys.ENTER:
+            return "SAVE"
+        elif key in [Keys.ESC, ord('q'), ord('Q')]:
+            return "CANCEL"
+        return None
+
 class CreateScreen(Screen):
     """
     Interactive wizard for creating package modules.
@@ -110,16 +279,13 @@ class CreateScreen(Screen):
         preview_raw_lines = [""]
         preview_code = self._generate_python()
         for line in preview_code.split("\n"):
-            wrapped_code = TUI.wrap_text(line, right_width - 4)
-            for wl in wrapped_code:
+            for wl in TUI.wrap_text(line, right_width - 4):
                 preview_raw_lines.append(f"  {wl}")
         
         # Apply Scroll to Preview
         max_preview_off = max(0, len(preview_raw_lines) - (preview_height - 2))
-        if self.preview_offset > max_preview_off:
-            self.preview_offset = max_preview_off
-            
-        preview_content = preview_raw_lines[self.preview_offset : self.preview_offset + (preview_height - 2)]
+        if self.preview_offset > max_preview_off: self.preview_offset = max_preview_off
+        visible_preview = preview_raw_lines[self.preview_offset : self.preview_offset + (preview_height - 2)]
 
         # 4. Build Left Content (Form)
         form_lines = [""]
@@ -133,8 +299,7 @@ class CreateScreen(Screen):
             
             # Value Row
             value_line = "  "
-            field_id = field['id']
-            val = self.form.get(field_id, "")
+            val = self.form.get(field['id'], "")
             
             if field['type'] == 'text':
                 # Text Input style: [ value ] ✎
@@ -148,7 +313,7 @@ class CreateScreen(Screen):
                 
                 # Validation color for ID (Regex or Duplicated)
                 txt_color = ""
-                if field_id == 'id' and val:
+                if field['id'] == 'id' and val:
                     if not re.match(r'^[a-zA-Z0-9_-]+$', val) or any(m.id == val for m in self.modules):
                         txt_color = Style.hex("#f38ba8")
                 
@@ -159,14 +324,13 @@ class CreateScreen(Screen):
                 # Horizontal Selector style: ○ opt1   ● opt2
                 styled_opts = []
                 for opt in field['options']:
-                    is_sel = (val == opt)
-                    mark = "●" if is_sel else "○"
+                    mark = "●" if val == opt else "○"
                     
                     # Special case for Custom...
                     if opt == "Custom...":
-                        custom_txt = f"Custom: '{self.form['custom_category']}'" if self.form['custom_category'] else "Custom..."
-                        if is_sel and self.is_editing:
-                            c_val = self.form['custom_category']
+                        c_val = self.form['custom_category']
+                        custom_txt = f"Custom: '{c_val}'" if c_val else "Custom..."
+                        if val == "Custom..." and self.is_editing:
                             pre = c_val[:self.text_cursor_pos]
                             char = c_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
                             post = c_val[self.text_cursor_pos+1:]
@@ -180,13 +344,9 @@ class CreateScreen(Screen):
                 value_line += "   ".join(styled_opts) + hint
                 
             elif field['type'] == 'check':
-                mark = "■" if val else " "
-                hint = f" {Style.DIM}(SPACE to toggle){Style.RESET}" if is_focused else ""
-                value_line += f"[{mark}] {'Yes' if val else 'No'}{hint}"
-                
+                value_line += f"[{'■' if val else ' '}] {'Yes' if val else 'No'} {Style.DIM}(SPACE to toggle){Style.RESET}" if is_focused else f"[{'■' if val else ' '}] {'Yes' if val else 'No'}"
             elif field['type'] == 'multi':
-                hint = f" {Style.DIM}(ENTER to select){Style.RESET}" if is_focused else ""
-                value_line += f"{len(val)} selected{hint}"
+                value_line += f"{len(val)} selected {Style.DIM}(ENTER to select){Style.RESET}" if is_focused else f"{len(val)} selected"
             elif field['type'] == 'placeholder':
                 value_line += f"{Style.DIM}[Not implemented]{Style.RESET}"
 
@@ -210,10 +370,7 @@ class CreateScreen(Screen):
             p_scroll_pos = int(prog * (preview_height - 2 - thumb_size))
             p_scroll_size = thumb_size
 
-        preview_box = TUI.create_container(preview_raw_lines[self.preview_offset : self.preview_offset + (preview_height - 2)], 
-                                         right_width, preview_height, title="PYTHON PREVIEW", is_focused=False, 
-                                         scroll_pos=p_scroll_pos, scroll_size=p_scroll_size)
-        
+        preview_box = TUI.create_container(visible_preview, right_width, preview_height, title="PYTHON PREVIEW", is_focused=False, scroll_pos=p_scroll_pos, scroll_size=p_scroll_size)
         main_content = TUI.stitch_containers(left_box, help_box + preview_box, gap=1)
         
         # 6. Footer
@@ -270,7 +427,13 @@ class CreateScreen(Screen):
             res = self.modal.handle_input(key)
             if res == "YES":
                 if self.modal_type == "DISCARD": return "WELCOME"
-            elif res in ["NO", "CLOSE"]: self.modal = None
+            elif res == "CONFIRM":
+                if isinstance(self.modal, DependencyModal):
+                    self.form['dependencies'] = self.modal.get_selected()
+                self.modal = None
+            elif res == "SAVE":
+                self.modal = None # Phase 4 target
+            elif res in ["NO", "CLOSE", "CANCEL"]: self.modal = None
             return None
 
         field = self.fields[self.focus_idx]
@@ -330,8 +493,11 @@ class CreateScreen(Screen):
                 target = 'custom_category' if (field['id'] == 'category' and self.form['category'] == 'Custom...') else field['id']
                 self.old_value = self.form[target]
                 self.text_cursor_pos = len(self.old_value)
-            elif field['type'] == 'check':
-                pass
+            elif field['type'] == 'multi':
+                self.modal = DependencyModal(self.modules, self.form['dependencies'])
+            elif key == Keys.ENTER:
+                self.modal = WizardSummaryModal(self.form)
+
         elif key == Keys.PGUP: self.preview_offset = max(0, self.preview_offset - 5)
         elif key == Keys.PGDN: self.preview_offset += 5 
         return None
