@@ -11,6 +11,7 @@ from core.tui import TUI, Keys
 from core.screens.welcome import WelcomeScreen
 from core.screens.menu import MenuScreen
 from core.screens.install import InstallScreen
+from core.screens.create import CreateScreen
 
 def load_modules(sys_manager):
     """Scan and initialize all available installation modules."""
@@ -69,7 +70,27 @@ def main():
                 if action == "MENU": 
                     TUI.clear_screen()
                     state = "MENU"
+                elif action == "CREATE":
+                    TUI.clear_screen()
+                    state = "CREATE"
                 if action == "EXIT": sys.exit(0)
+                
+            elif state == "CREATE":
+                create_screen = CreateScreen(modules)
+                while True:
+                    create_screen.render()
+                    key = TUI.get_key(blocking=True)
+                    if key == Keys.RESIZE:
+                        TUI.clear_screen()
+                        continue
+                    if key is None: continue
+                    
+                    action = create_screen.handle_input(key)
+                    if action == "WELCOME":
+                        state = "WELCOME"
+                        TUI.clear_screen()
+                        break
+                    if action == "EXIT": sys.exit(0)
                 
             elif state == "MENU":
                 menu_screen.render()
