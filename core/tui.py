@@ -34,6 +34,35 @@ class Keys:
     R = 114 # Refresh/Back
     RESIZE = -2 # Virtual key for terminal resize
 
+class Theme:
+    """Catppuccin Mocha Color Palette"""
+    ROSEWATER = "#f5e0dc"
+    FLAMINGO  = "#f2cdcd"
+    PINK      = "#f5c2e7"
+    MAUVE     = "#cba6f7"
+    RED       = "#f38ba8"
+    MAROON    = "#eba0ac"
+    PEACH     = "#fab387"
+    YELLOW    = "#f9e2af"
+    GREEN     = "#a6e3a1"
+    TEAL      = "#94e2d5"
+    SKY       = "#89dceb"
+    SAPPHIRE  = "#74c7ec"
+    BLUE      = "#89b4fa"
+    LAVENDER  = "#b4befe"
+    TEXT      = "#cdd6f4"
+    SUBTEXT1  = "#bac2de"
+    SUBTEXT0  = "#a6adc8"
+    OVERLAY2  = "#9399b2"
+    OVERLAY1  = "#7f849c"
+    OVERLAY0  = "#6c7086"
+    SURFACE2  = "#585b70"
+    SURFACE1  = "#45475a"
+    SURFACE0  = "#313244"
+    BASE      = "#1e1e2e"
+    MANTLE    = "#181825"
+    CRUST     = "#11111b"
+
 class Style:
     """ANSI TrueColor and text attribute escape sequences."""
     RESET = "\033[0m"
@@ -44,6 +73,7 @@ class Style:
     @staticmethod
     def hex(hex_color, bg=False):
         """Converts a HEX string to a 24-bit ANSI escape sequence."""
+        if not hex_color: return ""
         hex_color = hex_color.lstrip('#')
         if len(hex_color) == 3:
             hex_color = ''.join([c*2 for c in hex_color])
@@ -55,6 +85,36 @@ class Style:
             return f"\033[{layer};2;{r};{g};{b}m"
         except ValueError:
             return ""
+
+    # --- Theme Helpers ---
+    @classmethod
+    def mauve(cls, bg=False): return cls.hex(Theme.MAUVE, bg)
+    @classmethod
+    def red(cls, bg=False): return cls.hex(Theme.RED, bg)
+    @classmethod
+    def green(cls, bg=False): return cls.hex(Theme.GREEN, bg)
+    @classmethod
+    def yellow(cls, bg=False): return cls.hex(Theme.YELLOW, bg)
+    @classmethod
+    def blue(cls, bg=False): return cls.hex(Theme.BLUE, bg)
+    @classmethod
+    def sky(cls, bg=False): return cls.hex(Theme.SKY, bg)
+    @classmethod
+    def teal(cls, bg=False): return cls.hex(Theme.TEAL, bg)
+    @classmethod
+    def peach(cls, bg=False): return cls.hex(Theme.PEACH, bg)
+    @classmethod
+    def surface2(cls, bg=False): return cls.hex(Theme.SURFACE2, bg)
+    @classmethod
+    def crust(cls, bg=False): return cls.hex(Theme.CRUST, bg)
+    @classmethod
+    def mantle(cls, bg=False): return cls.hex(Theme.MANTLE, bg)
+    @classmethod
+    def base(cls, bg=False): return cls.hex(Theme.BASE, bg)
+    @classmethod
+    def text(cls, bg=False): return cls.hex(Theme.TEXT, bg)
+    @classmethod
+    def subtext0(cls, bg=False): return cls.hex(Theme.SUBTEXT0, bg)
 
 class TUI:
     """
@@ -301,8 +361,8 @@ class TUI:
     @staticmethod
     def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
         """Wraps a list of lines in a rounded box with an optional title and integrated scrollbar."""
-        base_border_color = color if color else (Style.hex("#CBA6F7") if is_focused else Style.hex("#585B70"))
-        thumb_color = Style.hex("#CBA6F7") if is_focused else Style.hex("#89B4FA")
+        base_border_color = color if color else (Style.mauve() if is_focused else Style.surface2())
+        thumb_color = Style.mauve() if is_focused else Style.blue()
         reset = Style.RESET
         
         # 1. Top border with title
@@ -443,5 +503,6 @@ class TUI:
         """Renders a styled command shortcut pill."""
         bg = Style.hex(color_hex, bg=True)
         fg = Style.hex(color_hex, bg=False)
-        # Structure: [BG_COLOR][BLACK_TEXT] KEY [RESET] [COLOR_TEXT] Action
-        return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}"
+        # Structure: [BG_COLOR][CRUST_TEXT] KEY [RESET] [COLOR_TEXT] Action
+        return f"{bg}{Style.crust()} {key} {Style.RESET} {fg}{action}{Style.RESET}"
+

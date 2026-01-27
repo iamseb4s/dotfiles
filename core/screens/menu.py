@@ -2,7 +2,7 @@ import shutil
 import time
 import sys
 from collections import defaultdict
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
 from core.screens.overrides import OverrideModal
 from core.screens.summary import SummaryModal
@@ -89,9 +89,9 @@ class MenuScreen(Screen):
             mod = current_item['obj']
             ovr = self.overrides.get(mod.id, {})
             is_inst = mod.is_installed()
-            status_color = Style.hex("#89B4FA") if is_inst else ""
+            status_color = Style.blue() if is_inst else ""
             
-            info_lines.append(f"{Style.BOLD}{Style.hex('#89B4FA')}{mod.label.upper()}{Style.RESET}")
+            info_lines.append(f"{Style.BOLD}{Style.blue()}{mod.label.upper()}{Style.RESET}")
             if mod.description:
                 for l in TUI.wrap_text(mod.description, r_content_width):
                     info_lines.append(f"{Style.DIM}{l}{Style.RESET}")
@@ -101,12 +101,12 @@ class MenuScreen(Screen):
             cur_mgr = mod.get_manager()
             ovr_mgr = ovr.get('manager', cur_mgr)
             is_mgr_mod = 'manager' in ovr and ovr_mgr != cur_mgr
-            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{Style.hex('#FDCB6E') if is_mgr_mod else ''}{ovr_mgr}{'*' if is_mgr_mod else ''}{Style.RESET}")
+            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{Style.yellow() if is_mgr_mod else ''}{ovr_mgr}{'*' if is_mgr_mod else ''}{Style.RESET}")
             
             cur_pkg = mod.get_package_name()
             ovr_pkg = ovr.get('pkg_name', cur_pkg)
             is_pkg_mod = 'pkg_name' in ovr and ovr_pkg != cur_pkg
-            info_lines.append(f"{Style.BOLD}Package: {Style.RESET}{Style.hex('#FDCB6E') if is_pkg_mod else ''}{ovr_pkg}{'*' if is_pkg_mod else ''}{Style.RESET}")
+            info_lines.append(f"{Style.BOLD}Package: {Style.RESET}{Style.yellow() if is_pkg_mod else ''}{ovr_pkg}{'*' if is_pkg_mod else ''}{Style.RESET}")
             
             tree = mod.get_config_tree()
             if tree:
@@ -117,7 +117,7 @@ class MenuScreen(Screen):
                         info_lines.append(f"  {wl}")
         else:
             cat_name = current_item['obj']
-            info_lines.append(f"{Style.BOLD}{Style.hex('#FDCB6E')}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"{Style.BOLD}{Style.yellow()}{cat_name.upper()}{Style.RESET}")
             info_lines.append(f"{Style.DIM}Packages in this group:{Style.RESET}")
             info_lines.append("")
             for m in self.categories[cat_name]:
@@ -137,10 +137,9 @@ class MenuScreen(Screen):
         
         # 1. Header & Layout Metrics
         title_text = " PACKAGES SELECTOR "
-        bg_blue = Style.hex("89B4FA", bg=True)
-        text_black = "\033[30m"
+        bg_blue = Style.blue(bg=True)
         padding = (term_width - len(title_text)) // 2
-        header_bar = f"{bg_blue}{text_black}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
+        header_bar = f"{bg_blue}{Style.crust()}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
         
         # Available space for boxes
         # Overhead calculation: Header(1) + Spacer(1) + Spacer(1) + Pills(1) = 4 lines
@@ -170,13 +169,13 @@ class MenuScreen(Screen):
                 active_count = sum(1 for m in mods_in_cat if self.is_active(m.id))
                 
                 if active_count == 0: sel_mark, header_color = "[ ]", ""
-                elif active_count == len(mods_in_cat): sel_mark, header_color = "[■]", Style.hex("55E6C1")
-                else: sel_mark, header_color = "[-]", Style.hex("FDCB6E")
+                elif active_count == len(mods_in_cat): sel_mark, header_color = "[■]", Style.green()
+                else: sel_mark, header_color = "[-]", Style.yellow()
                 
                 line = f"  {icon} {sel_mark} {cat_name.upper()}"
                 # If cursor is here, use Purple + BOLD
                 if is_cursor: 
-                    style = Style.hex("#CBA6F7") + Style.BOLD
+                    style = Style.mauve() + Style.BOLD
                     list_lines.append(f"{style}{line}{Style.RESET}")
                 else: 
                     list_lines.append(f"{Style.BOLD}{header_color}{line}{Style.RESET}")
@@ -186,18 +185,18 @@ class MenuScreen(Screen):
                 installed = mod.is_installed()
                 has_override = mod.id in self.overrides
                 
-                if mod.id in self.auto_locked: mark, color, suffix = "[■]", Style.hex("FF6B6B"), " "
+                if mod.id in self.auto_locked: mark, color, suffix = "[■]", Style.red(), " "
                 elif mod.id in self.selected:
                     ovr = self.overrides.get(mod.id)
                     is_full = ovr['install_pkg'] and (not mod.stow_pkg or ovr['install_dots']) if ovr else True
-                    mark, color, suffix = ("[■]" if is_full else "[-]"), (Style.hex("FDCB6E") if has_override else Style.hex("55E6C1")), ("*" if has_override else "")
-                elif installed: mark, color, suffix = "[ ]", Style.hex("89B4FA"), " ●"
+                    mark, color, suffix = ("[■]" if is_full else "[-]"), (Style.yellow() if has_override else Style.green()), ("*" if has_override else "")
+                elif installed: mark, color, suffix = "[ ]", Style.blue(), " ●"
                 else: mark, color, suffix = "[ ]", "", ""
                 
                 line = f"    │     {mark} {mod.label}{suffix}"
                 # If cursor is here, use Purple + BOLD
                 if is_cursor: 
-                    style = Style.hex("#CBA6F7") + Style.BOLD
+                    style = Style.mauve() + Style.BOLD
                     list_lines.append(f"{style}{line}{Style.RESET}")
                 else: 
                     list_lines.append(f"    {Style.DIM}│{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}")
@@ -229,8 +228,8 @@ class MenuScreen(Screen):
             start_pos = int(prog * (available_height - 2 - thumb_size))
             for i in range(available_height - 2):
                 is_focus = (self.active_panel == 0 and not self.modal)
-                border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
-                thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
+                border_color = Style.mauve() if is_focus else Style.surface2()
+                thumb_color = Style.mauve() if is_focus else Style.blue()
                 char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
                 line = left_box[i+1]
                 left_box[i+1] = line[:-10] + char + Style.RESET
@@ -243,13 +242,13 @@ class MenuScreen(Screen):
             start_pos = int(prog * (available_height - 2 - thumb_size))
             for i in range(available_height - 2):
                 is_focus = (self.active_panel == 1 and not self.modal)
-                border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
-                thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
+                border_color = Style.mauve() if is_focus else Style.surface2()
+                thumb_color = Style.mauve() if is_focus else Style.blue()
                 
                 char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
                 line = right_box[i+1]
                 right_box[i+1] = line[:-10] + char + Style.RESET
-
+ 
         main_content = TUI.stitch_containers(left_box, right_box, gap=1)
         
         buffer = [header_bar, ""]
@@ -257,15 +256,15 @@ class MenuScreen(Screen):
         buffer.append("")
         
         # Footer
-        f_move = TUI.pill("↑↓←→", "Navigate", "81ECEC")
-        f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", "89B4FA")
-        f_space = TUI.pill("SPACE", "Select", "89B4FA")
-        f_tab = TUI.pill("TAB", "Overrides", "CBA6F7")
-        f_enter = TUI.pill("ENTER", "Install", "a6e3a1")
-        f_quit = TUI.pill("Q", "Exit", "f38ba8")
+        f_move = TUI.pill("↑↓←→", "Navigate", Theme.SKY)
+        f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE)
+        f_space = TUI.pill("SPACE", "Select", Theme.BLUE)
+        f_tab = TUI.pill("TAB", "Overrides", Theme.MAUVE)
+        f_enter = TUI.pill("ENTER", "Install", Theme.GREEN)
+        f_quit = TUI.pill("Q", "Exit", Theme.RED)
         pills_line = f"{f_move}    {f_scroll}    {f_space}    {f_tab}    {f_enter}    {f_quit}"
         buffer.append(f"{' ' * ((term_width - TUI.visible_len(pills_line)) // 2)}{pills_line}")
-        if self.exit_pending: buffer.append(f"  {Style.hex('FF6B6B')}Press ESC again to exit...{Style.RESET}")
+        if self.exit_pending: buffer.append(f"  {Style.red()}Press ESC again to exit...{Style.RESET}")
 
         # Modal Overlay
         if self.modal:

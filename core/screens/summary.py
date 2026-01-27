@@ -1,5 +1,5 @@
 import shutil
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 
 class SummaryModal:
     """
@@ -33,9 +33,9 @@ class SummaryModal:
             label = mod.label
             if is_custom:
                 label += "*"
-                color = Style.hex("#FDCB6E") # Yellow for custom
+                color = Style.yellow() # Yellow for custom
             else:
-                color = Style.hex("#55E6C1") # Green for standard
+                color = Style.green() # Green for standard
             
             lines.append({'text': f"- {label}", 'color': color})
             
@@ -55,7 +55,7 @@ class SummaryModal:
                     pkg_icon, pkg_color = "○", Style.DIM
                 else: 
                     pkg_icon = "✔" if success_pkg else "✘"
-                    pkg_color = Style.hex("#55E6C1") if success_pkg else Style.hex("#FF6B6B")
+                    pkg_color = Style.green() if success_pkg else Style.red()
                 
                 # Dots result icon
                 success_dots = res.get('dots')
@@ -63,7 +63,7 @@ class SummaryModal:
                     dots_icon, dots_color = "○", Style.DIM
                 else: 
                     dots_icon = "✔" if success_dots else "✘"
-                    dots_color = Style.hex("#55E6C1") if success_dots else Style.hex("#FF6B6B")
+                    dots_color = Style.green() if success_dots else Style.red()
             else:
                 pkg_icon = "■" if do_pkg else " "
                 dots_icon = "■" if do_dots else " "
@@ -83,7 +83,7 @@ class SummaryModal:
                 # Info: Target path (Only in audit mode and if dots are active)
                 if not self.is_results_mode and do_dots:
                     target = mod.stow_target or "~/"
-                    lines.append({'text': f"     Target: {Style.hex('#89B4FA')}{target}", 'color': ""})
+                    lines.append({'text': f"     Target: {Style.blue()}{target}", 'color': ""})
                 
         return lines
 
@@ -157,9 +157,9 @@ class SummaryModal:
         if self.is_results_mode:
             stats = self._get_summary_stats()
             # Colored counts in pastel
-            c_inst = f"{Style.hex('#55E6C1')}{stats['installed']} installed{Style.RESET}"
-            c_can  = f"{Style.hex('#89B4FA')}{stats['cancelled']} cancelled{Style.RESET}"
-            c_fail = f"{Style.hex('#FF6B6B')}{stats['failed']} failed{Style.RESET}"
+            c_inst = f"{Style.green()}{stats['installed']} installed{Style.RESET}"
+            c_can  = f"{Style.blue()}{stats['cancelled']} cancelled{Style.RESET}"
+            c_fail = f"{Style.red()}{stats['failed']} failed{Style.RESET}"
             
             stats_line = f"{c_inst}, {c_can}, {c_fail}"
             # Centering a string with ANSI codes is tricky, we use visible_len
@@ -176,16 +176,15 @@ class SummaryModal:
         else:
             btn_left, btn_right = "  INSTALL  ", "  CANCEL  "
         
-        purple_bg = Style.hex("#CBA6F7", bg=True)
-        text_black = "\033[30m"
+        purple_bg = Style.mauve(bg=True)
         
         if self.focus_idx == 0:
-            l_styled = f"{purple_bg}{text_black}{btn_left}{Style.RESET}"
+            l_styled = f"{purple_bg}{Style.crust()}{btn_left}{Style.RESET}"
         else:
             l_styled = f"[{btn_left.strip()}]"
             
         if self.focus_idx == 1:
-            r_styled = f"{purple_bg}{text_black}{btn_right}{Style.RESET}"
+            r_styled = f"{purple_bg}{Style.crust()}{btn_right}{Style.RESET}"
         else:
             r_styled = f"[{btn_right.strip()}]"
         

@@ -2,7 +2,7 @@ import time
 import shutil
 import sys
 import select
-from core.tui import TUI, Style, Keys
+from core.tui import TUI, Style, Keys, Theme
 from core.screens.welcome import Screen
 from core.screens.summary import SummaryModal
 
@@ -30,16 +30,14 @@ class ConfirmModal:
         txt_y = "YES"
         txt_n = "NO"
         
-        purple_bg = Style.hex("#CBA6F7", bg=True)
-        text_black = "\033[30m"
+        purple_bg = Style.mauve(bg=True)
         
         if self.focus_idx == 0:
-            btn_y = f"{purple_bg}{text_black}  YES  {Style.RESET}"
+            btn_y = f"{purple_bg}{Style.crust()}  YES  {Style.RESET}"
             btn_n = "[  NO  ]" # Matches 7-char width
         else:
             btn_y = "[ YES ]"
-
-            btn_n = f"{purple_bg}{text_black}   NO   {Style.RESET}"
+            btn_n = f"{purple_bg}{Style.crust()}   NO   {Style.RESET}"
         
         btn_row = f"{btn_y}    {btn_n}"
 
@@ -128,10 +126,9 @@ class InstallScreen(Screen):
         
         # 1. Header & Layout Metrics
         title = " DEPLOYING PACKAGES "
-        bg_blue = Style.hex("89B4FA", bg=True)
-        text_black = "\033[30m"
+        bg_blue = Style.blue(bg=True)
         padding = (term_width - len(title)) // 2
-        header_bar = f"{bg_blue}{text_black}{' '*padding}{title}{' '*(term_width-padding-len(title))}{Style.RESET}"
+        header_bar = f"{bg_blue}{Style.crust()}{' '*padding}{title}{' '*(term_width-padding-len(title))}{Style.RESET}"
         
         # Space for boxes: Top(2), Bottom(4)
         available_height = term_height - 7
@@ -156,7 +153,7 @@ class InstallScreen(Screen):
             elif all_done: icon = "✔"
             else: icon = "○"
             
-            color = Style.hex("#89B4FA") if is_current else (Style.hex("#55E6C1") if icon == "✔" else (Style.hex("#FF6B6B") if icon == "✘" else ""))
+            color = Style.blue() if is_current else (Style.green() if icon == "✔" else (Style.red() if icon == "✘" else ""))
             left_lines.append(f" {color}{icon} {mod.label}{Style.RESET}")
             
             ovr = self.overrides.get(mod.id, {})
@@ -194,8 +191,8 @@ class InstallScreen(Screen):
             # Inject thumb into the right border of the right box
             for i in range(available_height - 2):
                 is_focus = self.is_finished and not self.modal
-                border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
-                thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
+                border_color = Style.mauve() if is_focus else Style.surface2()
+                thumb_color = Style.mauve() if is_focus else Style.blue()
                 
                 char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
                 
@@ -210,12 +207,12 @@ class InstallScreen(Screen):
         if self.is_finished: progress_val = 1
         bar_len = int(safe_width * 0.5)
         filled = int(bar_len * progress_val)
-        bar_color = Style.hex("#55E6C1") if not self.is_cancelled else Style.hex("#FF6B6B")
+        bar_color = Style.green() if not self.is_cancelled else Style.red()
         bar_content = f"{bar_color}█" * filled + f"{Style.DIM}░" * (bar_len - filled) + Style.RESET
         
-        if self.is_finished: footer = f"{TUI.pill('ENTER', 'Finish', '#a6e3a1')}    {TUI.pill('R', 'Summary', '#FDCB6E')}    {TUI.pill('Q', 'Quit', '#f38ba8')}"
-        elif self.is_cancelled: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', '#FDCB6E')}"
-        else: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', '#FDCB6E')}    {TUI.pill('Q/ESC', 'Stop', '#f38ba8')}"
+        if self.is_finished: footer = f"{TUI.pill('ENTER', 'Finish', Theme.GREEN)}    {TUI.pill('R', 'Summary', Theme.YELLOW)}    {TUI.pill('Q', 'Quit', Theme.RED)}"
+        elif self.is_cancelled: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', Theme.YELLOW)}"
+        else: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', Theme.YELLOW)}    {TUI.pill('Q/ESC', 'Stop', Theme.RED)}"
 
         buffer = [header_bar, ""]
         buffer.extend(main_content)

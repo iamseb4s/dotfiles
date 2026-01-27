@@ -2,7 +2,7 @@ import shutil
 import platform
 import os
 import sys
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 
 class Screen:
     """Interface for terminal screens."""
@@ -47,7 +47,7 @@ class WelcomeScreen(Screen):
         
         content = []
         # Banner
-        content.append(f"{Style.hex('#81ECEC')}") # Cyan accent
+        content.append(f"{Style.sky()}") # Sky accent
         for line in banner:
             padding = (term_width - len(line)) // 2
             padding = max(0, padding)
@@ -70,9 +70,9 @@ class WelcomeScreen(Screen):
         content.append(f.getvalue().strip("\n"))
         
         # Navigation Hints
-        p_enter = TUI.pill("ENTER", "Install", "a6e3a1") # Success Green
-        p_new   = TUI.pill("N", "New Package", "CBA6F7") # Purple Pastel
-        p_quit  = TUI.pill("Q", "Exit", "f38ba8")      # Danger Red
+        p_enter = TUI.pill("ENTER", "Install", Theme.GREEN) # Success Green
+        p_new   = TUI.pill("N", "New Package", Theme.MAUVE) # Mauve Pastel
+        p_quit  = TUI.pill("Q", "Exit", Theme.RED)      # Red Pastel
         
         pills_line = f"{p_enter}     {p_new}     {p_quit}"
         p_padding = (term_width - TUI.visible_len(pills_line)) // 2

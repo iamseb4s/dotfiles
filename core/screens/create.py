@@ -6,7 +6,7 @@ import re
 import json
 from datetime import datetime
 from modules.base import Module
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
 from core.screens.install import ConfirmModal
 
@@ -45,8 +45,8 @@ class DependencyModal:
                 label = f"{mod.label} ({mod.id})"
                 
                 # Colors
-                color = Style.hex("#CBA6F7") + Style.BOLD if is_focused else ""
-                sel_color = Style.hex("#55E6C1") if is_selected else ""
+                color = Style.mauve() + Style.BOLD if is_focused else ""
+                sel_color = Style.green() if is_selected else ""
                 
                 inner_lines.append(f"  {color}{mark} {sel_color if not is_focused else ''}{label}{Style.RESET}")
 
@@ -136,14 +136,13 @@ class WizardSummaryModal:
         inner_lines.append("")
         
         # Buttons
-        purple_bg = Style.hex("#CBA6F7", bg=True)
-        text_black = "\033[30m"
+        purple_bg = Style.mauve(bg=True)
         btn_s = "  SAVE  "
         btn_c = "  CANCEL  "
         
-        if self.focus_idx == 0: btn_s = f"{purple_bg}{text_black}{btn_s}{Style.RESET}"
+        if self.focus_idx == 0: btn_s = f"{purple_bg}{Style.crust()}{btn_s}{Style.RESET}"
         else: btn_s = f"[ {btn_s.strip()} ]"
-        if self.focus_idx == 1: btn_c = f"{purple_bg}{text_black}{btn_c}{Style.RESET}"
+        if self.focus_idx == 1: btn_c = f"{purple_bg}{Style.crust()}{btn_c}{Style.RESET}"
         else: btn_c = f"[ {btn_c.strip()} ]"
         
         btn_row = f"{btn_s}     {btn_c}"
@@ -207,7 +206,7 @@ class DraftSelectionModal:
             if idx < len(options):
                 fname, data, mtime = options[idx]
                 is_focused = (self.focus_idx == idx)
-                color = Style.hex("#CBA6F7") + Style.BOLD if is_focused else ""
+                color = Style.mauve() + Style.BOLD if is_focused else ""
                 
                 if fname == "fresh":
                     label = " [ Start Fresh / New ] "
@@ -355,10 +354,10 @@ class CreateScreen(Screen):
             with open(path, 'w') as f:
                 json.dump(self.form, f, indent=4)
             self.active_draft_path = path
-            self.status_msg = f"{Style.hex('#a6e3a1')}Draft saved: {name}.json{Style.RESET}"
+            self.status_msg = f"{Style.green()}Draft saved: {name}.json{Style.RESET}"
             self.status_time = time.time()
         except Exception as e:
-            self.status_msg = f"{Style.hex('#f38ba8')}Error saving draft: {str(e)}{Style.RESET}"
+            self.status_msg = f"{Style.red()}Error saving draft: {str(e)}{Style.RESET}"
             self.status_time = time.time()
 
     def _get_categories(self):
@@ -421,10 +420,9 @@ class CreateScreen(Screen):
         
         # 1. Header
         title_text = " PACKAGE WIZARD "
-        bg_purple = Style.hex("CBA6F7", bg=True)
-        text_black = "\033[30m"
+        bg_purple = Style.mauve(bg=True)
         padding = (term_width - len(title_text)) // 2
-        header_bar = f"{bg_purple}{text_black}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
+        header_bar = f"{bg_purple}{Style.crust()}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
         
         # 2. Layout Metrics
         # Overhead: Header(1), Spacer(1), Spacer(1), Footer(1)
@@ -456,7 +454,7 @@ class CreateScreen(Screen):
                 
                 should_show = self.show_validation_errors or not is_empty_err or self.is_editing or is_custom_cat_empty
                 if should_show:
-                    help_content.append(f"  {Style.hex('#f38ba8')}ERROR: {err}{Style.RESET}")
+                    help_content.append(f"  {Style.red()}ERROR: {err}{Style.RESET}")
         
         # Show status message if recent (AT THE BOTTOM)
         if self.status_msg and time.time() - self.status_time < 3:
@@ -493,7 +491,7 @@ class CreateScreen(Screen):
             # Default state: Dimmed if not focused
             base_color = ""
             if is_focused:
-                base_color = Style.hex("#CBA6F7") # Pastel Purple
+                base_color = Style.mauve() # Pastel Purple (Mauve)
             
             # Error state (Red)
             # Show red label if global validation triggered or it's a "live" error
@@ -503,7 +501,7 @@ class CreateScreen(Screen):
             
             label_color = base_color
             if has_error and show_label_red:
-                label_color = Style.hex("#f38ba8") # Pastel Red
+                label_color = Style.red() # Pastel Red
             
             bold = Style.BOLD if is_focused else ""
             
@@ -516,9 +514,10 @@ class CreateScreen(Screen):
             # Text Color for the value itself
             value_color = ""
             if field['id'] == 'id' and val and has_error:
-                value_color = Style.hex("#f38ba8")
+                value_color = Style.red()
             elif is_focused:
-                value_color = label_color # Match label (Morado or Red)
+                value_color = label_color # Match label (Red)
+
             
             if field['type'] == 'text':
                 # Text Input style: [ value ] ✎
@@ -544,9 +543,9 @@ class CreateScreen(Screen):
                     opt_color = ""
                     if is_sel:
                         if opt == "Custom..." and not self.form['custom_category']:
-                            opt_color = Style.hex("#f38ba8") # RED IMMEDIATELY
+                            opt_color = Style.red() # RED IMMEDIATELY
                         elif is_focused:
-                            opt_color = Style.hex("#CBA6F7")
+                            opt_color = Style.mauve()
                         else:
                             opt_color = "" # Default White
                     else:
@@ -618,19 +617,19 @@ class CreateScreen(Screen):
         
         # 6. Footer
         if self.is_editing:
-            p_line = f"{TUI.pill('ENTER', 'Finish', 'a6e3a1')}    {TUI.pill('ESC', 'Cancel', 'f38ba8')}"
+            p_line = f"{TUI.pill('ENTER', 'Finish', Theme.GREEN)}    {TUI.pill('ESC', 'Cancel', Theme.RED)}"
         else:
             f_pills = [
-                TUI.pill('ESC', 'Discard', 'f9e2af'),
-                TUI.pill('h/j/k/l', 'Navigate', '81ECEC'),
-                TUI.pill('PgUp/Dn', 'Scroll Script', '89B4FA'),
-                TUI.pill('ENTER', 'Summary & Save', 'a6e3a1'),
-                TUI.pill('D', 'Draft', 'CBA6F7'),
+                TUI.pill('ESC', 'Discard', Theme.YELLOW),
+                TUI.pill('h/j/k/l', 'Navigate', Theme.SKY),
+                TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE),
+                TUI.pill('ENTER', 'Summary & Save', Theme.GREEN),
+                TUI.pill('D', 'Draft', Theme.MAUVE),
             ]
             
             if self.active_draft_path:
-                f_pills.append(TUI.pill('X', 'Delete Draft', 'f38ba8'))
-            f_pills.append(TUI.pill('Q', 'Exit', 'f38ba8'))
+                f_pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
+            f_pills.append(TUI.pill('Q', 'Exit', Theme.RED))
             
             p_line = "    ".join(f_pills)
         
@@ -681,7 +680,7 @@ class CreateScreen(Screen):
                 
             return True
         except Exception as e:
-            self.status_msg = f"{Style.hex('#f38ba8')}Save failed: {str(e)}{Style.RESET}"
+            self.status_msg = f"{Style.red()}Save failed: {str(e)}{Style.RESET}"
             self.status_time = time.time()
             return False
 
@@ -835,7 +834,7 @@ class CreateScreen(Screen):
                 
                 if all_errors:
                     self.show_validation_errors = True
-                    self.status_msg = f"{Style.hex('#f38ba8')}Cannot proceed: Please fix errors.{Style.RESET}"
+                    self.status_msg = f"{Style.red()}Cannot proceed: Please fix errors.{Style.RESET}"
                     self.status_time = time.time()
                 else:
                     self.modal = WizardSummaryModal(self.form)

@@ -1,6 +1,6 @@
 import shutil
 import os
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 
 class OverrideModal:
     """
@@ -60,8 +60,8 @@ class OverrideModal:
             is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
 
             if is_focused:
-                # Purple + BOLD for selection
-                style = Style.hex("#CBA6F7") + Style.BOLD
+                # Mauve + BOLD for selection
+                style = Style.mauve() + Style.BOLD
                 mgr_styled_items.append(f"{style}{mark} {mgr}{Style.RESET}")
             else:
                 mgr_styled_items.append(f"{mark} {mgr}")
@@ -84,7 +84,7 @@ class OverrideModal:
         if self.editing_name: label += " ✎"
         
         if is_focused:
-            style = Style.hex("#CBA6F7") + Style.BOLD
+            style = Style.mauve() + Style.BOLD
             inner_lines.append(f"{style}{label}{Style.RESET}")
         else:
             inner_lines.append(label)
@@ -109,7 +109,7 @@ class OverrideModal:
             label = f"  [{dot_mark}] {label_text}"
             
             if is_focused:
-                style = Style.hex("#CBA6F7") + Style.BOLD
+                style = Style.mauve() + Style.BOLD
                 inner_lines.append(f"{style}{label}{Style.RESET}")
             else:
                 inner_lines.append(label)
@@ -123,16 +123,15 @@ class OverrideModal:
         btn_acc = "  ACCEPT  "
         btn_can = "  CANCEL  "
         
-        purple_bg = Style.hex("#CBA6F7", bg=True)
-        text_black = "\033[30m"
+        purple_bg = Style.mauve(bg=True)
         
         if self.focus_idx == 3:
-            acc_styled = f"{purple_bg}{text_black}{btn_acc}{Style.RESET}"
+            acc_styled = f"{purple_bg}{Style.crust()}{btn_acc}{Style.RESET}"
         else:
             acc_styled = f"[{btn_acc.strip()}]"
             
         if self.focus_idx == 4:
-            can_styled = f"{purple_bg}{text_black}{btn_can}{Style.RESET}"
+            can_styled = f"{purple_bg}{Style.crust()}{btn_can}{Style.RESET}"
         else:
             can_styled = f"[{btn_can.strip()}]"
         
