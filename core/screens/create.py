@@ -544,8 +544,8 @@ class CreateScreen(Screen):
                     post = display_val[self.text_cursor_pos+1:]
                     display_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{value_color}{bold}{post}"
                 
-                hint = f" {Style.DIM}(ENTER to edit){Style.RESET}" if is_focused and not self.is_editing else ""
-                value_line = f"{value_color}{bold}[{Style.RESET}{value_color}{display_val}{Style.RESET}{value_color}{bold}]{Style.RESET} ✎{hint}"
+                hint = f" {Style.DIM}(E to edit){Style.RESET}" if is_focused and not self.is_editing else ""
+                value_line = f"{value_color}{bold}[{Style.RESET}{value_color}{display_val}{Style.RESET}{value_color}{bold}] ✎{Style.RESET}{hint}"
                 
             elif field['type'] == 'select':
                 # Horizontal Selector style: ○ opt1   ● opt2
@@ -582,7 +582,7 @@ class CreateScreen(Screen):
                     else:
                         styled_opts.append(f"{opt_color}{mark} {opt}{Style.RESET}")
                 
-                hint_txt = "(ENTER to edit)" if val == "Custom..." and not self.is_editing else "(h/l to select)"
+                hint_txt = "(E to edit)" if val == "Custom..." and not self.is_editing else "(h/l to select)"
                 hint = f" {Style.DIM}{hint_txt}{Style.RESET}" if is_focused else ""
                 value_line = "   ".join(styled_opts) + hint
                 
@@ -593,7 +593,7 @@ class CreateScreen(Screen):
                 value_line = f"{value_color}{bold}[{mark}] {label_txt}{Style.RESET}{hint}"
                 
             elif field['type'] == 'multi':
-                hint = f" {Style.DIM}(ENTER to select){Style.RESET}" if is_focused else ""
+                hint = f" {Style.DIM}(E to select){Style.RESET}" if is_focused else ""
                 value_line = f"{value_color}{bold}{len(val)} selected{Style.RESET}{hint}"
                 
             elif field['type'] == 'placeholder':
@@ -637,6 +637,7 @@ class CreateScreen(Screen):
             f_pills = [
                 TUI.pill('h/j/k/l', 'Navigate', Theme.SKY),
                 TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE),
+                TUI.pill('E', 'Edit', Theme.BLUE),
                 TUI.pill('ENTER', 'Summary & Save', Theme.GREEN),
                 TUI.pill('D', 'Draft', Theme.MAUVE),
             ]
@@ -831,7 +832,7 @@ class CreateScreen(Screen):
 
         elif key == Keys.SPACE:
             if field['type'] == 'check': self.form[field['id']] = not self.form[field['id']]
-        elif key == Keys.ENTER or key in [ord('e'), ord('E')]:
+        elif key in [ord('e'), ord('E')]:
             if field['type'] in ['text'] or (field['type'] == 'select' and self.form[field['id']] == 'Custom...'):
                 self.is_editing = True
                 target = 'custom_category' if (field['id'] == 'category' and self.form['category'] == 'Custom...') else field['id']
@@ -839,18 +840,20 @@ class CreateScreen(Screen):
                 self.text_cursor_pos = len(self.old_value)
             elif field['type'] == 'multi':
                 self.modal = DependencyModal(self.modules, self.form['dependencies'])
+            return None
+            
+        elif key == Keys.ENTER:
+            # GLOBAL SUMMARY TRIGGER
+            all_errors = []
+            for f in self.fields:
+                all_errors.extend(self._get_field_errors(f['id']))
+            
+            if all_errors:
+                self.show_validation_errors = True
+                self.status_msg = f"{Style.red()}Cannot proceed: Please fix errors.{Style.RESET}"
+                self.status_time = time.time()
             else:
-                # GLOBAL SUMMARY TRIGGER (When pressing ENTER on non-editable field)
-                all_errors = []
-                for f in self.fields:
-                    all_errors.extend(self._get_field_errors(f['id']))
-                
-                if all_errors:
-                    self.show_validation_errors = True
-                    self.status_msg = f"{Style.red()}Cannot proceed: Please fix errors.{Style.RESET}"
-                    self.status_time = time.time()
-                else:
-                    self.modal = WizardSummaryModal(self.form)
+                self.modal = WizardSummaryModal(self.form)
             return None
 
         elif key == Keys.PGUP: self.preview_offset = max(0, self.preview_offset - 5)

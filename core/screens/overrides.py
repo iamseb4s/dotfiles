@@ -116,7 +116,7 @@ class OverrideModal:
             inner_lines.append("")
         
         # Hints Line (Internal)
-        hints = "SPACE toggle    R rename    ENTER accept    Q cancel"
+        hints = "SPACE toggle, E edit, ENTER accept, Q cancel"
         v_len = TUI.visible_len(hints)
         padding_left = (width - 2 - v_len) // 2
         inner_lines.append(f"{' ' * padding_left}{Style.DIM}{hints}{Style.RESET}")
@@ -192,7 +192,7 @@ class OverrideModal:
             if self.focus_idx == 0: self.install_pkg = not self.install_pkg
             elif self.focus_idx == 2: self.install_dots = not self.install_dots
             
-        elif key in [ord('r'), ord('R')] and self.focus_idx == 0:
+        elif key in [ord('e'), ord('E')] and self.focus_idx == 0:
             self.old_pkg_name = self.pkg_name
             self.text_cursor_pos = len(self.pkg_name)
             self.editing_name = True
