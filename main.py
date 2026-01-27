@@ -90,6 +90,13 @@ def main():
                         state = "WELCOME"
                         TUI.clear_screen()
                         break
+                    elif action == "RELOAD_AND_WELCOME":
+                        # Reload all modules to include the new one
+                        modules = load_modules(sys_mgr)
+                        menu_screen = MenuScreen(modules) # Refresh menu too
+                        state = "WELCOME"
+                        TUI.clear_screen()
+                        break
                     if action == "EXIT": sys.exit(0)
                 
             elif state == "MENU":

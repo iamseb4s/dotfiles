@@ -650,6 +650,41 @@ class CreateScreen(Screen):
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
+    def save_package(self):
+        """Generates the .py module and creates the dots/ folder."""
+        fid = self.form['id']
+        module_path = os.path.join("modules", f"{fid}.py")
+        dots_path = os.path.join("dots", fid)
+        
+        try:
+            # 1. Generate Python Code
+            code = "from modules.base import Module\n\n"
+            code += self._generate_python()
+            
+            # If Manual Mode is enabled, add the install method template
+            if self.form['is_incomplete']:
+                code += "\n\n    def install(self):\n        # TODO: Implement custom logic\n        super().install()"
+            
+            # 2. Write Module File
+            with open(module_path, "w") as f:
+                f.write(code + "\n")
+            
+            # 3. Create Dots Directory
+            if not os.path.exists(dots_path):
+                os.makedirs(dots_path)
+            
+            # 4. Clean up draft if exists
+            if self.active_draft_path and os.path.exists(self.active_draft_path):
+                os.remove(self.active_draft_path)
+            elif os.path.exists(os.path.join(self.drafts_dir, f"{fid}.json")):
+                os.remove(os.path.join(self.drafts_dir, f"{fid}.json"))
+                
+            return True
+        except Exception as e:
+            self.status_msg = f"{Style.hex('#f38ba8')}Save failed: {str(e)}{Style.RESET}"
+            self.status_time = time.time()
+            return False
+
     def _generate_python(self):
         """Generates the Python class code based on form data."""
         fid = self.form['id'] or "my_package"
@@ -704,6 +739,11 @@ class CreateScreen(Screen):
                     self.pending_delete = res[1] # (filename, data, mtime)
                     self.modal = ConfirmModal("DELETE DRAFT?", f"Are you sure you want to permanently delete '{res[1][1].get('id', 'unnamed')}' draft?")
                     self.modal_type = "DELETE_MODAL_DRAFT"
+            elif res == "SAVE":
+                if self.save_package():
+                    return "RELOAD_AND_WELCOME"
+                else:
+                    self.modal = None
             elif res == "FRESH":
                 self.modal = None
             elif res in ["NO", "CLOSE", "CANCEL"]:
