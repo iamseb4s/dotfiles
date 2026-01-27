@@ -123,6 +123,9 @@ class TUI:
     _old_settings = None
     _raw_ref_count = 0
     _resize_pending = False
+    
+    # Notification System State
+    _notifications = [] # List of {'msg': str, 'type': str, 'time': float}
 
     @staticmethod
     def init_signal_handler():
@@ -284,6 +287,73 @@ class TUI:
             return None
 
     @staticmethod
+    def push_notification(message, type="INFO"):
+        """Adds a new notification to the global stack."""
+        TUI._notifications.append({
+            'msg': message,
+            'type': type,
+            'time': time.time()
+        })
+
+    @staticmethod
+    def _clean_notifications():
+        """Removes expired notifications (3 seconds)."""
+        now = time.time()
+        TUI._notifications = [n for n in TUI._notifications if now - n['time'] < 5.0]
+
+    @staticmethod
+    def draw_notifications(buffer):
+        """Overlays active notifications onto the provided buffer."""
+        TUI._clean_notifications()
+        if not TUI._notifications:
+            return buffer
+            
+        term_width = shutil.get_terminal_size().columns
+        width = 40
+        margin_right = 2
+        current_y = 1
+        
+        for n in TUI._notifications:
+            border_color = Style.blue() if n['type'] == "INFO" else Style.red()
+            title = " [i] INFO " if n['type'] == "INFO" else " [!] ERROR "
+                
+            # Wrap message
+            wrapped = TUI.wrap_text(n['msg'], width - 4)
+            height = len(wrapped) + 2
+            
+            # Build notification lines
+            n_lines = []
+            
+            # Top Border (Exactly 40 chars)
+            title_len = len(title)
+            # ╭─ (2) + title (11) + ─ * (40 - 11 - 3 = 26) + ╮ (1) = 40
+            top_str = "╭─" + title + "─" * (width - title_len - 3) + "╮"
+            n_lines.append(f"{border_color}{top_str}{Style.RESET}")
+            
+            # Content
+            # Width calculation: │ (1) + " " (1) + line + padding + │ (1) = 40
+            for line in wrapped:
+                padding = " " * (37 - TUI.visible_len(line))
+                n_lines.append(f"{border_color}│{Style.RESET} {line}{padding}{border_color}│{Style.RESET}")
+            
+            # Bottom Border
+            bot_str = "╰" + "─" * (width - 2) + "╯"
+            n_lines.append(f"{border_color}{bot_str}{Style.RESET}")
+            
+            # Overlay onto buffer
+            start_x = term_width - width - margin_right
+            for i, line in enumerate(n_lines):
+                target_y = current_y + i
+                if 0 <= target_y < len(buffer):
+                    buffer[target_y] = TUI.overlay(buffer[target_y], line, start_x)
+            
+            current_y += len(n_lines) + 1
+            
+        return buffer
+
+        term_width = shutil.get_terminal_size().columns
+
+    @staticmethod
     def truncate_ansi(text, max_len):
         """Truncates a string containing ANSI codes without breaking them."""
         if TUI.visible_len(text) <= max_len:
@@ -353,9 +423,15 @@ class TUI:
     @staticmethod
     def overlay(bg, fg, x):
         """Composites foreground text onto background text at a specific x-offset."""
-        fg_len = TUI.visible_len(fg)
-        left = TUI.ansi_slice(bg, 0, x)
-        right = TUI.ansi_slice(bg, x + fg_len)
+        bg_vlen = TUI.visible_len(bg)
+        if bg_vlen < x:
+            left = bg + " " * (x - bg_vlen)
+        else:
+            left = TUI.ansi_slice(bg, 0, x)
+            
+        fg_vlen = TUI.visible_len(fg)
+        right = TUI.ansi_slice(bg, x + fg_vlen)
+        
         return left + fg + right
 
     @staticmethod

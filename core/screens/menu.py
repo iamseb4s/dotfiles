@@ -262,8 +262,11 @@ class MenuScreen(Screen):
                 if 0 <= target_y < len(buffer):
                     buffer[target_y] = self._overlay_string(buffer[target_y], m_line, m_x)
 
+        # Global Notifications Overlay
+        buffer = TUI.draw_notifications(buffer)
+
         # Final buffer management
-        final_output = "\n".join(buffer[:term_height])
+        final_output = "\n".join([line.ljust(term_width) for line in buffer[:term_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
@@ -310,6 +313,7 @@ class MenuScreen(Screen):
                         self.selected.add(mod.id)
                         self.overrides[mod.id] = ovr
                     self.modal = None
+                    TUI.push_notification(f"Changes saved for {mod.label}", type="INFO")
                 elif action == "CANCEL":
                     self.modal = None
                     
@@ -381,6 +385,9 @@ class MenuScreen(Screen):
              else: self.active_panel = 1
         elif key == Keys.ENTER:
             total_selection = self.selected.union(self.auto_locked)
-            if len(total_selection) > 0: self.modal = SummaryModal(self.modules, total_selection, self.overrides)
+            if len(total_selection) > 0: 
+                self.modal = SummaryModal(self.modules, total_selection, self.overrides)
+            else:
+                TUI.push_notification("Select at least one package to install", type="ERROR")
         
         return None

@@ -659,8 +659,11 @@ class CreateScreen(Screen):
                 if 0 <= m_y + i < len(buffer):
                     buffer[m_y + i] = TUI.overlay(buffer[m_y + i], m_line, m_x)
 
+        # 7. Global Notifications Overlay
+        buffer = TUI.draw_notifications(buffer)
+
         # Final Render
-        final_output = "\n".join(buffer[:term_height])
+        final_output = "\n".join([line.ljust(term_width) for line in buffer[:term_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
@@ -722,20 +725,25 @@ class CreateScreen(Screen):
         if self.modal:
             res = self.modal.handle_input(key)
             if res == "YES":
-                if self.modal_type == "DISCARD": return "WELCOME"
+                if self.modal_type == "DISCARD": 
+                    TUI.push_notification("Changes discarded", type="INFO")
+                    return "WELCOME"
                 elif self.modal_type == "DRAFT":
                     self.save_draft()
                     self.modal = None
+                    TUI.push_notification("Draft saved successfully", type="INFO")
                     return "WELCOME"
                 elif self.modal_type == "DELETE_DRAFT":
                     if self.active_draft_path and os.path.exists(self.active_draft_path):
                         os.remove(self.active_draft_path)
                         self._reset_form()
+                        TUI.push_notification("Draft deleted successfully", type="INFO")
                     self.modal = None
                 elif self.modal_type == "DELETE_MODAL_DRAFT":
                     path = os.path.join(self.drafts_dir, self.pending_delete[0])
                     if os.path.exists(path):
                         os.remove(path)
+                        TUI.push_notification("Draft deleted successfully", type="INFO")
                     self.modal = None
                     self._check_for_drafts() # Refresh list
                     return None
@@ -755,6 +763,7 @@ class CreateScreen(Screen):
                     self.modal_type = "DELETE_MODAL_DRAFT"
             elif res == "SAVE":
                 if self.save_package():
+                    TUI.push_notification(f"Module '{self.form['id']}' created", type="INFO")
                     return "RELOAD_AND_WELCOME"
                 else:
                     self.modal = None
@@ -850,8 +859,7 @@ class CreateScreen(Screen):
             
             if all_errors:
                 self.show_validation_errors = True
-                self.status_msg = f"{Style.red()}Cannot proceed: Please fix errors.{Style.RESET}"
-                self.status_time = time.time()
+                TUI.push_notification("Please fix form errors before saving", type="ERROR")
             else:
                 self.modal = WizardSummaryModal(self.form)
             return None

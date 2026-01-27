@@ -227,8 +227,11 @@ class InstallScreen(Screen):
                 if 0 <= target_y < len(buffer):
                     buffer[target_y] = TUI.overlay(buffer[target_y], m_line, m_x)
 
-        # Final buffer management to prevent terminal scroll
-        final_output = "\n".join(buffer[:term_height])
+        # Global Notifications Overlay
+        buffer = TUI.draw_notifications(buffer)
+
+        # Final buffer management
+        final_output = "\n".join([line.ljust(term_width) for line in buffer[:term_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
@@ -278,6 +281,7 @@ class InstallScreen(Screen):
                         if res == "YES":
                             self.is_cancelled = True
                             self.modal = None
+                            TUI.push_notification("Installation stopped by user", type="ERROR")
                         elif res == "NO":
                             self.modal = None
                     

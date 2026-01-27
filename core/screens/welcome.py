@@ -93,8 +93,12 @@ class WelcomeScreen(Screen):
         buffer = [""] * top_pad
         buffer.extend(real_lines)
 
+        # Global Notifications Overlay
+        buffer = TUI.draw_notifications(buffer)
+
         # Atomic Draw
-        sys.stdout.write("\033[H" + "\n".join(buffer) + "\n\033[J")
+        final_output = "\n".join([line.ljust(term_width) for line in buffer[:term_height]])
+        sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
         
