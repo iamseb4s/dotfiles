@@ -37,12 +37,12 @@ class OverrideModal:
             self.selected_manager = current_overrides['manager']
         else:
             self.selected_manager = native_manager
-
-
         
-        # UI Focus: 0:Package, 1:Manager, 2:Dotfiles, 3:Accept, 4:Cancel
-        self.focus_idx = 3
+        # UI Focus: 0:Package, 1:Manager, 2:Dotfiles
+        self.focus_idx = 0
         self.editing_name = False
+        self.text_cursor_pos = 0
+        self.old_pkg_name = ""
 
     def render(self):
         """Draws the modal on top of the existing screen."""
@@ -60,32 +60,33 @@ class OverrideModal:
             is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
 
             if is_focused:
-                # Mauve + BOLD for selection
-                style = Style.mauve() + Style.BOLD
-                mgr_styled_items.append(f"{style}{mark} {mgr}{Style.RESET}")
+                mgr_styled_items.append(f"{Style.mauve()}{Style.BOLD}{mark} {mgr}{Style.RESET}")
             else:
                 mgr_styled_items.append(f"{mark} {mgr}")
         
         mgr_content = "   ".join(mgr_styled_items)
         mgr_v_len = TUI.visible_len(mgr_content)
         
-        # Determine optimal modal width
-        width = max(54, len(title_text) + 10, TUI.visible_len(pkg_measure) + 6, mgr_v_len + 6)
+        width = max(60, len(title_text) + 10, TUI.visible_len(pkg_measure) + 6, mgr_v_len + 6)
         width = min(width, term_width - 4)
         
-        # 2. Build Inner Lines (without borders)
-        inner_lines = []
-        inner_lines.append("") # Top spacer
+        # 2. Build Inner Lines
+        inner_lines = [""] # Top spacer
         
         # Option 0: Package Toggle
         pkg_mark = "■" if self.install_pkg else " "
         is_focused = (self.focus_idx == 0)
-        label = f"  [{pkg_mark}] Install Package: '{self.pkg_name}'"
-        if self.editing_name: label += " ✎"
+        display_name = self.pkg_name
+        if self.editing_name:
+            pre = display_name[:self.text_cursor_pos]
+            char = display_name[self.text_cursor_pos:self.text_cursor_pos+1] or " "
+            post = display_name[self.text_cursor_pos+1:]
+            display_name = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.mauve()}{Style.BOLD}{post}"
+            
+        label = f"  [{pkg_mark}] Install Package: '{display_name}' ✎"
         
         if is_focused:
-            style = Style.mauve() + Style.BOLD
-            inner_lines.append(f"{style}{label}{Style.RESET}")
+            inner_lines.append(f"{Style.mauve()}{Style.BOLD}{label}{Style.RESET}")
         else:
             inner_lines.append(label)
         
@@ -109,37 +110,17 @@ class OverrideModal:
             label = f"  [{dot_mark}] {label_text}"
             
             if is_focused:
-                style = Style.mauve() + Style.BOLD
-                inner_lines.append(f"{style}{label}{Style.RESET}")
+                inner_lines.append(f"{Style.mauve()}{Style.BOLD}{label}{Style.RESET}")
             else:
                 inner_lines.append(label)
             inner_lines.append("")
         
-        # Instructions
-        instr = "(Press R to rename)" if self.focus_idx == 0 else ""
-        inner_lines.append(f"{Style.DIM}{instr.center(width-2)}{Style.RESET}")
+        # Hints Line (Internal)
+        hints = "SPACE toggle    R rename    ENTER accept    Q cancel"
+        v_len = TUI.visible_len(hints)
+        padding_left = (width - 2 - v_len) // 2
+        inner_lines.append(f"{' ' * padding_left}{Style.DIM}{hints}{Style.RESET}")
         
-        # Buttons
-        btn_acc = "  ACCEPT  "
-        btn_can = "  CANCEL  "
-        
-        purple_bg = Style.mauve(bg=True)
-        
-        if self.focus_idx == 3:
-            acc_styled = f"{purple_bg}{Style.crust()}{btn_acc}{Style.RESET}"
-            can_styled = f"[{btn_can.strip().center(len(btn_can)-2)}]"
-        elif self.focus_idx == 4:
-            acc_styled = f"[{btn_acc.strip().center(len(btn_acc)-2)}]"
-            can_styled = f"{purple_bg}{Style.crust()}{btn_can}{Style.RESET}"
-        else:
-            acc_styled = f"[{btn_acc.strip().center(len(btn_acc)-2)}]"
-            can_styled = f"[{btn_can.strip().center(len(btn_can)-2)}]"
-        
-        btn_row = f"{acc_styled}     {can_styled}"
-        v_len = TUI.visible_len(btn_row)
-        padding = (width - 2 - v_len) // 2
-        inner_lines.append(f"{' ' * padding}{btn_row}")
-
         # 3. Wrap in Container
         height = len(inner_lines) + 2
         lines = TUI.create_container(inner_lines, width, height, title=title_text, is_focused=True)
@@ -152,52 +133,52 @@ class OverrideModal:
     def handle_input(self, key):
         """Internal logic for modal navigation."""
         if self.editing_name:
+            curr_val = self.pkg_name
             if key == Keys.ENTER:
                 self.editing_name = False
             elif key == Keys.ESC:
+                self.pkg_name = self.old_pkg_name
                 self.editing_name = False
             elif key == Keys.BACKSPACE:
-                self.pkg_name = self.pkg_name[:-1]
+                if self.text_cursor_pos > 0:
+                    self.pkg_name = curr_val[:self.text_cursor_pos-1] + curr_val[self.text_cursor_pos:]
+                    self.text_cursor_pos -= 1
+            elif key == Keys.DEL:
+                if self.text_cursor_pos < len(curr_val):
+                    self.pkg_name = curr_val[:self.text_cursor_pos] + curr_val[self.text_cursor_pos+1:]
+            elif key in [Keys.LEFT, Keys.H]:
+                self.text_cursor_pos = max(0, self.text_cursor_pos - 1)
+            elif key in [Keys.RIGHT, Keys.L]:
+                self.text_cursor_pos = min(len(curr_val), self.text_cursor_pos + 1)
             elif 32 <= key <= 126: # Printable chars
-                self.pkg_name += chr(key)
+                self.pkg_name = curr_val[:self.text_cursor_pos] + chr(key) + curr_val[self.text_cursor_pos:]
+                self.text_cursor_pos += 1
             return None
 
-        # Modal close keys
-        if key in [Keys.Q, Keys.Q_UPPER]:
-            return "CANCEL"
-            
+        # Global Actions
+        if key in [Keys.Q, Keys.Q_UPPER, ord('q'), ord('Q')]: return "CANCEL"
+        if key == Keys.ENTER: return "ACCEPT"
+        
         if key == Keys.ESC:
-            if self.focus_idx != 4:
-                self.focus_idx = 4
-            else:
-                return "CANCEL"
+            return "CANCEL"
 
-        # Vertical Navigation
+        # Navigation
         if key in [Keys.UP, Keys.K]:
-            if self.focus_idx in [3, 4]: # From buttons row
-                self.focus_idx = 2 if self.has_dots else 0
-            elif self.focus_idx == 2:
-                self.focus_idx = 1 if self.install_pkg else 0
+            if self.focus_idx == 0:
+                self.focus_idx = 2 if self.has_dots else (1 if self.install_pkg else 0)
             elif self.focus_idx == 1:
                 self.focus_idx = 0
-            else:
-                # Wrap from Top to Buttons row (Standard entry: ACCEPT)
-                self.focus_idx = 3
+            elif self.focus_idx == 2:
+                self.focus_idx = 1 if self.install_pkg else 0
                 
         elif key in [Keys.DOWN, Keys.J]:
             if self.focus_idx == 0:
-                self.focus_idx = 1 if self.install_pkg else (2 if self.has_dots else 3)
+                self.focus_idx = 1 if self.install_pkg else (2 if self.has_dots else 0)
             elif self.focus_idx == 1:
-                self.focus_idx = 2 if self.has_dots else 3
+                self.focus_idx = 2 if self.has_dots else 0
             elif self.focus_idx == 2:
-                # From Bottom list item to Buttons row
-                self.focus_idx = 3
-            else:
-                # Wrap from Buttons row to Top
                 self.focus_idx = 0
-
                 
-        # Horizontal Navigation (Strictly for Managers and Buttons)
         elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
             if self.focus_idx == 1: # Managers list
                 try:
@@ -206,19 +187,15 @@ class OverrideModal:
                     self.selected_manager = self.managers[(curr_idx + step) % len(self.managers)]
                 except ValueError:
                     if self.managers: self.selected_manager = self.managers[0]
-            elif self.focus_idx in [3, 4]: # Buttons row
-                self.focus_idx = 4 if self.focus_idx == 3 else 3
             
         elif key == Keys.SPACE:
             if self.focus_idx == 0: self.install_pkg = not self.install_pkg
             elif self.focus_idx == 2: self.install_dots = not self.install_dots
             
-        elif key == Keys.R and self.focus_idx == 0:
+        elif key in [ord('r'), ord('R')] and self.focus_idx == 0:
+            self.old_pkg_name = self.pkg_name
+            self.text_cursor_pos = len(self.pkg_name)
             self.editing_name = True
-            
-        elif key == Keys.ENTER:
-            if self.focus_idx == 3: return "ACCEPT"
-            if self.focus_idx == 4: return "CANCEL"
             
         return None
 
