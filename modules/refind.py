@@ -11,7 +11,6 @@ class RefindModule(Module):
     package_name = "refind gdisk"
     
     # Package metadata
-    stow_pkg = "refind"
     stow_target = "/boot/EFI/refind"
 
     def is_installed(self):

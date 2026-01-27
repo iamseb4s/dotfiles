@@ -21,11 +21,12 @@ class Module:
     package_name = None 
     
     # Stow configuration
-    stow_pkg = None      
-    stow_target = None   
+    stow_target = "~"   
 
     def __init__(self, sys_manager: System):
         self.sys = sys_manager
+        # Auto-resolve stow_pkg to match id
+        self.stow_pkg = self.id
 
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
@@ -72,10 +73,16 @@ class Module:
         return True
 
     def configure(self, override=None, callback=None, input_callback=None):
-        """Auto-stow if stow_pkg is defined, supporting user overrides."""
-        if self.stow_pkg:
-            return self.run_stow(self.stow_pkg, self.stow_target, callback=callback, input_callback=input_callback)
-        return True
+        """Auto-stow if dotfiles directory exists, supporting user overrides."""
+        if not self.stow_pkg:
+            return True
+            
+        # Check if source directory exists before stowing to avoid errors
+        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
+        if not os.path.exists(pkg_path):
+            return True # Nothing to stow, not an error
+            
+        return self.run_stow(self.stow_pkg, self.stow_target, callback=callback, input_callback=input_callback)
 
     def run_stow(self, package_name, target=None, callback=None, input_callback=None):
         """Standard GNU Stow wrapper."""
