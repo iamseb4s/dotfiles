@@ -47,12 +47,11 @@ class WelcomeScreen(Screen):
         
         content = []
         # Banner
-        content.append(f"{Style.sky()}") # Sky accent
         for line in banner:
             padding = (term_width - len(line)) // 2
             padding = max(0, padding)
-            content.append(f"{' ' * padding}{line}")
-        content.append(f"{Style.RESET}")
+            # Each line is now atomic with its own color and reset
+            content.append(f"{Style.sky()}{' ' * padding}{line}{Style.RESET}")
         
         # Subtitle
         subtitle = "─ Dotfiles & Packages Installer ─"
@@ -97,7 +96,7 @@ class WelcomeScreen(Screen):
         buffer = TUI.draw_notifications(buffer)
 
         # Atomic Draw
-        final_output = "\n".join([line.ljust(term_width) for line in buffer[:term_height]])
+        final_output = "\n".join([TUI.visible_ljust(line, term_width) for line in buffer[:term_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 

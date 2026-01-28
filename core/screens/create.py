@@ -663,7 +663,7 @@ class CreateScreen(Screen):
         buffer = TUI.draw_notifications(buffer)
 
         # Final Render
-        final_output = "\n".join([line.ljust(term_width) for line in buffer[:term_height]])
+        final_output = "\n".join([TUI.visible_ljust(line, term_width) for line in buffer[:term_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 

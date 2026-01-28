@@ -305,10 +305,18 @@ class TUI:
     def draw_notifications(buffer):
         """Overlays active notifications onto the provided buffer."""
         TUI._clean_notifications()
+        
+        term_size = shutil.get_terminal_size()
+        term_width = term_size.columns
+        term_height = term_size.lines
+
+        # Prevent ghosting
+        if len(buffer) < term_height:
+            buffer.extend([""] * (term_height - len(buffer)))
+
         if not TUI._notifications:
             return buffer
-            
-        term_width = shutil.get_terminal_size().columns
+
         width = 40
         margin_right = 2
         current_y = 1
@@ -393,7 +401,7 @@ class TUI:
 
     @staticmethod
     def ansi_slice(text, start, end=None):
-        """Slices a string by its visible length, preserving all ANSI codes."""
+        """Slices a string by its visible length, preserving necessary ANSI codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         result = ""
         current_visible_pos = 0
@@ -407,8 +415,10 @@ class TUI:
                     result += char
                 current_visible_pos += 1
             
-            # Always include the ANSI sequence itself
-            result += match.group()
+            # Only include ANSI sequence
+            if end is None or current_visible_pos < end:
+                result += match.group()
+                
             last_match_end = match.end()
             
         # Process remaining plain text
@@ -568,6 +578,12 @@ class TUI:
         """Calculates character count excluding ANSI control codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         return len(ansi_escape.sub('', text))
+
+    @staticmethod
+    def visible_ljust(text, width):
+        """Pads string to width based on visible characters."""
+        v_len = TUI.visible_len(text)
+        return text + " " * max(0, width - v_len)
 
     @staticmethod
     def hex_to_ansi(hex_color, bg=False):
