@@ -121,6 +121,12 @@ class MenuScreen(Screen):
             ovr_pkg = ovr.get('pkg_name', cur_pkg)
             info_lines.append(info_row("Package", f"{ovr_pkg}{'*' if ovr_pkg != cur_pkg else ''}"))
             
+            # Show custom target if changed
+            cur_target = mod.stow_target
+            ovr_target = ovr.get('stow_target', cur_target)
+            if ovr_target != cur_target:
+                info_lines.append(info_row("Target", f"{ovr_target}*"))
+            
             tree = mod.get_config_tree()
             if tree:
                 info_lines.append("")
