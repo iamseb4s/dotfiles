@@ -106,6 +106,16 @@ class Style:
     @classmethod
     def surface2(cls, bg=False): return cls.hex(Theme.SURFACE2, bg)
     @classmethod
+    def surface1(cls, bg=False): return cls.hex(Theme.SURFACE1, bg)
+    @classmethod
+    def surface0(cls, bg=False): return cls.hex(Theme.SURFACE0, bg)
+    @classmethod
+    def overlay2(cls, bg=False): return cls.hex(Theme.OVERLAY2, bg)
+    @classmethod
+    def overlay1(cls, bg=False): return cls.hex(Theme.OVERLAY1, bg)
+    @classmethod
+    def overlay0(cls, bg=False): return cls.hex(Theme.OVERLAY0, bg)
+    @classmethod
     def crust(cls, bg=False): return cls.hex(Theme.CRUST, bg)
     @classmethod
     def mantle(cls, bg=False): return cls.hex(Theme.MANTLE, bg)
@@ -113,6 +123,8 @@ class Style:
     def base(cls, bg=False): return cls.hex(Theme.BASE, bg)
     @classmethod
     def text(cls, bg=False): return cls.hex(Theme.TEXT, bg)
+    @classmethod
+    def subtext1(cls, bg=False): return cls.hex(Theme.SUBTEXT1, bg)
     @classmethod
     def subtext0(cls, bg=False): return cls.hex(Theme.SUBTEXT0, bg)
 
@@ -584,6 +596,18 @@ class TUI:
         """Pads string to width based on visible characters."""
         v_len = TUI.visible_len(text)
         return text + " " * max(0, width - v_len)
+
+    @staticmethod
+    def split_line(left, right, width, fill=' '):
+        """Creates a line with 'left' aligned left and 'right' aligned right."""
+        l_vlen = TUI.visible_len(left)
+        r_vlen = TUI.visible_len(right)
+        gap = width - l_vlen - r_vlen
+        if gap < 0:
+            left = TUI.truncate_ansi(left, max(0, width - r_vlen - 1))
+            l_vlen = TUI.visible_len(left)
+            gap = width - l_vlen - r_vlen
+        return left + (fill * gap) + right
 
     @staticmethod
     def hex_to_ansi(hex_color, bg=False):

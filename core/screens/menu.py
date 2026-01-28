@@ -88,39 +88,57 @@ class MenuScreen(Screen):
             mod = current_item['obj']
             ovr = self.overrides.get(mod.id, {})
             is_inst = mod.is_installed()
-            status_color = Style.blue() if is_inst else ""
+            is_act = self.is_active(mod.id)
             
-            info_lines.append(f"  {Style.BOLD}{Style.blue()}{mod.label.upper()}{Style.RESET}")
+            # Use state color for the information header too
+            if mod.id in self.auto_locked: state_color = Style.red()
+            elif mod.id in self.selected: state_color = Style.yellow() if mod.id in self.overrides else Style.green()
+            elif is_inst: state_color = Style.blue()
+            else: state_color = Style.mauve()
+
+            # Title
+            info_lines.append(f"  {Style.BOLD}{state_color}{mod.label.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.surface1()}{'─' * (r_content_width - 4)}{Style.RESET}")
+            
             if mod.description:
-                for l in TUI.wrap_text(mod.description, r_content_width):
+                for l in TUI.wrap_text(mod.description, r_content_width - 4):
                     info_lines.append(f"  {Style.DIM}{l}{Style.RESET}")
             info_lines.append("")
-            info_lines.append(f"  {Style.BOLD}Status:  {status_color}{('●' if is_inst else '○')} {('Installed' if is_inst else 'Not Installed')}{Style.RESET}")
+            
+            # Metadata with compact label width
+            def info_row(label, value, color=""):
+                return f"  {Style.subtext1()}{label:<10}{Style.RESET} {color}{value}{Style.RESET}"
+
+            status_text = 'Installed' if is_inst else 'Not Installed'
+            status_color = Style.blue() if is_inst else Style.surface2()
+            info_lines.append(info_row("Status", status_text, status_color))
             
             cur_mgr = mod.get_manager()
             ovr_mgr = ovr.get('manager', cur_mgr)
-            is_mgr_mod = 'manager' in ovr and ovr_mgr != cur_mgr
-            info_lines.append(f"  {Style.BOLD}Manager: {Style.RESET}{Style.yellow() if is_mgr_mod else ''}{ovr_mgr}{'*' if is_mgr_mod else ''}{Style.RESET}")
+            info_lines.append(info_row("Manager", f"{ovr_mgr}{'*' if ovr_mgr != cur_mgr else ''}"))
             
             cur_pkg = mod.get_package_name()
             ovr_pkg = ovr.get('pkg_name', cur_pkg)
-            is_pkg_mod = 'pkg_name' in ovr and ovr_pkg != cur_pkg
-            info_lines.append(f"  {Style.BOLD}Package: {Style.RESET}{Style.yellow() if is_pkg_mod else ''}{ovr_pkg}{'*' if is_pkg_mod else ''}{Style.RESET}")
+            info_lines.append(info_row("Package", f"{ovr_pkg}{'*' if ovr_pkg != cur_pkg else ''}"))
             
             tree = mod.get_config_tree()
             if tree:
                 info_lines.append("")
-                info_lines.append(f"  {Style.BOLD}CONFIG TREE:{Style.RESET}")
+                info_lines.append(f"  {Style.BOLD}{Style.subtext0()}CONFIG TREE{Style.RESET}")
+                info_lines.append(f"  {Style.surface1()}{'─' * 11}{Style.RESET}")
                 for l in tree:
-                    for wl in TUI.wrap_text(l, r_content_width - 2):
-                        info_lines.append(f"    {wl}")
+                    for wl in TUI.wrap_text(l, r_content_width - 6):
+                        info_lines.append(f"    {Style.DIM}{wl}{Style.RESET}")
         else:
             cat_name = current_item['obj']
-            info_lines.append(f"  {Style.BOLD}{Style.yellow()}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}{Style.mauve()}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.surface1()}{'─' * (r_content_width - 4)}{Style.RESET}")
             info_lines.append(f"  {Style.DIM}Packages in this group:{Style.RESET}")
             info_lines.append("")
             for m in self.categories[cat_name]:
-                info_lines.append(f"    {('●' if m.is_installed() else '○')} {m.label}")
+                status_mark = "■" if self.is_active(m.id) else " "
+                color = Style.green() if self.is_active(m.id) else Style.DIM
+                info_lines.append(f"    {color}[{status_mark}] {m.label}{Style.RESET}")
         return info_lines
 
     def render(self):
@@ -164,52 +182,94 @@ class MenuScreen(Screen):
         list_lines = [""]
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
+            # Use 8-space margin as requested
+            content_width = left_width - 10 # 8 margin left + 2 margin right inside box
             
             if item['type'] == 'header':
+                # Add vertical spacing before new category (except the first one)
+                if idx > 0:
+                    list_lines.append("")
+                
                 cat_name = item['obj']
-                icon = "▼" if self.expanded[cat_name] else "►"
                 mods_in_cat = self.categories[cat_name]
                 active_count = sum(1 for m in mods_in_cat if self.is_active(m.id))
                 
-                if active_count == 0: sel_mark, header_color = "[ ]", ""
-                elif active_count == len(mods_in_cat): sel_mark, header_color = "[■]", Style.green()
-                else: sel_mark, header_color = "[-]", Style.yellow()
+                # Header style: ─── CATEGORY ─── (Centered)
+                label = f" {cat_name.upper()} "
+                header_line = TUI.split_line("───", "───", content_width, fill="─")
+                # Re-calculate centering for the label
+                gap = content_width - len(label)
+                left_p = gap // 2
+                centered_label = ("─" * left_p) + label + ("─" * (gap - left_p))
                 
-                line = f"  {icon} {sel_mark} {cat_name.upper()}"
-                # If cursor is here, use Purple + BOLD
-                if is_cursor: 
-                    style = Style.mauve() + Style.BOLD
-                    list_lines.append(f"{style}{line}{Style.RESET}")
-                else: 
-                    list_lines.append(f"{Style.BOLD}{header_color}{line}{Style.RESET}")
+                color = Style.mauve() if is_cursor else Style.subtext0()
+                bold = Style.BOLD if is_cursor else ""
+                list_lines.append(f"  {color}{bold}{centered_label}{Style.RESET}")
 
             elif item['type'] == 'module':
                 mod = item['obj']
                 installed = mod.is_installed()
                 has_override = mod.id in self.overrides
                 
-                if mod.id in self.auto_locked: mark, color, suffix = "[■]", Style.red(), " "
+                # Determine mark and status (Correct Multiple Selection Semantics)
+                if mod.id in self.auto_locked: 
+                    mark = "[■]"
+                    status = "[ LOCKED ]"
+                    color = Style.red()
                 elif mod.id in self.selected:
+                    # Check for partial selection if override exists
                     ovr = self.overrides.get(mod.id)
-                    is_full = ovr['install_pkg'] and (not mod.stow_pkg or ovr['install_dots']) if ovr else True
-                    mark, color, suffix = ("[■]" if is_full else "[-]"), (Style.yellow() if has_override else Style.green()), ("*" if has_override else "")
-                elif installed: mark, color, suffix = "[ ]", Style.blue(), " ●"
-                else: mark, color, suffix = "[ ]", "", ""
+                    is_partial = False
+                    if ovr:
+                        has_dots = mod.stow_pkg is not None
+                        if has_dots:
+                            if not ovr.get('install_pkg', True) or not ovr.get('install_dots', True):
+                                is_partial = True
+                        else:
+                            if not ovr.get('install_pkg', True):
+                                is_partial = True
+                    
+                    mark = "[-]" if is_partial else "[■]"
+                    status = "[ SELECTED ]"
+                    color = Style.green() if not has_override else Style.yellow()
+                elif installed:
+                    mark = "[ ]"
+                    status = "[ INSTALLED ]"
+                    color = Style.blue()
+                else:
+                    mark = "[ ]"
+                    status = "" 
+                    color = Style.surface2()
                 
-                line = f"    │     {mark} {mod.label}{suffix}"
-                # If cursor is here, use Purple + BOLD
-                if is_cursor: 
-                    style = Style.mauve() + Style.BOLD
-                    list_lines.append(f"{style}{line}{Style.RESET}")
-                else: 
-                    list_lines.append(f"    {Style.DIM}│{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}")
+                if is_cursor:
+                    # CURSOR FOCUS: Use Mauve for the ENTIRE line to maintain visual unity
+                    f_name = f" {Style.mauve()}{Style.BOLD}{mark}  {mod.label}{Style.RESET}"
+                    f_status = f"{Style.mauve()}{Style.BOLD}{status}{Style.RESET}" if status else ""
+                    line = TUI.split_line(f_name, f_status, content_width)
+                    list_lines.append(f"  {line}")
+                else:
+                    # NORMAL STATE: Unified color per state.
+                    # If active (selected/locked), the whole line inherits the status color.
+                    is_act = self.is_active(mod.id)
+                    line_color = color if (is_act or installed) else Style.surface2()
+                    name_style = Style.BOLD if is_act else Style.DIM
+                    
+                    n_name = f" {line_color}{mark}  {name_style}{mod.label}{Style.RESET}"
+                    n_status = f"{line_color}{status}{Style.RESET}" if status else ""
+                    line = TUI.split_line(n_name, n_status, content_width)
+                    list_lines.append(f"  {line}")
 
         visible_list = list_lines[self.list_offset : self.list_offset + (available_height - 3)]
 
         while len(visible_list) < (available_height - 3):
             visible_list.append("")
         
-        status_text = f"  {Style.DIM}Selected: {len(self.selected.union(self.auto_locked))} packages{Style.RESET}"
+        # Centered selection status
+        count = len(self.selected.union(self.auto_locked))
+        raw_status = f"Selected: {count} packages"
+        # left_width is the total box width, internal is left_width - 2
+        pad = (left_width - 2 - len(raw_status)) // 2
+        status_text = f"{' ' * max(0, pad)}{Style.DIM}{raw_status}{Style.RESET}"
         visible_list.append(status_text)
 
         # Build Right Content
