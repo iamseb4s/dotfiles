@@ -593,7 +593,7 @@ class CreateScreen(Screen):
                 value_line = f"{value_color}{bold}[{mark}] {label_txt}{Style.RESET}{hint}"
                 
             elif field['type'] == 'multi':
-                hint = f" {Style.DIM}(E to select){Style.RESET}" if is_focused else ""
+                hint = f" {Style.DIM}(ENTER to select){Style.RESET}" if is_focused else ""
                 value_line = f"{value_color}{bold}{len(val)} selected{Style.RESET}{hint}"
                 
             elif field['type'] == 'placeholder':
@@ -634,13 +634,26 @@ class CreateScreen(Screen):
         if self.is_editing:
             p_line = f"{TUI.pill('ENTER', 'Finish', Theme.GREEN)}    {TUI.pill('ESC', 'Cancel', Theme.RED)}"
         else:
+            field = self.fields[self.focus_idx]
             f_pills = [
                 TUI.pill('h/j/k/l', 'Navigate', Theme.SKY),
                 TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE),
-                TUI.pill('E', 'Edit', Theme.BLUE),
-                TUI.pill('ENTER', 'Summary & Save', Theme.GREEN),
-                TUI.pill('D', 'Draft', Theme.MAUVE),
             ]
+            
+            # Show E Edit only for text fields or Category:Custom...
+            show_edit = False
+            if field['type'] == 'text':
+                show_edit = True
+            elif field['type'] == 'select' and field['id'] == 'category' and self.form['category'] == "Custom...":
+                show_edit = True
+            
+            if show_edit:
+                f_pills.append(TUI.pill('E', 'Edit', Theme.BLUE))
+            
+            # Dynamic ENTER pill
+            enter_label = "Select" if field['type'] == 'multi' else "Summary & Save"
+            f_pills.append(TUI.pill('ENTER', enter_label, Theme.GREEN))
+            f_pills.append(TUI.pill('D', 'Draft', Theme.MAUVE))
             
             if self.active_draft_path:
                 f_pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
@@ -847,11 +860,14 @@ class CreateScreen(Screen):
                 target = 'custom_category' if (field['id'] == 'category' and self.form['category'] == 'Custom...') else field['id']
                 self.old_value = self.form[target]
                 self.text_cursor_pos = len(self.old_value)
-            elif field['type'] == 'multi':
-                self.modal = DependencyModal(self.modules, self.form['dependencies'])
             return None
             
         elif key == Keys.ENTER:
+            # Check if field opens a modal
+            if field['type'] == 'multi':
+                self.modal = DependencyModal(self.modules, self.form['dependencies'])
+                return None
+
             # GLOBAL SUMMARY TRIGGER
             all_errors = []
             for f in self.fields:
