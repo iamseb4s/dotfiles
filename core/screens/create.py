@@ -344,7 +344,7 @@ class CreateScreen(Screen):
         line_map = {}
         curr = 1 # Initial blank
         term_width = shutil.get_terminal_size().columns
-        left_width = int((term_width - 2) * 0.40)
+        left_width = int(term_width * 0.40)
         
         for idx in reachable:
             line_map[idx] = curr
@@ -360,7 +360,7 @@ class CreateScreen(Screen):
                     items.append(f"● {lbl}")
                 
                 vlen = TUI.visible_len("   ".join(items))
-                if vlen > left_width - 10: curr += 4 # Label + 2 lines of options + spacer
+                if vlen > left_width - 6: curr += 4 # Label + 2 lines of options + spacer
                 else: curr += 3 # Label + 1 line of options + spacer
             else:
                 curr += 2 # Content line + spacer
@@ -374,7 +374,7 @@ class CreateScreen(Screen):
             field_bottom = curr - 1
         
         term_height = shutil.get_terminal_size().lines
-        available_height = term_height - 6
+        available_height = term_height - 5
         content_height = available_height - 2
         
         # Adjust offset
@@ -397,10 +397,9 @@ class CreateScreen(Screen):
         padding = (term_width - len(title_text)) // 2
         header_bar = f"{Style.mauve(bg=True)}{Style.crust()}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
         
-        available_height = term_height - 6
-        safe_width = term_width - 2
-        left_width = int(safe_width * 0.40)
-        right_width = safe_width - left_width - 1
+        available_height = term_height - 5
+        left_width = int(term_width * 0.40)
+        right_width = term_width - left_width - 1
         
         # 2. Build Left Content (Form)
         form_lines = [""]
@@ -440,16 +439,16 @@ class CreateScreen(Screen):
                         char = val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
                         post = val[self.text_cursor_pos+1:]
                         val = f"{pre}{Style.INVERT}{char}{Style.RESET}{row_style}{bold}{post}"
-                    value_display = f"[ {val} ] ✎"
+                    value_display = f"✎ [ {val} ]"
                 elif field['type'] == 'check':
-                    value_display = "[■] YES" if self.form[field['id']] else "[ ] NO"
+                    value_display = "YES [■]" if self.form[field['id']] else "NO [ ]"
                 elif field['type'] == 'multi':
-                    value_display = f"[ {len(self.form[field['id']])} items ] ↓"
+                    value_display = f"↓ [ {len(self.form[field['id']])} items ]"
                 else: # placeholder
                     value_display = "[ Not implemented ]"
                 
-                line = TUI.split_line(label, value_display, left_width - 10)
-                form_lines.append(f"    {row_style}{bold}{line}{Style.RESET}")
+                line = TUI.split_line(label, value_display, left_width - 6)
+                form_lines.append(f"  {row_style}{bold}{line}{Style.RESET}")
                 form_lines.append("") 
                 
             elif field['type'] == 'radio':
@@ -461,7 +460,7 @@ class CreateScreen(Screen):
                         h_txt = "h/l to select, e to edit"
                     label = f"{label} {Style.surface2()}{h_txt}{Style.RESET}{row_style}{bold}"
                 
-                form_lines.append(f"    {row_style}{bold}{label}{Style.RESET}")
+                form_lines.append(f"  {row_style}{bold}{label}{Style.RESET}")
                 
                 items = []
                 current_val = self.form[field['id']]
@@ -490,25 +489,25 @@ class CreateScreen(Screen):
                 
                 radio_raw = "   ".join(items)
                 vlen = TUI.visible_len(radio_raw)
-                if vlen > left_width - 10:
+                if vlen > left_width - 6:
                     mid = len(items) // 2
                     l1 = "   ".join(items[:mid]); l2 = "   ".join(items[mid:])
                     for l in [l1, l2]:
-                        pad = (left_width - 10 - TUI.visible_len(l)) // 2
-                        form_lines.append(f"{' '*(pad+4)}{l}")
+                        pad = (left_width - 6 - TUI.visible_len(l)) // 2
+                        form_lines.append(f"{' '*(pad+2)}{l}")
                 else:
-                    pad = (left_width - 10 - vlen) // 2
-                    form_lines.append(f"{' '*(pad+4)}{radio_raw}")
+                    pad = (left_width - 6 - vlen) // 2
+                    form_lines.append(f"{' '*(pad+2)}{radio_raw}")
                 form_lines.append("")
 
         # 3. Right Content (Help & Preview)
         help_content = []
         curr_field = self.fields[self.focus_idx]
-        for l in TUI.wrap_text(curr_field['help'], right_width - 10): help_content.append(f"    {l}")
+        for l in TUI.wrap_text(curr_field['help'], right_width - 6): help_content.append(f"  {l}")
         
         errors = self._get_field_errors(curr_field['id'])
         if errors and (self.show_validation_errors or self.is_editing or (curr_field['id']=='id' and self.form['id'])):
-            for e in errors: help_content.append(f"    {Style.red()}! {e}{Style.RESET}")
+            for e in errors: help_content.append(f"  {Style.red()}! {e}{Style.RESET}")
         
         help_height = min(len(help_content) + 2, available_height // 3)
         preview_height = available_height - help_height
@@ -517,7 +516,7 @@ class CreateScreen(Screen):
         preview_code = self._generate_python()
         preview_lines = [""]
         for line in preview_code.split("\n"):
-            for wl in TUI.wrap_text(line, right_width - 10): preview_lines.append(f"    {wl}")
+            for wl in TUI.wrap_text(line, right_width - 6): preview_lines.append(f"  {wl}")
         
         max_p_off = max(0, len(preview_lines) - (preview_height - 2))
         if self.preview_offset > max_p_off: self.preview_offset = max_p_off

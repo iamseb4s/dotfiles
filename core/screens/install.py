@@ -141,9 +141,8 @@ class InstallScreen(Screen):
         available_height = term_height - 7
         available_height = max(10, available_height)
         
-        safe_width = term_width - 2
-        left_width = int(safe_width * 0.30)
-        right_width = safe_width - left_width - 1
+        left_width = int(term_width * 0.30)
+        right_width = term_width - left_width - 1
         
         # 2. Build Left Content (Task Tree)
         left_lines = [""]

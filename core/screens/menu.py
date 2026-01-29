@@ -82,7 +82,7 @@ class MenuScreen(Screen):
         if not self.flat_items: return info_lines
         
         current_item = self.flat_items[self.cursor_idx]
-        r_content_width = right_width - 4
+        r_content_width = right_width - 6
         
         if current_item['type'] == 'module':
             mod = current_item['obj']
@@ -98,10 +98,10 @@ class MenuScreen(Screen):
 
             # Title
             info_lines.append(f"  {Style.BOLD}{state_color}{mod.label.upper()}{Style.RESET}")
-            info_lines.append(f"  {Style.surface1()}{'─' * (r_content_width - 4)}{Style.RESET}")
+            info_lines.append(f"  {Style.surface1()}{'─' * r_content_width}{Style.RESET}")
             
             if mod.description:
-                for l in TUI.wrap_text(mod.description, r_content_width - 4):
+                for l in TUI.wrap_text(mod.description, r_content_width):
                     info_lines.append(f"  {Style.DIM}{l}{Style.RESET}")
             info_lines.append("")
             
@@ -133,12 +133,12 @@ class MenuScreen(Screen):
                 info_lines.append(f"  {Style.BOLD}{Style.subtext0()}CONFIG TREE{Style.RESET}")
                 info_lines.append(f"  {Style.surface1()}{'─' * 11}{Style.RESET}")
                 for l in tree:
-                    for wl in TUI.wrap_text(l, r_content_width - 6):
+                    for wl in TUI.wrap_text(l, r_content_width - 2):
                         info_lines.append(f"    {Style.DIM}{wl}{Style.RESET}")
         else:
             cat_name = current_item['obj']
             info_lines.append(f"  {Style.BOLD}{Style.mauve()}{cat_name.upper()}{Style.RESET}")
-            info_lines.append(f"  {Style.surface1()}{'─' * (r_content_width - 4)}{Style.RESET}")
+            info_lines.append(f"  {Style.surface1()}{'─' * r_content_width}{Style.RESET}")
             info_lines.append(f"  {Style.DIM}Packages in this group:{Style.RESET}")
             info_lines.append("")
             for m in self.categories[cat_name]:
@@ -170,9 +170,8 @@ class MenuScreen(Screen):
         available_height = max(10, available_height)
         
         # Box Widths
-        safe_width = term_width - 2
-        left_width = int(safe_width * 0.50)
-        right_width = safe_width - left_width - 1
+        left_width = term_width // 2
+        right_width = term_width - left_width - 1
         
         # Build Left Content
         # Window size for items is available_height - 3 (excluding header, footer, pills, and status line)
@@ -188,8 +187,8 @@ class MenuScreen(Screen):
         list_lines = [""]
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
-            # Use 8-space margin as requested
-            content_width = left_width - 10 # 8 margin left + 2 margin right inside box
+            # Use 4-space total margin (2 left + 2 right) for perfect symmetry
+            content_width = left_width - 6
             
             if item['type'] == 'header':
                 # Add vertical spacing before new category (except the first one)
@@ -197,13 +196,10 @@ class MenuScreen(Screen):
                     list_lines.append("")
                 
                 cat_name = item['obj']
-                mods_in_cat = self.categories[cat_name]
-                active_count = sum(1 for m in mods_in_cat if self.is_active(m.id))
                 
                 # Header style: ─── CATEGORY ─── (Centered)
                 label = f" {cat_name.upper()} "
-                header_line = TUI.split_line("───", "───", content_width, fill="─")
-                # Re-calculate centering for the label
+                # Re-calculate centering for the label within the available content width
                 gap = content_width - len(label)
                 left_p = gap // 2
                 centered_label = ("─" * left_p) + label + ("─" * (gap - left_p))
@@ -217,13 +213,12 @@ class MenuScreen(Screen):
                 installed = mod.is_installed()
                 has_override = mod.id in self.overrides
                 
-                # Determine mark and status (Correct Multiple Selection Semantics)
+                # Determine mark and status
                 if mod.id in self.auto_locked: 
                     mark = "[■]"
                     status = "[ LOCKED ]"
                     color = Style.red()
                 elif mod.id in self.selected:
-                    # Check for partial selection if override exists
                     ovr = self.overrides.get(mod.id)
                     is_partial = False
                     if ovr:
@@ -248,14 +243,13 @@ class MenuScreen(Screen):
                     color = Style.surface2()
                 
                 if is_cursor:
-                    # CURSOR FOCUS: Use Mauve for the ENTIRE line to maintain visual unity
+                    # CURSOR FOCUS
                     f_name = f" {Style.mauve()}{Style.BOLD}{mark}  {mod.label}{Style.RESET}"
                     f_status = f"{Style.mauve()}{Style.BOLD}{status}{Style.RESET}" if status else ""
                     line = TUI.split_line(f_name, f_status, content_width)
                     list_lines.append(f"  {line}")
                 else:
-                    # NORMAL STATE: Unified color per state.
-                    # If active (selected/locked), the whole line inherits the status color.
+                    # NORMAL STATE
                     is_act = self.is_active(mod.id)
                     line_color = color if (is_act or installed) else Style.surface2()
                     name_style = Style.BOLD if is_act else Style.DIM
