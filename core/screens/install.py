@@ -80,8 +80,17 @@ class InstallScreen(Screen):
         self.overrides = overrides or {}
         self.total = len(self.queue)
         
+        # Calculate total work units (pkg + dots for each module)
+        self.total_units = 0
+        for mod in self.queue:
+            ovr = self.overrides.get(mod.id, {})
+            if ovr.get('install_pkg', True): self.total_units += 1
+            if mod.stow_pkg and ovr.get('install_dots', True): self.total_units += 1
+        
         # Execution State
         self.current_idx = -1
+        self.completed_units = 0
+        self.current_unit_progress = 0.0
         self.results = {} # {mod_id: {'pkg': bool, 'dots': bool}}
         self.status = {}  # {mod_id: {'pkg': 'pending', 'dots': 'pending'}}
         for m in self.queue:
@@ -212,22 +221,38 @@ class InstallScreen(Screen):
 
         
         # 5. Progress Bar & Footer
-        progress_val = self.current_idx / self.total if self.total > 0 else 0
+        progress_val = (self.completed_units + self.current_unit_progress) / self.total_units if self.total_units > 0 else 0
         if self.is_finished: progress_val = 1
         
-        bar_len = int(term_width * 0.5)
-        filled = int(bar_len * progress_val)
+        # Fixed Bar width: 50% of terminal
+        bar_width = int(term_width * 0.5)
+        filled = int(bar_width * progress_val)
         bar_color = Style.highlight() if not self.is_cancelled else Style.red()
-        bar_content = f"{bar_color}█" * filled + f"{Style.muted()}░" * (bar_len - filled) + Style.RESET
         
-        if self.is_finished: footer = f"{TUI.pill('ENTER', 'Results', Theme.GREEN)}    {TUI.pill('Q', 'Finish', Theme.RED)}"
-        elif self.is_cancelled: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', Theme.YELLOW)}"
-        else: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', Theme.YELLOW)}    {TUI.pill('Q', 'Stop', Theme.RED)}"
-
+        # Build the raw bar string (without percentage yet)
+        bar_chars = ("█" * filled) + (Style.muted() + "░" * (bar_width - filled))
+        bar_raw = f"{bar_color}{bar_chars}{Style.RESET}"
+        
+        # Prepare percentage string
+        perc_text = f" {int(progress_val * 100)}% "
+        
+        # Overlay percentage in the center of the bar
+        # We overlay onto the bar content only (the part between brackets)
+        center_pos = (bar_width - len(perc_text)) // 2
+        # Use a high-visibility style for the percentage text
+        perc_styled = f"{Style.normal()}{Style.BOLD}{perc_text}{Style.RESET}"
+        
+        # Composite the bar: [ OVERLAY ]
+        bar_final = TUI.overlay(bar_raw, perc_styled, center_pos)
+        full_bar_line = f"[ {bar_final} ]"
+        
         buffer = [header_bar, ""]
         buffer.extend(main_content)
         buffer.append("")
-        buffer.append(f"{' ' * ((term_width - bar_len - 10) // 2)}[ {bar_content} ] {int(progress_val*100)}%")
+        
+        # Centering the full line [ BAR ]
+        bar_pad = max(0, (term_width - TUI.visible_len(full_bar_line)) // 2)
+        buffer.append(f"{' ' * bar_pad}{full_bar_line}")
         buffer.append("")
         
         for f_line in footer_lines:
@@ -272,10 +297,13 @@ class InstallScreen(Screen):
                 if self.is_cancelled: break
                 
                 self.status[mod.id][task_type] = 'running'
+                self.current_unit_progress = 0.0
                 
                 def live_callback(line):
                     self.add_log(line)
                     self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
+                    # Fake progress crawl: move up to 95% of the current unit
+                    self.current_unit_progress = min(0.95, self.current_unit_progress + 0.005)
                     input_handler()
                 
                 def input_handler():
@@ -306,6 +334,9 @@ class InstallScreen(Screen):
                 success = func(ovr, callback=live_callback, input_callback=input_handler)
                 self.status[mod.id][task_type] = 'success' if success else 'error'
                 self.results[mod.id][task_type] = success
+                
+                self.completed_units += 1
+                self.current_unit_progress = 0.0
                 
                 if not success and task_type == 'pkg':
                     self.status[mod.id]['dots'] = 'skipped'
