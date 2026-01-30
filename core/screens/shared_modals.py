@@ -84,8 +84,10 @@ class DependencyModal:
 
 class WizardSummaryModal:
     """Final summary modal with 4-space margins."""
-    def __init__(self, form_data):
+    def __init__(self, form_data, custom_tag="Custom...✎", custom_field="custom_category"):
         self.form = form_data
+        self.custom_tag = custom_tag
+        self.custom_field = custom_field
         self.focus_idx = 0 # 0: SAVE, 1: CANCEL
         self.content_lines = self._build_content()
 
@@ -95,7 +97,7 @@ class WizardSummaryModal:
         lines.append(row("ID", self.form['id']))
         lines.append(row("Label", self.form['label']))
         lines.append(row("Manager", self.form['manager']))
-        cat = self.form['custom_category'] if self.form['category'] == "Custom...✎" else self.form['category']
+        cat = self.form[self.custom_field] if self.form['category'] == self.custom_tag else self.form['category']
         lines.append(row("Category", cat))
         lines.append(row("Target", self.form['stow_target']))
         lines.append(row("Manual", 'Yes' if self.form['is_incomplete'] else 'No'))
