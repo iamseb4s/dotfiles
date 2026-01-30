@@ -581,6 +581,10 @@ class CreateScreen(Screen):
             if field['type'] == 'text':
                 f_pills.append(TUI.pill('E', 'Edit', Theme.BLUE))
             
+            f_pills.append(TUI.pill('D', 'Draft', Theme.PEACH))
+            if self.active_draft_path:
+                f_pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
+            
             enter_label = "Select" if field['type'] == 'multi' else "Summary & Save"
             f_pills.append(TUI.pill('ENTER', enter_label, Theme.GREEN))
             f_pills.append(TUI.pill('Q', 'Back', Theme.RED))
