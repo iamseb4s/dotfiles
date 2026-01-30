@@ -104,9 +104,9 @@ class WelcomeScreen(Screen):
     def handle_input(self, key):
         """Maps key events to screen transitions."""
         if key == Keys.ENTER:
-            return "MENU"
+            return "SELECTOR"
         if key in [ord('n'), ord('N')]:
-            return "CREATE"
+            return "WIZARD"
         if key in [Keys.Q, Keys.Q_UPPER]:
             return "EXIT"
         return None
