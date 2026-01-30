@@ -57,7 +57,7 @@ class WelcomeScreen(Screen):
         subtitle = "─ Dotfiles & Packages Installer ─"
         s_padding = (term_width - len(subtitle)) // 2
         content.append("")
-        content.append(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}")
+        content.append(f"{Style.muted()}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}")
         content.append("")
         
         # Information Box

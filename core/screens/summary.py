@@ -37,7 +37,7 @@ class SummaryModal:
             else:
                 color = Style.green() # Green for standard
             
-            lines.append({'text': f"- {label}", 'color': color})
+            lines.append({'text': f"{Style.muted()}- {Style.RESET}{color}{label}", 'color': ""})
             
             # Children data resolution
             pkg_name = ovr['pkg_name'] if is_custom else mod.get_package_name()
@@ -52,7 +52,7 @@ class SummaryModal:
                 # Package result icon
                 success_pkg = res.get('pkg')
                 if not do_pkg or success_pkg is None: 
-                    pkg_icon, pkg_color = "○", Style.DIM
+                    pkg_icon, pkg_color = "○", Style.muted()
                 else: 
                     pkg_icon = "✔" if success_pkg else "✘"
                     pkg_color = Style.green() if success_pkg else Style.red()
@@ -60,30 +60,32 @@ class SummaryModal:
                 # Dots result icon
                 success_dots = res.get('dots')
                 if not do_dots or not has_config or success_dots is None: 
-                    dots_icon, dots_color = "○", Style.DIM
+                    dots_icon, dots_color = "○", Style.muted()
                 else: 
                     dots_icon = "✔" if success_dots else "✘"
                     dots_color = Style.green() if success_dots else Style.red()
             else:
                 pkg_icon = "■" if do_pkg else " "
                 dots_icon = "■" if do_dots else " "
-                pkg_color = dots_color = Style.RESET
+                pkg_color = dots_color = Style.normal()
 
             # Child 1: Package/Binary
-            connector = " ├" if has_config else " └"
-            text_pkg = f"{connector}[{pkg_icon}] Package: '{pkg_name}', Manager: '{manager}'"
-            lines.append({'text': text_pkg, 'color': pkg_color})
+            connector = f"{Style.muted()} ├{Style.RESET}" if has_config else f"{Style.muted()} └{Style.RESET}"
+            text_pkg = f"{connector}{pkg_color}[{pkg_icon}]{Style.RESET} {Style.muted()}Package:{Style.RESET} {Style.normal()}'{pkg_name}'{Style.RESET}{Style.muted()}, Manager:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}"
+            lines.append({'text': text_pkg, 'color': ""})
             
             # Child 2: Configuration (Optional)
             if has_config:
                 label_dots = "Configuration files" if mod.id == "refind" else "Dotfiles (Stow)"
-                text_dots = f" └[{dots_icon}] {label_dots}"
-                lines.append({'text': text_dots, 'color': dots_color})
+                connector_dots = f"{Style.muted()} └{Style.RESET}"
+                text_dots = f"{connector_dots}{dots_color}[{dots_icon}]{Style.RESET} {Style.normal()}{label_dots}{Style.RESET}"
+                lines.append({'text': text_dots, 'color': ""})
                 
                 # Info: Target path (Only in audit mode and if dots are active)
                 if not self.is_results_mode and do_dots:
                     target = mod.stow_target or "~/"
-                    lines.append({'text': f"     Target: {Style.blue()}{target}", 'color': ""})
+                    lines.append({'text': f"     {Style.muted()}Target: {Style.normal()}{target}", 'color': ""})
+
                 
         return lines
 
@@ -150,7 +152,7 @@ class SummaryModal:
         if len(self.content_lines) > self.max_visible_rows:
             remaining = len(self.content_lines) - self.max_visible_rows - self.scroll_offset
             scroll_text = f"--- {max(0, remaining)} more entries ---" if remaining > 0 else "--- End of list ---"
-            inner_lines.append(f"{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}")
+            inner_lines.append(f"{Style.muted()}{scroll_text.center(width-2)}{Style.RESET}")
         
         inner_lines.append("") # Spacer
         
@@ -162,13 +164,12 @@ class SummaryModal:
             c_fail = f"{Style.red()}{stats['failed']} failed{Style.RESET}"
             
             stats_line = f"{c_inst}, {c_can}, {c_fail}"
-            # Centering a string with ANSI codes is tricky, we use visible_len
             v_len = TUI.visible_len(stats_line)
             padding = (width - 2 - v_len) // 2
             inner_lines.append(f"{' ' * padding}{stats_line}")
         else:
             footer_msg = "Confirm and start installation?"
-            inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
+            inner_lines.append(f"{Style.muted()}{footer_msg.center(width-2)}{Style.RESET}")
         
         # Buttons
         if self.is_results_mode:
@@ -176,14 +177,12 @@ class SummaryModal:
         else:
             btn_left, btn_right = "  INSTALL  ", "  CANCEL  "
         
-        purple_bg = Style.mauve(bg=True)
-        
         if self.focus_idx == 0:
-            l_styled = f"{purple_bg}{Style.crust()}{btn_left}{Style.RESET}"
-            r_styled = f"[{btn_right.strip().center(len(btn_right)-2)}]"
+            l_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_left}{Style.RESET}"
+            r_styled = f"{Style.muted()}[{btn_right.strip()}]{Style.RESET}"
         else:
-            l_styled = f"[{btn_left.strip().center(len(btn_left)-2)}]"
-            r_styled = f"{purple_bg}{Style.crust()}{btn_right}{Style.RESET}"
+            l_styled = f"{Style.muted()}[{btn_left.strip()}]{Style.RESET}"
+            r_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_right}{Style.RESET}"
         
         btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)

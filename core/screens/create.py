@@ -41,16 +41,16 @@ class DependencyModal:
                 
                 if is_focused:
                     line = TUI.split_line(f"{mark}  {label}", "", content_width)
-                    inner_lines.append(f"    {Style.mauve()}{Style.BOLD}{line}{Style.RESET}")
+                    inner_lines.append(f"    {Style.highlight()}{Style.BOLD}{line}{Style.RESET}")
                 else:
-                    color = Style.green() if is_selected else Style.surface1()
+                    color = Style.green() if is_selected else Style.muted()
                     line = TUI.split_line(f"{mark}  {label}", "", content_width)
                     inner_lines.append(f"    {color}{line}{Style.RESET}")
 
         inner_lines.append("")
         hint = "SPACE: Toggle   ENTER: Confirm   ESC: Cancel"
         h_pad = (width - 2 - TUI.visible_len(hint)) // 2
-        inner_lines.append(f"{' ' * h_pad}{Style.DIM}{hint}{Style.RESET}")
+        inner_lines.append(f"{' ' * h_pad}{Style.muted()}{hint}{Style.RESET}")
         
         scroll_pos, scroll_size = None, None
         if len(self.modules) > max_rows:
@@ -98,7 +98,7 @@ class WizardSummaryModal:
 
     def _build_content(self):
         lines = []
-        def row(label, val): return f"{Style.subtext1()}{label:<12}{Style.RESET} {Style.text()}{val}{Style.RESET}"
+        def row(label, val): return f"{Style.subtext1()}{label:<12}{Style.RESET} {Style.normal()}{val}{Style.RESET}"
         lines.append(row("ID", self.form['id']))
         lines.append(row("Label", self.form['label']))
         lines.append(row("Manager", self.form['manager']))
@@ -109,10 +109,10 @@ class WizardSummaryModal:
         lines.append("")
         lines.append(f"{Style.subtext1()}Dependencies:{Style.RESET}")
         if not self.form['dependencies']:
-            lines.append(f"  {Style.DIM}None{Style.RESET}")
+            lines.append(f"  {Style.muted()}None{Style.RESET}")
         else:
             for dep in sorted(self.form['dependencies']):
-                lines.append(f"  {Style.surface2()}● {Style.RESET}{dep}")
+                lines.append(f"  {Style.muted()}● {Style.RESET}{dep}")
         return lines
 
     def render(self):
@@ -126,11 +126,11 @@ class WizardSummaryModal:
         btn_s = "  SAVE  "
         btn_c = "  CANCEL  "
         if self.focus_idx == 0:
-            s_styled = f"{Style.mauve(bg=True)}{Style.crust()}{Style.BOLD}{btn_s}{Style.RESET}"
-            c_styled = f"{Style.DIM}[{btn_c.strip()}]{Style.RESET}"
+            s_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_s}{Style.RESET}"
+            c_styled = f"{Style.muted()}[{btn_c.strip()}]{Style.RESET}"
         else:
-            s_styled = f"{Style.DIM}[{btn_s.strip()}]{Style.RESET}"
-            c_styled = f"{Style.mauve(bg=True)}{Style.crust()}{Style.BOLD}{btn_c}{Style.RESET}"
+            s_styled = f"{Style.muted()}[{btn_s.strip()}]{Style.RESET}"
+            c_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_c}{Style.RESET}"
         
         btn_row = f"{s_styled}     {c_styled}"
         pad = (width - 2 - TUI.visible_len(btn_row)) // 2
@@ -183,7 +183,7 @@ class DraftSelectionModal:
 
         inner_lines.append("")
         hint = "ENTER: Select   X: Delete   ESC: Start Fresh"
-        inner_lines.append(f"{' ' * ((width - 2 - TUI.visible_len(hint)) // 2)}{Style.DIM}{hint}{Style.RESET}")
+        inner_lines.append(f"{' ' * ((width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}")
         
         height = len(inner_lines) + 2
         lines = TUI.create_container(inner_lines, width, height, title="RESUME DRAFT?", is_focused=True)
@@ -415,22 +415,25 @@ class CreateScreen(Screen):
             has_error = len(f_errors) > 0 and (self.show_validation_errors or (field['id'] == 'id' and self.form['id']))
             
             # Row styling
-            if is_focused: row_style = Style.mauve()
+            if is_focused: row_style = Style.highlight()
             elif has_error: row_style = Style.red()
-            else: row_style = Style.text()
+            else: row_style = Style.normal()
             
-            bold = Style.BOLD if is_focused else ""
+            # Apply bold only to focused labels, not to hints
+            label_bold = Style.BOLD if is_focused else ""
             
             if field['type'] in ['text', 'check', 'multi', 'placeholder']:
                 # Split Layout
-                label = field['label']
+                label_text = field['label']
                 if is_focused:
                     hint = ""
                     if field['type'] == 'text': hint = "e to edit"
                     elif field['type'] == 'check': hint = "SPACE to toggle"
                     elif field['type'] == 'multi': hint = "ENTER to select"
-                    if hint:
-                        label = f"{label} {Style.surface2()}{hint}{Style.RESET}{row_style}{bold}"
+                    # Hint is added WITHOUT bold
+                    label_display = f"{row_style}{label_bold}{label_text}{Style.RESET} {Style.muted()}{hint}{Style.RESET}"
+                else:
+                    label_display = f"{row_style}{label_text}{Style.RESET}"
 
                 if field['type'] == 'text':
                     val = self.form[field['id']]
@@ -438,29 +441,33 @@ class CreateScreen(Screen):
                         pre = val[:self.text_cursor_pos]
                         char = val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
                         post = val[self.text_cursor_pos+1:]
-                        val = f"{pre}{Style.INVERT}{char}{Style.RESET}{row_style}{bold}{post}"
-                    value_display = f"✎ [ {val} ]"
+                        val_display = f"{pre}{Style.INVERT}{char}{Style.RESET}{row_style}{label_bold}{post}"
+                    else:
+                        val_display = val
+                    value_display = f"{row_style}{label_bold}✎ [ {val_display}{Style.RESET}{row_style}{label_bold} ]{Style.RESET}"
                 elif field['type'] == 'check':
-                    value_display = "YES [■]" if self.form[field['id']] else "NO [ ]"
+                    value_display = f"{row_style}{label_bold}{'YES [■]' if self.form[field['id']] else 'NO [ ]'}{Style.RESET}"
                 elif field['type'] == 'multi':
-                    value_display = f"↓ [ {len(self.form[field['id']])} items ]"
+                    value_display = f"{row_style}{label_bold}↓ [ {len(self.form[field['id']])} items ]{Style.RESET}"
                 else: # placeholder
-                    value_display = "[ Not implemented ]"
+                    value_display = f"{Style.muted()}[ Not implemented ]{Style.RESET}"
                 
-                line = TUI.split_line(label, value_display, left_width - 6)
-                form_lines.append(f"  {row_style}{bold}{line}{Style.RESET}")
+                line = TUI.split_line(label_display, value_display, left_width - 6)
+                form_lines.append(f"  {line}")
                 form_lines.append("") 
                 
             elif field['type'] == 'radio':
                 # Centered Radio Group
-                label = field['label']
+                label_text = field['label']
                 if is_focused:
                     h_txt = "h/l to select"
                     if field['id'] == 'category' and self.form['category'] == 'Custom...✎':
                         h_txt = "h/l to select, e to edit"
-                    label = f"{label} {Style.surface2()}{h_txt}{Style.RESET}{row_style}{bold}"
+                    label_display = f"{row_style}{label_bold}{label_text}{Style.RESET} {Style.muted()}{h_txt}{Style.RESET}"
+                else:
+                    label_display = f"{row_style}{label_text}{Style.RESET}"
                 
-                form_lines.append(f"  {row_style}{bold}{label}{Style.RESET}")
+                form_lines.append(f"  {label_display}")
                 
                 items = []
                 current_val = self.form[field['id']]
@@ -469,21 +476,28 @@ class CreateScreen(Screen):
                     mark = "●" if is_sel else "○"
                     
                     label_txt = opt
+                    is_custom_empty = (opt == "Custom...✎" and is_sel and not self.form['custom_category'])
+                    
                     if opt == "Custom...✎" and is_sel:
                         c_val = self.form['custom_category']
                         if is_focused and self.is_editing:
                             pre = c_val[:self.text_cursor_pos]
                             char = c_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
                             post = c_val[self.text_cursor_pos+1:]
-                            label_txt = f"Custom: '{pre}{Style.INVERT}{char}{Style.RESET}{row_style}{bold}{post}' ✎"
+                            label_txt = f"Custom: '{pre}{Style.INVERT}{char}{Style.RESET}{row_style}{label_bold}{post}' ✎"
                         else:
                             label_txt = f"Custom: '{c_val}' ✎" if c_val else "Custom...✎"
                     
-                    if is_focused:
-                        if is_sel: item = f"{Style.mauve()}{Style.BOLD}{mark} {label_txt}{Style.RESET}"
-                        else: item = f"{Style.surface1()}{mark} {label_txt}{Style.RESET}"
+                    if is_custom_empty:
+                        # Alert state for empty custom category
+                        color = Style.red()
+                        if is_focused: item = f"{color}{Style.BOLD}{mark} {label_txt}{Style.RESET}"
+                        else: item = f"{color}{mark} {label_txt}{Style.RESET}"
+                    elif is_focused:
+                        if is_sel: item = f"{Style.highlight()}{Style.BOLD}{mark} {label_txt}{Style.RESET}"
+                        else: item = f"{Style.muted()}{mark} {label_txt}{Style.RESET}"
                     else:
-                        color = Style.green() if is_sel else Style.surface1()
+                        color = Style.green() if is_sel else Style.muted()
                         item = f"{color}{mark} {label_txt}{Style.RESET}"
                     items.append(item)
                 
@@ -503,10 +517,17 @@ class CreateScreen(Screen):
         # 3. Right Content (Help & Preview)
         help_content = []
         curr_field = self.fields[self.focus_idx]
-        for l in TUI.wrap_text(curr_field['help'], right_width - 6): help_content.append(f"  {l}")
+        for l in TUI.wrap_text(curr_field['help'], right_width - 6): help_content.append(f"  {Style.normal()}{l}{Style.RESET}")
         
         errors = self._get_field_errors(curr_field['id'])
-        if errors and (self.show_validation_errors or self.is_editing or (curr_field['id']=='id' and self.form['id'])):
+        # Show errors if: 
+        # 1. Global validation triggered (show_validation_errors)
+        # 2. We are currently editing the field
+        # 3. It's the ID field and has content (proactive validation)
+        # 4. It's the Category field, Custom is selected but empty
+        is_custom_cat_empty = (curr_field['id'] == 'category' and self.form['category'] == 'Custom...✎' and not self.form['custom_category'])
+        
+        if errors and (self.show_validation_errors or self.is_editing or (curr_field['id'] == 'id' and self.form['id']) or is_custom_cat_empty):
             for e in errors: help_content.append(f"  {Style.red()}! {e}{Style.RESET}")
         
         help_height = min(len(help_content) + 2, available_height // 3)
@@ -516,7 +537,7 @@ class CreateScreen(Screen):
         preview_code = self._generate_python()
         preview_lines = [""]
         for line in preview_code.split("\n"):
-            for wl in TUI.wrap_text(line, right_width - 6): preview_lines.append(f"  {wl}")
+            for wl in TUI.wrap_text(line, right_width - 6): preview_lines.append(f"  {Style.normal()}{wl}{Style.RESET}")
         
         max_p_off = max(0, len(preview_lines) - (preview_height - 2))
         if self.preview_offset > max_p_off: self.preview_offset = max_p_off

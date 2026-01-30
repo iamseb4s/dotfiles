@@ -90,11 +90,11 @@ class MenuScreen(Screen):
             is_inst = mod.is_installed()
             is_act = self.is_active(mod.id)
             
-            # Use state color for the information header too
+            # Use semantic state color for the information header
             if mod.id in self.auto_locked: state_color = Style.red()
             elif mod.id in self.selected: state_color = Style.yellow() if mod.id in self.overrides else Style.green()
             elif is_inst: state_color = Style.blue()
-            else: state_color = Style.mauve()
+            else: state_color = Style.highlight()
 
             # Title
             info_lines.append(f"  {Style.BOLD}{state_color}{mod.label.upper()}{Style.RESET}")
@@ -102,7 +102,7 @@ class MenuScreen(Screen):
             
             if mod.description:
                 for l in TUI.wrap_text(mod.description, r_content_width):
-                    info_lines.append(f"  {Style.DIM}{l}{Style.RESET}")
+                    info_lines.append(f"  {Style.muted()}{l}{Style.RESET}")
             info_lines.append("")
             
             # Metadata with compact label width
@@ -110,7 +110,7 @@ class MenuScreen(Screen):
                 return f"  {Style.subtext1()}{label:<10}{Style.RESET} {color}{value}{Style.RESET}"
 
             status_text = 'Installed' if is_inst else 'Not Installed'
-            status_color = Style.blue() if is_inst else Style.surface2()
+            status_color = Style.blue() if is_inst else Style.muted()
             info_lines.append(info_row("Status", status_text, status_color))
             
             cur_mgr = mod.get_manager()
@@ -134,16 +134,16 @@ class MenuScreen(Screen):
                 info_lines.append(f"  {Style.surface1()}{'─' * 11}{Style.RESET}")
                 for l in tree:
                     for wl in TUI.wrap_text(l, r_content_width - 2):
-                        info_lines.append(f"    {Style.DIM}{wl}{Style.RESET}")
+                        info_lines.append(f"    {Style.muted()}{wl}{Style.RESET}")
         else:
             cat_name = current_item['obj']
-            info_lines.append(f"  {Style.BOLD}{Style.mauve()}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}{Style.highlight()}{cat_name.upper()}{Style.RESET}")
             info_lines.append(f"  {Style.surface1()}{'─' * r_content_width}{Style.RESET}")
-            info_lines.append(f"  {Style.DIM}Packages in this group:{Style.RESET}")
+            info_lines.append(f"  {Style.muted()}Packages in this group:{Style.RESET}")
             info_lines.append("")
             for m in self.categories[cat_name]:
                 status_mark = "■" if self.is_active(m.id) else " "
-                color = Style.green() if self.is_active(m.id) else Style.DIM
+                color = Style.green() if self.is_active(m.id) else Style.muted()
                 info_lines.append(f"    {color}[{status_mark}] {m.label}{Style.RESET}")
         return info_lines
 
@@ -204,7 +204,7 @@ class MenuScreen(Screen):
                 left_p = gap // 2
                 centered_label = ("─" * left_p) + label + ("─" * (gap - left_p))
                 
-                color = Style.mauve() if is_cursor else Style.subtext0()
+                color = Style.highlight() if is_cursor else Style.normal()
                 bold = Style.BOLD if is_cursor else ""
                 list_lines.append(f"  {color}{bold}{centered_label}{Style.RESET}")
 
@@ -240,21 +240,22 @@ class MenuScreen(Screen):
                 else:
                     mark = "[ ]"
                     status = "" 
-                    color = Style.surface2()
+                    color = Style.muted()
                 
                 if is_cursor:
                     # CURSOR FOCUS
-                    f_name = f" {Style.mauve()}{Style.BOLD}{mark}  {mod.label}{Style.RESET}"
-                    f_status = f"{Style.mauve()}{Style.BOLD}{status}{Style.RESET}" if status else ""
+                    f_name = f" {Style.highlight()}{Style.BOLD}{mark}  {mod.label}{Style.RESET}"
+                    f_status = f"{Style.highlight()}{Style.BOLD}{status}{Style.RESET}" if status else ""
                     line = TUI.split_line(f_name, f_status, content_width)
                     list_lines.append(f"  {line}")
                 else:
                     # NORMAL STATE
                     is_act = self.is_active(mod.id)
-                    line_color = color if (is_act or installed) else Style.surface2()
-                    name_style = Style.BOLD if is_act else Style.DIM
+                    line_color = color if (is_act or installed) else Style.muted()
+                    name_style = Style.BOLD if is_act else ""
+                    label_color = Style.normal() if not (is_act or installed) else line_color
                     
-                    n_name = f" {line_color}{mark}  {name_style}{mod.label}{Style.RESET}"
+                    n_name = f" {line_color}{mark}  {label_color}{name_style}{mod.label}{Style.RESET}"
                     n_status = f"{line_color}{status}{Style.RESET}" if status else ""
                     line = TUI.split_line(n_name, n_status, content_width)
                     list_lines.append(f"  {line}")
@@ -269,7 +270,7 @@ class MenuScreen(Screen):
         raw_status = f"Selected: {count} packages"
         # left_width is the total box width, internal is left_width - 2
         pad = (left_width - 2 - len(raw_status)) // 2
-        status_text = f"{' ' * max(0, pad)}{Style.DIM}{raw_status}{Style.RESET}"
+        status_text = f"{' ' * max(0, pad)}{Style.muted()}{raw_status}{Style.RESET}"
         visible_list.append(status_text)
 
         # Build Right Content

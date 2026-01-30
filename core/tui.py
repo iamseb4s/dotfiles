@@ -67,7 +67,6 @@ class Style:
     """ANSI TrueColor and text attribute escape sequences."""
     RESET = "\033[0m"
     BOLD = "\033[1m"
-    DIM = "\033[2m"
     INVERT = "\033[7m"
 
     @staticmethod
@@ -85,6 +84,14 @@ class Style:
             return f"\033[{layer};2;{r};{g};{b}m"
         except ValueError:
             return ""
+
+    # --- Semantic Levels ---
+    @classmethod
+    def highlight(cls, bg=False): return cls.mauve(bg)
+    @classmethod
+    def normal(cls, bg=False): return cls.text(bg)
+    @classmethod
+    def muted(cls, bg=False): return cls.surface2(bg)
 
     # --- Theme Helpers ---
     @classmethod
@@ -354,7 +361,7 @@ class TUI:
             # Width calculation: │ (1) + " " (1) + line + padding + │ (1) = 40
             for line in wrapped:
                 padding = " " * (37 - TUI.visible_len(line))
-                n_lines.append(f"{border_color}│{Style.RESET} {line}{padding}{border_color}│{Style.RESET}")
+                n_lines.append(f"{border_color}│{Style.RESET} {Style.normal()}{line}{Style.RESET}{padding}{border_color}│{Style.RESET}")
             
             # Bottom Border
             bot_str = "╰" + "─" * (width - 2) + "╯"
@@ -459,8 +466,8 @@ class TUI:
     @staticmethod
     def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
         """Wraps a list of lines in a rounded box with an optional title and integrated scrollbar."""
-        base_border_color = color if color else (Style.mauve() if is_focused else Style.surface2())
-        thumb_color = Style.mauve() if is_focused else Style.blue()
+        base_border_color = color if color else (Style.highlight() if is_focused else Style.muted())
+        thumb_color = Style.highlight() if is_focused else Style.blue()
         reset = Style.RESET
         
         # 1. Top border with title
@@ -563,12 +570,12 @@ class TUI:
         margin = max(0, margin)
         indent = " " * margin
             
-        print(f"{indent}╭" + "─" * (width - 2) + "╮")
+        print(f"{indent}{Style.normal()}╭" + "─" * (width - 2) + f"╮{Style.RESET}")
         if title:
             padding = (width - 2 - len(title) - 2) // 2
             padding = max(0, padding)
-            print(f"{indent}│" + " " * padding + f" {Style.BOLD}{title}{Style.RESET} " + " " * (width - 2 - padding - len(title) - 2) + "│")
-            print(f"{indent}├" + "─" * (width - 2) + "┤")
+            print(f"{indent}{Style.normal()}│{Style.RESET}" + " " * padding + f" {Style.normal()}{Style.BOLD}{title}{Style.RESET} " + " " * (width - 2 - padding - len(title) - 2) + f"{Style.normal()}│{Style.RESET}")
+            print(f"{indent}{Style.normal()}├" + "─" * (width - 2) + f"┤{Style.RESET}")
             
         for line in lines:
             # Calculate visible length to handle padding correctly
@@ -579,11 +586,11 @@ class TUI:
             
             if ":" in line:
                 label, value = line.split(":", 1)
-                formatted_line = f"{Style.BOLD}{label}:{Style.RESET}{value}"
-                print(f"{indent}│ {' ' * left_pad}{formatted_line}{' ' * right_pad} │")
+                formatted_line = f"{Style.normal()}{Style.BOLD}{label}:{Style.RESET}{Style.normal()}{value}{Style.RESET}"
+                print(f"{indent}{Style.normal()}│{Style.RESET} {' ' * left_pad}{formatted_line}{' ' * right_pad} {Style.normal()}│{Style.RESET}")
             else:
-                print(f"{indent}│ {' ' * left_pad}{line}{' ' * right_pad} │")
-        print(f"{indent}╰" + "─" * (width - 2) + "╯")
+                print(f"{indent}{Style.normal()}│{Style.RESET} {' ' * left_pad}{Style.normal()}{line}{Style.RESET}{' ' * right_pad} {Style.normal()}│{Style.RESET}")
+        print(f"{indent}{Style.normal()}╰" + "─" * (width - 2) + f"╯{Style.RESET}")
 
     @staticmethod
     def visible_len(text):

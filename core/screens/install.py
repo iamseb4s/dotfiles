@@ -23,21 +23,19 @@ class ConfirmModal:
         wrapped = TUI.wrap_text(self.message, width - 6)
         inner_lines = [""]
         for line in wrapped:
-            inner_lines.append(line.center(width - 2))
+            inner_lines.append(f"  {Style.normal()}{line.center(width - 6)}{Style.RESET}")
         inner_lines.append("")
         
         # Button labels
         btn_y = "  YES  "
         btn_n = "  NO  "
         
-        purple_bg = Style.mauve(bg=True)
-        
         if self.focus_idx == 0:
-            y_styled = f"{purple_bg}{Style.crust()}{btn_y}{Style.RESET}"
-            n_styled = f"[{btn_n.strip().center(len(btn_n)-2)}]"
+            y_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_y}{Style.RESET}"
+            n_styled = f"{Style.muted()}[{btn_n.strip()}]{Style.RESET}"
         else:
-            y_styled = f"[{btn_y.strip().center(len(btn_y)-2)}]"
-            n_styled = f"{purple_bg}{Style.crust()}{btn_n}{Style.RESET}"
+            y_styled = f"{Style.muted()}[{btn_y.strip()}]{Style.RESET}"
+            n_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_n}{Style.RESET}"
         
         btn_row = f"{y_styled}     {n_styled}"
 
@@ -159,20 +157,26 @@ class InstallScreen(Screen):
             elif all_done: icon = "✔"
             else: icon = "○"
             
-            color = Style.blue() if is_current else (Style.green() if icon == "✔" else (Style.red() if icon == "✘" else ""))
-            left_lines.append(f"  {color}{icon} {mod.label}{Style.RESET}")
+            if is_current: color = Style.highlight()
+            elif icon == "✔": color = Style.green()
+            elif icon == "✘": color = Style.red()
+            else: color = Style.muted()
+            
+            left_lines.append(f"  {color}{icon} {Style.BOLD if is_current else ''}{mod.label}{Style.RESET}")
             
             ovr = self.overrides.get(mod.id, {})
             has_dots = mod.stow_pkg is not None
             
             def get_icon(s):
-                if s == 'running': return self.spinner_chars[self.spinner_idx]
-                return "✔" if s == 'success' else ("✘" if s == 'error' else "○")
+                if s == 'running': return f"{Style.highlight()}{self.spinner_chars[self.spinner_idx]}{Style.RESET}"
+                if s == 'success': return f"{Style.green()}✔{Style.RESET}"
+                if s == 'error': return f"{Style.red()}✘{Style.RESET}"
+                return f"{Style.muted()}○{Style.RESET}"
 
             if ovr.get('install_pkg', True):
-                left_lines.append(f"  {Style.DIM}{'├' if has_dots else '└'}{Style.RESET} {get_icon(state['pkg'])} Package")
+                left_lines.append(f"  {Style.muted()}{'├' if has_dots else '└'} {get_icon(state['pkg'])} {Style.normal()}Package{Style.RESET}")
             if has_dots and ovr.get('install_dots', True):
-                left_lines.append(f"  {Style.DIM}└{Style.RESET} {get_icon(state['dots'])} Dotfiles")
+                left_lines.append(f"  {Style.muted()}└ {get_icon(state['dots'])} {Style.normal()}Dotfiles{Style.RESET}")
 
 
         # 3. Build Right Content (Logs)
@@ -181,7 +185,7 @@ class InstallScreen(Screen):
             if len(self.logs) > log_window_size:
                 self.log_offset = len(self.logs) - log_window_size
         
-        visible_logs = [""] + [f"  {l}" for l in self.logs[self.log_offset : self.log_offset + log_window_size]] + [""]
+        visible_logs = [""] + [f"  {Style.normal()}{l}{Style.RESET}" for l in self.logs[self.log_offset : self.log_offset + log_window_size]] + [""]
         
         # 4. Generate Boxes
         # Calculate Scroll Parameters for Logs
@@ -202,10 +206,11 @@ class InstallScreen(Screen):
         # 5. Progress Bar & Footer
         progress_val = self.current_idx / self.total if self.total > 0 else 0
         if self.is_finished: progress_val = 1
-        bar_len = int(safe_width * 0.5)
+        
+        bar_len = int(term_width * 0.5)
         filled = int(bar_len * progress_val)
-        bar_color = Style.green() if not self.is_cancelled else Style.red()
-        bar_content = f"{bar_color}█" * filled + f"{Style.DIM}░" * (bar_len - filled) + Style.RESET
+        bar_color = Style.highlight() if not self.is_cancelled else Style.red()
+        bar_content = f"{bar_color}█" * filled + f"{Style.muted()}░" * (bar_len - filled) + Style.RESET
         
         if self.is_finished: footer = f"{TUI.pill('ENTER', 'Results', Theme.GREEN)}    {TUI.pill('Q', 'Finish', Theme.RED)}"
         elif self.is_cancelled: footer = f"{TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', Theme.YELLOW)}"

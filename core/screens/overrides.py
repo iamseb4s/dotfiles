@@ -60,18 +60,18 @@ class OverrideModal:
             is_focused = (self.focus_idx == idx)
             # Baseline style
             if is_focused:
-                row_style = Style.mauve()
+                row_style = Style.highlight()
             elif is_dim:
-                row_style = Style.crust() # Absolute dim
+                row_style = Style.muted()
             else:
-                row_style = Style.text()
+                row_style = Style.normal()
                 
             bold = Style.BOLD if is_focused else ""
             line = TUI.split_line(label, value, content_width)
             return f"    {row_style}{bold}{line}{Style.RESET}"
 
         # 0. Install Package
-        pkg_toggle = "[■] YES" if self.install_pkg else "[ ] NO"
+        pkg_toggle = "YES [■]" if self.install_pkg else "NO [ ]"
         inner_lines.append(draw_row(0, "Install Package", pkg_toggle))
         
         # 1. Package Name
@@ -81,17 +81,17 @@ class OverrideModal:
             pre = name_val[:self.text_cursor_pos]
             char = name_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
             post = name_val[self.text_cursor_pos+1:]
-            name_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.mauve()}{Style.BOLD}{post}"
-        inner_lines.append(draw_row(1, "Package Name", f"[ {name_val} ] ✎", is_dim=is_name_dim))
+            name_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
+        inner_lines.append(draw_row(1, "Package Name", f"✎ [ {name_val} ]", is_dim=is_name_dim))
         
         # 2. Manager (Grid Layout)
         is_mgr_focused = (self.focus_idx == 2)
         if is_mgr_focused:
-            mgr_label_style = Style.mauve() + Style.BOLD
+            mgr_label_style = Style.highlight() + Style.BOLD
         elif is_name_dim:
-            mgr_label_style = Style.crust()
+            mgr_label_style = Style.muted()
         else:
-            mgr_label_style = Style.text()
+            mgr_label_style = Style.normal()
             
         inner_lines.append(f"    {mgr_label_style}Package Manager:{Style.RESET}")
         
@@ -104,15 +104,15 @@ class OverrideModal:
             if is_mgr_focused:
                 # Highlight ONLY the selected one when row is focused
                 if is_sel:
-                    item = f"{Style.mauve()}{Style.BOLD}{mark} {mgr}{Style.RESET}"
+                    item = f"{Style.highlight()}{Style.BOLD}{mark} {mgr}{Style.RESET}"
                 else:
-                    item = f"{Style.surface1()}{mark} {mgr}{Style.RESET}"
+                    item = f"{Style.muted()}{mark} {mgr}{Style.RESET}"
             elif is_name_dim:
                 # Row is disabled - extreme dim
-                item = f"{Style.crust()}{mark} {mgr}{Style.RESET}"
+                item = f"{Style.muted()}{mark} {mgr}{Style.RESET}"
             else:
                 # Row is active but not focused
-                m_color = Style.green() if is_sel else Style.surface1()
+                m_color = Style.green() if is_sel else Style.muted()
                 item = f"{m_color}{mark} {mgr}{Style.RESET}"
             mgr_items.append(item)
         
@@ -125,7 +125,7 @@ class OverrideModal:
         inner_lines.append("") # Spacer
         
         # 3. Deploy Config
-        dot_toggle = "[■] YES" if self.install_dots else "[ ] NO"
+        dot_toggle = "YES [■]" if self.install_dots else "NO [ ]"
         dot_label = "Copy Configuration Files" if self.mod.id == "refind" else "Deploy Config (Stow)"
         is_dot_disabled = not self.has_dots
         inner_lines.append(draw_row(3, dot_label, dot_toggle, is_dim=is_dot_disabled))
@@ -137,8 +137,8 @@ class OverrideModal:
             pre = path_val[:self.text_cursor_pos]
             char = path_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
             post = path_val[self.text_cursor_pos+1:]
-            path_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.mauve()}{Style.BOLD}{post}"
-        inner_lines.append(draw_row(4, "Target Path", f"[ {path_val} ] ✎", is_dim=is_path_dim))
+            path_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
+        inner_lines.append(draw_row(4, "Target Path", f"✎ [ {path_val} ]", is_dim=is_path_dim))
 
         inner_lines.append("") # Extra spacer
         inner_lines.append("") # Extra spacer
@@ -150,9 +150,8 @@ class OverrideModal:
         h1_pad = (width - 2 - TUI.visible_len(h1)) // 2
         h2_pad = (width - 2 - TUI.visible_len(h2)) // 2
         
-        # Use surface2 for hints to ensure they are NOT darker than disabled info
-        inner_lines.append(f"{' ' * h1_pad}{Style.surface2()}{h1}{Style.RESET}")
-        inner_lines.append(f"{' ' * h2_pad}{Style.surface2()}{h2}{Style.RESET}")
+        inner_lines.append(f"{' ' * h1_pad}{Style.muted()}{h1}{Style.RESET}")
+        inner_lines.append(f"{' ' * h2_pad}{Style.muted()}{h2}{Style.RESET}")
 
         
         height = len(inner_lines) + 2
