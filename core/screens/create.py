@@ -127,9 +127,9 @@ class WizardSummaryModal:
         btn_c = "  CANCEL  "
         if self.focus_idx == 0:
             s_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_s}{Style.RESET}"
-            c_styled = f"{Style.muted()}[{btn_c.strip()}]{Style.RESET}"
+            c_styled = f"{Style.muted()}[ {btn_c.strip()} ]{Style.RESET}"
         else:
-            s_styled = f"{Style.muted()}[{btn_s.strip()}]{Style.RESET}"
+            s_styled = f"{Style.muted()}[ {btn_s.strip()} ]{Style.RESET}"
             c_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_c}{Style.RESET}"
         
         btn_row = f"{s_styled}     {c_styled}"

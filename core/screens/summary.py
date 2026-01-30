@@ -179,9 +179,9 @@ class SummaryModal:
         
         if self.focus_idx == 0:
             l_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_left}{Style.RESET}"
-            r_styled = f"{Style.muted()}[{btn_right.strip()}]{Style.RESET}"
+            r_styled = f"{Style.muted()}[ {btn_right.strip()} ]{Style.RESET}"
         else:
-            l_styled = f"{Style.muted()}[{btn_left.strip()}]{Style.RESET}"
+            l_styled = f"{Style.muted()}[ {btn_left.strip()} ]{Style.RESET}"
             r_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_right}{Style.RESET}"
         
         btn_row = f"{l_styled}     {r_styled}"

@@ -32,9 +32,10 @@ class ConfirmModal:
         
         if self.focus_idx == 0:
             y_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_y}{Style.RESET}"
-            n_styled = f"{Style.muted()}[{btn_n.strip()}]{Style.RESET}"
+            # Length of btn_y is 7. "[ YES ]" is also 7.
+            n_styled = f"{Style.muted()}[ {btn_n.strip()} ]{Style.RESET}"
         else:
-            y_styled = f"{Style.muted()}[{btn_y.strip()}]{Style.RESET}"
+            y_styled = f"{Style.muted()}[ {btn_y.strip()} ]{Style.RESET}"
             n_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_n}{Style.RESET}"
         
         btn_row = f"{y_styled}     {n_styled}"
