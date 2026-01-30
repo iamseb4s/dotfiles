@@ -54,15 +54,27 @@ class OptionsModal(BaseModal):
         content_width = self.width - 10 
         inner_lines = [""] # Top spacer
         
-        def draw_row(idx, label, value, is_dim=False):
+        def draw_row(idx, label, value, is_dim=False, is_main=False):
             is_focused = (self.focus_idx == idx)
             style = Style.highlight() if is_focused else (Style.muted() if is_dim else Style.normal())
-            bold = Style.BOLD if is_focused else ""
-            return f"    {style}{bold}{TUI.split_line(label, value, content_width)}{Style.RESET}"
+            bold = Style.BOLD if is_focused or is_main else ""
+            
+            # Hierarchical styling
+            display_label = label.upper() if is_main else f"╰─ {label}"
+            prefix = "    " if is_main else "    " # Unified base indent
+            
+            hint = ""
+            if is_focused:
+                h = {0: "SPACE to toggle", 1: "E to edit", 3: "SPACE to toggle", 4: "E to edit"}.get(idx, "")
+                if h: hint = f" {Style.muted()}{h}{Style.RESET}{style}{bold}"
+            
+            label_styled = f"{style}{bold}{display_label}{Style.RESET}{hint}"
+            value_styled = f"{style}{bold}{value}{Style.RESET}"
+            return f"{prefix}{TUI.split_line(label_styled, value_styled, content_width)}"
 
         # 0. Install Package
         pkg_toggle = f"YES {self.SYM_CHECK}" if self.install_pkg else "NO [ ]"
-        inner_lines.append(draw_row(0, "Install Package", pkg_toggle))
+        inner_lines.append(draw_row(0, "Install Package", pkg_toggle, is_main=True))
         
         # 1. Package Name
         is_name_dim = not self.install_pkg; name_val = self.pkg_name
@@ -73,8 +85,9 @@ class OptionsModal(BaseModal):
         
         # 2. Manager (Grid Layout)
         is_mgr_f = (self.focus_idx == 2)
-        m_lbl_style = Style.highlight() + Style.BOLD if is_mgr_f else (Style.muted() if is_name_dim else Style.normal())
-        inner_lines.append(f"    {m_lbl_style}Package Manager:{Style.RESET}")
+        m_lbl_style = Style.highlight() if is_mgr_f else (Style.muted() if is_name_dim else Style.normal())
+        m_hint = f" {Style.muted()}h/l to select{Style.RESET}" if is_mgr_f else ""
+        inner_lines.append(f"    {m_lbl_style}╰─ Package Manager:{Style.RESET}{m_hint}")
         
         mgr_items = []
         for mgr in self.managers:
@@ -91,7 +104,7 @@ class OptionsModal(BaseModal):
         # 3. Deploy Config
         dot_toggle = f"YES {self.SYM_CHECK}" if self.install_dots else "NO [ ]"
         dot_label = "Copy Configuration Files" if self.mod.id == "refind" else "Deploy Config (Stow)"
-        inner_lines.append(draw_row(3, dot_label, dot_toggle, is_dim=not self.has_dots))
+        inner_lines.append(draw_row(3, dot_label, dot_toggle, is_dim=not self.has_dots, is_main=True))
         
         # 4. Target Path
         is_path_dim = not (self.has_dots and self.install_dots); path_val = self.stow_target
@@ -103,10 +116,8 @@ class OptionsModal(BaseModal):
         inner_lines.append(draw_row(4, "Target Path", f"{self.SYM_EDIT} [ {path_val} ]", is_dim=is_path_dim))
 
         inner_lines.extend(["", ""])
-        h1 = "SPACE: Toggle   E: Edit   h/l: Select"
-        h2 = "ENTER: Accept   Q: Cancel"
-        for h in [h1, h2]:
-            inner_lines.append(f"{' ' * ((self.width - 2 - TUI.visible_len(h)) // 2)}{Style.muted()}{h}{Style.RESET}")
+        hint = "ENTER: Accept   Q: Cancel"
+        inner_lines.append(f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}")
         
         return self._get_layout(inner_lines)
 

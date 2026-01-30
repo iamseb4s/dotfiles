@@ -1,6 +1,5 @@
 import shutil
 import sys
-import time
 from collections import defaultdict
 from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
@@ -72,7 +71,7 @@ class SelectorScreen(Screen):
         tw, th = shutil.get_terminal_size()
         
         header = f"{Style.blue(bg=True)}{Style.crust()}{' PACKAGES SELECTOR '.center(tw)}{Style.RESET}"
-        pills = [TUI.pill("h/j/k/l", "Navigate", Theme.SKY), TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE), TUI.pill("SPACE", "Select", Theme.BLUE), TUI.pill("TAB", "Options", Theme.MAUVE), TUI.pill("ENTER", "Install", Theme.GREEN), TUI.pill("Q", "Back", Theme.RED)]
+        pills = self._get_footer_pills()
         footer = TUI.wrap_pills(pills, tw - 4)
         av_h = max(10, th - 4 - len(footer))
         lw, rw = tw // 2, tw - (tw // 2) - 1
@@ -95,6 +94,20 @@ class SelectorScreen(Screen):
         buffer = TUI.draw_notifications(buffer)
         sys.stdout.write("\033[H" + "\n".join([TUI.visible_ljust(l, tw) for l in buffer[:th]]) + "\033[J")
         sys.stdout.flush()
+
+    def _get_footer_pills(self):
+        """Dynamic footer pills based on screen state and active modals."""
+        if isinstance(self.modal, OptionsModal) and self.modal.editing_field:
+            return [TUI.pill("ENTER", "Finish", Theme.GREEN), TUI.pill("ESC", "Cancel", Theme.RED)]
+            
+        return [
+            TUI.pill("h/j/k/l", "Navigate", Theme.SKY),
+            TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE),
+            TUI.pill("SPACE", "Select", Theme.BLUE),
+            TUI.pill("TAB", "Options", Theme.MAUVE),
+            TUI.pill("ENTER", "Install", Theme.GREEN),
+            TUI.pill("Q", "Back", Theme.RED)
+        ]
 
     def _draw_left(self, w, h):
         """Internal logic for building the package list box."""
