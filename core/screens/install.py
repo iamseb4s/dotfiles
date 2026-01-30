@@ -5,69 +5,7 @@ import select
 from core.tui import TUI, Style, Keys, Theme
 from core.screens.welcome import Screen
 from core.screens.summary import SummaryModal
-
-class ConfirmModal:
-    """Simple confirmation modal for cancellation."""
-    def __init__(self, title, message):
-        self.title = title
-        self.message = message
-        self.focus_idx = 1 # Default to NO (Cancel)
-
-    def render(self):
-        width = 54 # Increased width
-        term_width = shutil.get_terminal_size().columns
-        term_height = shutil.get_terminal_size().lines
-        
-        # 1. Build Inner Lines with padding
-        # Wrap message to ensure it doesn't hit edges
-        wrapped = TUI.wrap_text(self.message, width - 6)
-        inner_lines = [""]
-        for line in wrapped:
-            inner_lines.append(f"  {Style.normal()}{line.center(width - 6)}{Style.RESET}")
-        inner_lines.append("")
-        
-        # Button labels
-        btn_y = "  YES  "
-        btn_n = "  NO  "
-        
-        if self.focus_idx == 0:
-            y_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_y}{Style.RESET}"
-            # Length of btn_y is 7. "[ YES ]" is also 7.
-            n_styled = f"{Style.muted()}[ {btn_n.strip()} ]{Style.RESET}"
-        else:
-            y_styled = f"{Style.muted()}[ {btn_y.strip()} ]{Style.RESET}"
-            n_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_n}{Style.RESET}"
-        
-        btn_row = f"{y_styled}     {n_styled}"
-
-
-        v_len = TUI.visible_len(btn_row)
-        padding = (width - 2 - v_len) // 2
-        inner_lines.append(f"{' ' * padding}{btn_row}")
-        
-        # 2. Wrap in Container
-        height = len(inner_lines) + 2
-        lines = TUI.create_container(inner_lines, width, height, title=self.title, is_focused=True)
-        
-        start_x = (term_width - width) // 2
-        start_y = (term_height - height) // 2
-        
-        return lines, start_y, start_x
-
-
-    def handle_input(self, key):
-        if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
-            self.focus_idx = 1 if self.focus_idx == 0 else 0
-        elif key == Keys.ENTER:
-            return "YES" if self.focus_idx == 0 else "NO"
-        elif key == Keys.ESC:
-            if self.focus_idx != 1:
-                self.focus_idx = 1 # Focus NO
-            else:
-                return "NO"
-        elif key in [Keys.Q, Keys.Q_UPPER]:
-            return "NO"
-        return None
+from core.screens.shared_modals import ConfirmModal
 
 class InstallScreen(Screen):
     """
