@@ -1,7 +1,6 @@
 import time
 import shutil
 import sys
-import select
 from core.tui import TUI, Style, Keys, Theme
 from core.screens.welcome import Screen
 from core.screens.summary import SummaryModal
@@ -12,6 +11,9 @@ class InstallScreen(Screen):
     Advanced installation dashboard with split-view, real-time logs,
     and soft-cancellation support.
     """
+    # UI Symbols
+    SYM_PENDING, SYM_RUNNING, SYM_SUCCESS, SYM_ERROR = "○", "⟳", "✔", "✘"
+    
     def __init__(self, modules, selected_ids, overrides=None):
         self.modules = modules
         self.queue = [m for m in modules if m.id in selected_ids]
@@ -48,9 +50,6 @@ class InstallScreen(Screen):
         self.modal = None # Used for cancel confirmation or final results
         self.spinner_chars = ["|", "/", "-", "\\"]
         self.spinner_idx = 0
-        
-        # Unified Layout Metric
-        self.reserved_height = 9
 
     def add_log(self, message):
         """Adds a line to the log buffer and handles auto-scroll."""
@@ -60,158 +59,104 @@ class InstallScreen(Screen):
             
         self.logs.append(message)
         if self.auto_scroll:
-            term_height = shutil.get_terminal_size().lines
-            available_height = max(10, term_height - 7)
-            log_window_size = available_height - 4 # Margin top(1) + bottom(1)
-            if len(self.logs) > log_window_size:
-                self.log_offset = len(self.logs) - log_window_size
+            th = shutil.get_terminal_size().lines
+            win_sz = max(10, th - 7) - 4
+            if len(self.logs) > win_sz:
+                self.log_offset = len(self.logs) - win_sz
 
-        # Throttled render during high-volume logs
         now = time.time()
         if now - self.last_render_time > self.render_throttle:
             self.render()
             self.last_render_time = now
 
+    def _get_scrollbar(self, total, visible, offset):
+        """Returns scroll position and size for containers."""
+        if total <= visible: return {'scroll_pos': None, 'scroll_size': None}
+        sz = max(1, int(visible**2 / total))
+        return {'scroll_pos': int((offset / (total - visible)) * (visible - sz)), 'scroll_size': sz}
+
     def render(self):
-        """Draws the boxed split-view dashboard with bottom progress bar and integrated scrolls."""
-        term_width = shutil.get_terminal_size().columns
-        term_height = shutil.get_terminal_size().lines
+        """Draws the boxed split-view dashboard with bottom progress bar."""
+        tw, th = shutil.get_terminal_size()
         
-        # 1. Header & Layout Metrics
-        title = " DEPLOYING PACKAGES "
-        bg_blue = Style.blue(bg=True)
-        padding = (term_width - len(title)) // 2
-        header_bar = f"{bg_blue}{Style.crust()}{' '*padding}{title}{' '*(term_width-padding-len(title))}{Style.RESET}"
+        # 1. Header & Footer
+        header = f"{Style.blue(bg=True)}{Style.crust()}{' DEPLOYING PACKAGES '.center(tw)}{Style.RESET}"
+        pills = self._get_footer_pills()
+        footer_lines = TUI.wrap_pills(pills, tw - 4)
+        avail_h = max(10, th - 6 - len(footer_lines))
+        lw, rw = int(tw * 0.30), tw - int(tw * 0.30) - 1
         
-        # Footer & Available space calculation
-        if self.is_finished: footer_pills = [TUI.pill('ENTER', 'Results', Theme.GREEN), TUI.pill('Q', 'Finish', Theme.RED)]
-        elif self.is_cancelled: footer_pills = [TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', Theme.YELLOW)]
-        else: footer_pills = [TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', Theme.YELLOW), TUI.pill('Q', 'Stop', Theme.RED)]
+        # 2. Panels
+        left = self._draw_task_tree(lw, avail_h)
+        right = self._draw_log_panel(rw, avail_h)
+        main_content = TUI.stitch_containers(left, right, gap=1)
         
-        footer_lines = TUI.wrap_pills(footer_pills, term_width - 4)
-        footer_height = len(footer_lines)
+        # 3. Progress Bar
+        bar_line = self._draw_progress_bar(tw)
         
-        # Space for boxes: Top(2), Progress(2), Footer(footer_height) + spacers
-        available_height = max(10, term_height - 6 - footer_height)
+        # 4. Assembly
+        buffer = [header, ""] + main_content + ["", bar_line, ""]
+        for fl in footer_lines:
+            fv = TUI.visible_len(fl); lp = (tw - fv) // 2
+            buffer.append(f"{' ' * lp}{fl}{' ' * (tw - fv - lp)}")
+
+        if self.modal:
+            ml, my, mx = self.modal.render()
+            for i, line in enumerate(ml):
+                if 0 <= my+i < len(buffer): buffer[my+i] = TUI.overlay(buffer[my+i], line, mx)
         
-        left_width = int(term_width * 0.30)
-        right_width = term_width - left_width - 1
-        
-        # 2. Build Left Content (Task Tree)
-        left_lines = [""]
+        buffer = TUI.draw_notifications(buffer)
+        final = "\n".join([TUI.visible_ljust(l, tw) for l in buffer[:th]])
+        sys.stdout.write("\033[H" + final + "\033[J")
+        sys.stdout.flush()
+
+    def _get_footer_pills(self):
+        if self.is_finished: return [TUI.pill('ENTER', 'Results', Theme.GREEN), TUI.pill('Q', 'Finish', Theme.RED)]
+        spin = self.spinner_chars[self.spinner_idx]
+        if self.is_cancelled: return [TUI.pill(spin, 'CANCELING...', Theme.YELLOW)]
+        return [TUI.pill(spin, 'INSTALLING...', Theme.YELLOW), TUI.pill('Q', 'Stop', Theme.RED)]
+
+    def _draw_task_tree(self, w, h):
+        lines = [""]
         for mod in self.queue:
-            state = self.status[mod.id]
-            is_current = (self.current_idx >= 0 and self.queue[self.current_idx].id == mod.id)
+            st = self.status[mod.id]
+            is_curr = (self.current_idx >= 0 and self.queue[self.current_idx].id == mod.id)
+            err = any(v == 'error' for v in st.values())
+            done = all(v in ['success', 'skipped'] for v in st.values())
             
-            # Icons and colors
-            all_done = all(v in ['success', 'skipped'] for v in state.values())
-            has_error = any(v == 'error' for v in state.values())
+            icon = self.SYM_RUNNING if (is_curr and not self.is_finished) else (self.SYM_ERROR if err else (self.SYM_SUCCESS if done else self.SYM_PENDING))
+            c = Style.highlight() if is_curr else (Style.green() if icon == self.SYM_SUCCESS else (Style.red() if icon == self.SYM_ERROR else Style.muted()))
+            lines.append(f"  {c}{icon} {Style.BOLD if is_curr else ''}{mod.label}{Style.RESET}")
             
-            if is_current and not self.is_finished: icon = "⟳"
-            elif has_error: icon = "✘"
-            elif all_done: icon = "✔"
-            else: icon = "○"
-            
-            if is_current: color = Style.highlight()
-            elif icon == "✔": color = Style.green()
-            elif icon == "✘": color = Style.red()
-            else: color = Style.muted()
-            
-            left_lines.append(f"  {color}{icon} {Style.BOLD if is_current else ''}{mod.label}{Style.RESET}")
-            
-            ovr = self.overrides.get(mod.id, {})
-            has_dots = mod.stow_pkg is not None
-            
-            def get_icon(s):
+            ovr, has_dots = self.overrides.get(mod.id, {}), mod.stow_pkg is not None
+            def get_sub_icon(s):
                 if s == 'running': return f"{Style.highlight()}{self.spinner_chars[self.spinner_idx]}{Style.RESET}"
-                if s == 'success': return f"{Style.green()}✔{Style.RESET}"
-                if s == 'error': return f"{Style.red()}✘{Style.RESET}"
-                return f"{Style.muted()}○{Style.RESET}"
+                return f"{Style.green() if s == 'success' else (Style.red() if s == 'error' else Style.muted())}{self.SYM_SUCCESS if s == 'success' else (self.SYM_ERROR if s == 'error' else self.SYM_PENDING)}{Style.RESET}"
 
             if ovr.get('install_pkg', True):
-                left_lines.append(f"  {Style.muted()}{'├' if has_dots else '└'} {get_icon(state['pkg'])} {Style.normal()}Package{Style.RESET}")
+                lines.append(f"  {Style.muted()}{'├' if has_dots else '└'} {get_sub_icon(st['pkg'])} {Style.normal()}Package{Style.RESET}")
             if has_dots and ovr.get('install_dots', True):
-                left_lines.append(f"  {Style.muted()}└ {get_icon(state['dots'])} {Style.normal()}Dotfiles{Style.RESET}")
+                lines.append(f"  {Style.muted()}└ {get_sub_icon(st['dots'])} {Style.normal()}Dotfiles{Style.RESET}")
+        
+        return TUI.create_container(lines, w, h, title="TASKS", color="", is_focused=(not self.is_finished and not self.modal))
 
+    def _draw_log_panel(self, w, h):
+        win_sz = h - 4
+        if self.auto_scroll and len(self.logs) > win_sz: self.log_offset = len(self.logs) - win_sz
+        vis_logs = [""] + [f"  {Style.normal()}{l}{Style.RESET}" for l in self.logs[self.log_offset : self.log_offset + win_sz]] + [""]
+        sc = self._get_scrollbar(len(self.logs), h - 2, self.log_offset)
+        return TUI.create_container(vis_logs, w, h, title="LOGS", color="", is_focused=(self.is_finished and not self.modal), scroll_pos=sc['scroll_pos'], scroll_size=sc['scroll_size'])
 
-        # 3. Build Right Content (Logs)
-        log_window_size = available_height - 4
-        if self.auto_scroll:
-            if len(self.logs) > log_window_size:
-                self.log_offset = len(self.logs) - log_window_size
-        
-        visible_logs = [""] + [f"  {Style.normal()}{l}{Style.RESET}" for l in self.logs[self.log_offset : self.log_offset + log_window_size]] + [""]
-        
-        # 4. Generate Boxes
-        # Calculate Scroll Parameters for Logs
-        l_scroll_pos, l_scroll_size = None, None
-        if len(self.logs) > log_window_size:
-            thumb_size = max(1, int((available_height - 2)**2 / (len(self.logs) + 2)))
-            max_off = len(self.logs) - log_window_size
-            prog = self.log_offset / max_off
-            l_scroll_pos = int(prog * (available_height - 2 - thumb_size))
-            l_scroll_size = thumb_size
-
-        left_box = TUI.create_container(left_lines, left_width, available_height, title="TASKS", is_focused=(not self.is_finished and not self.modal))
-        right_box = TUI.create_container(visible_logs, right_width, available_height, title="LOGS", is_focused=(self.is_finished and not self.modal), scroll_pos=l_scroll_pos, scroll_size=l_scroll_size)
-        
-        main_content = TUI.stitch_containers(left_box, right_box, gap=1)
-
-        
-        # 5. Progress Bar & Footer
-        progress_val = (self.completed_units + self.current_unit_progress) / self.total_units if self.total_units > 0 else 0
-        if self.is_finished: progress_val = 1
-        
-        # Fixed Bar width: 50% of terminal
-        bar_width = int(term_width * 0.5)
-        filled = int(bar_width * progress_val)
-        bar_color = Style.highlight() if not self.is_cancelled else Style.red()
-        
-        # Build the raw bar string (without percentage yet)
-        bar_chars = ("█" * filled) + (Style.muted() + "░" * (bar_width - filled))
-        bar_raw = f"{bar_color}{bar_chars}{Style.RESET}"
-        
-        # Prepare percentage string
-        perc_text = f" {int(progress_val * 100)}% "
-        
-        # Overlay percentage in the center of the bar
-        # We overlay onto the bar content only (the part between brackets)
-        center_pos = (bar_width - len(perc_text)) // 2
-        # Use a high-visibility style for the percentage text
-        perc_styled = f"{Style.normal()}{Style.BOLD}{perc_text}{Style.RESET}"
-        
-        # Composite the bar: [ OVERLAY ]
-        bar_final = TUI.overlay(bar_raw, perc_styled, center_pos)
-        full_bar_line = f"[ {bar_final} ]"
-        
-        buffer = [header_bar, ""]
-        buffer.extend(main_content)
-        buffer.append("")
-        
-        # Centering the full line [ BAR ]
-        bar_pad = max(0, (term_width - TUI.visible_len(full_bar_line)) // 2)
-        buffer.append(f"{' ' * bar_pad}{full_bar_line}")
-        buffer.append("")
-        
-        for f_line in footer_lines:
-            f_pad = max(0, (term_width - TUI.visible_len(f_line)) // 2)
-            buffer.append(f"{' ' * f_pad}{f_line}")
-
-        # Modal Overlay
-        if self.modal:
-            m_lines, m_y, m_x = self.modal.render()
-            for i, m_line in enumerate(m_lines):
-                target_y = m_y + i
-                if 0 <= target_y < len(buffer):
-                    buffer[target_y] = TUI.overlay(buffer[target_y], m_line, m_x)
-
-        # Global Notifications Overlay
-        buffer = TUI.draw_notifications(buffer)
-
-        # Final buffer management
-        final_output = "\n".join([TUI.visible_ljust(line, term_width) for line in buffer[:term_height]])
-        sys.stdout.write("\033[H" + final_output + "\033[J")
-        sys.stdout.flush()
+    def _draw_progress_bar(self, tw):
+        prog = (self.completed_units + self.current_unit_progress) / self.total_units if self.total_units > 0 else 0
+        if self.is_finished: prog = 1
+        bw = int(tw * 0.5); filled = int(bw * prog)
+        c = Style.highlight() if not self.is_cancelled else Style.red()
+        bar = f"{c}{'█' * filled}{Style.muted()}{'░' * (bw - filled)}{Style.RESET}"
+        perc = f"{Style.normal()}{Style.BOLD} {int(prog * 100)}% {Style.RESET}"
+        bar_ovr = TUI.overlay(bar, perc, (bw - TUI.visible_len(perc)) // 2)
+        line = f"[ {bar_ovr} ]"
+        return f"{' ' * ((tw - TUI.visible_len(line)) // 2)}{line}"
 
     def run(self):
         """Main installation loop with real-time interruption handling."""
@@ -231,54 +176,19 @@ class InstallScreen(Screen):
             if do_dots: tasks.append(('dots', mod.configure))
             else: self.status[mod.id]['dots'] = 'skipped'
 
-            for task_type, func in tasks:
+            for t_type, func in tasks:
                 if self.is_cancelled: break
+                self.status[mod.id][t_type], self.current_unit_progress = 'running', 0.0
                 
-                self.status[mod.id][task_type] = 'running'
-                self.current_unit_progress = 0.0
-                
-                def live_callback(line):
-                    self.add_log(line)
-                    self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
-                    # Fake progress crawl: move up to 95% of the current unit
+                def live_cb(l):
+                    self.add_log(l); self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
                     self.current_unit_progress = min(0.95, self.current_unit_progress + 0.005)
-                    input_handler()
+                    self._input_step()
                 
-                def input_handler():
-                    # Check for keyboard input when select() says stdin is ready
-                    key = TUI.get_key()
-                    if key is None: return
-                    
-                    if key == Keys.RESIZE:
-                        TUI.clear_screen()
-                        self.render()
-                        return
-
-                    if not self.modal:
-                        if key in [Keys.Q, Keys.Q_UPPER]:
-                            self.modal = ConfirmModal("STOP INSTALLATION", "Finish current task and stop?")
-                    else:
-                        res = self.modal.handle_input(key)
-                        if res == "YES":
-                            self.is_cancelled = True
-                            self.modal = None
-                            TUI.push_notification("Installation stopped by user", type="ERROR")
-                        elif res == "NO":
-                            self.modal = None
-                    
-                    self.render()
-
-                # Execute with dual monitoring (logs + keyboard)
-                success = func(ovr, callback=live_callback, input_callback=input_handler)
-                self.status[mod.id][task_type] = 'success' if success else 'error'
-                self.results[mod.id][task_type] = success
-                
-                self.completed_units += 1
-                self.current_unit_progress = 0.0
-                
-                if not success and task_type == 'pkg':
-                    self.status[mod.id]['dots'] = 'skipped'
-                    break
+                success = func(ovr, callback=live_cb, input_callback=self._input_step)
+                self.status[mod.id][t_type], self.results[mod.id][t_type] = ('success' if success else 'error'), success
+                self.completed_units += 1; self.current_unit_progress = 0.0
+                if not success and t_type == 'pkg': self.status[mod.id]['dots'] = 'skipped'; break
 
         self.is_finished = True
         # Always force SummaryModal on completion, overwriting any pending ConfirmModal
@@ -288,40 +198,40 @@ class InstallScreen(Screen):
             self.render()
             key = TUI.get_key(blocking=True)
             if key is None: continue
-            
-            if key == Keys.RESIZE:
-                TUI.clear_screen()
-                continue
+            res = self.handle_input(key)
+            if res: return res
 
-            if self.modal:
-                action = self.modal.handle_input(key)
-                if action == "FINISH": return "WELCOME"
-                if action in ["CLOSE", "NO", "CANCEL"]:
-                    self.modal = None
-            else:
-                if key == Keys.ENTER:
-                    if not self.modal:
-                        self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
-                    continue
-                if key in [Keys.Q, Keys.Q_UPPER]:
-                    if self.is_finished:
-                        return "WELCOME"
-                    else:
-                        self.modal = ConfirmModal("EXIT", "Are you sure you want to stop?")
-                
-                # Manual Scroll
-                term_height = shutil.get_terminal_size().lines
-                available_height = term_height - 7
-                available_height = max(10, available_height)
-                max_off = max(0, len(self.logs) - (available_height - 4))
-                
-                if key == Keys.PGUP:
-                    self.auto_scroll = False
-                    self.log_offset = max(0, self.log_offset - 5)
-                if key == Keys.PGDN:
-                    self.log_offset = min(max_off, self.log_offset + 5)
-                    if self.log_offset >= max_off:
-                        self.auto_scroll = True
+    def _input_step(self):
+        key = TUI.get_key()
+        if key is None: return
+        if key == Keys.RESIZE: TUI.clear_screen(); self.render(); return
+        
+        if not self.modal:
+            if key in [Keys.Q, Keys.Q_UPPER]: self.modal = ConfirmModal("STOP INSTALLATION", "Finish current task and stop?")
+        else:
+            res = self.modal.handle_input(key)
+            if res == "YES": self.is_cancelled, self.modal = True, None; TUI.push_notification("Stopped by user", "ERROR")
+            elif res == "NO": self.modal = None
+        self.render()
 
     def handle_input(self, key):
+        if key == Keys.RESIZE: TUI.clear_screen(); return None
+        if self.modal:
+            action = self.modal.handle_input(key)
+            if action == "FINISH": return "WELCOME"
+            if action in ["CLOSE", "NO", "CANCEL"]: self.modal = None
+            return None
+
+        if key == Keys.ENTER:
+            self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
+        elif key in [Keys.Q, Keys.Q_UPPER]:
+            if self.is_finished: return "WELCOME"
+            self.modal = ConfirmModal("EXIT", "Are you sure you want to stop?")
+        
+        win_h = max(10, shutil.get_terminal_size().lines - 7)
+        max_off = max(0, len(self.logs) - (win_h - 4))
+        if key == Keys.PGUP: self.auto_scroll, self.log_offset = False, max(0, self.log_offset - 5)
+        elif key == Keys.PGDN:
+            self.log_offset = min(max_off, self.log_offset + 5)
+            if self.log_offset >= max_off: self.auto_scroll = True
         return None
