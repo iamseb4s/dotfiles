@@ -2,10 +2,11 @@ import shutil
 import time
 import sys
 from collections import defaultdict
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
 from core.screens.overrides import OverrideModal
 from core.screens.summary import SummaryModal
+from core.screens.install import ConfirmModal
 
 class MenuScreen(Screen):
     """
@@ -38,8 +39,6 @@ class MenuScreen(Screen):
         self.modal = None          # Current active modal
         
         self.flat_items = [] 
-        self.exit_pending = False
-        self.last_esc_time = 0
 
     def _resolve_dependencies(self):
         """
@@ -79,49 +78,73 @@ class MenuScreen(Screen):
 
     def _get_info_lines(self, right_width):
         """Helper to pre-calculate info lines for scroll limits."""
-        info_lines = []
-        if not self.flat_items: return []
+        info_lines = [""]
+        if not self.flat_items: return info_lines
         
         current_item = self.flat_items[self.cursor_idx]
-        r_content_width = right_width - 4
+        r_content_width = right_width - 6
         
         if current_item['type'] == 'module':
             mod = current_item['obj']
             ovr = self.overrides.get(mod.id, {})
             is_inst = mod.is_installed()
-            status_color = Style.hex("#89B4FA") if is_inst else ""
+            is_act = self.is_active(mod.id)
             
-            info_lines.append(f"{Style.BOLD}{Style.hex('#89B4FA')}{mod.label.upper()}{Style.RESET}")
+            # Use semantic state color for the information header
+            if mod.id in self.auto_locked: state_color = Style.red()
+            elif mod.id in self.selected: state_color = Style.yellow() if mod.id in self.overrides else Style.green()
+            elif is_inst: state_color = Style.blue()
+            else: state_color = Style.highlight()
+
+            # Title
+            info_lines.append(f"  {Style.BOLD}{state_color}{mod.label.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.surface1()}{'─' * r_content_width}{Style.RESET}")
+            
             if mod.description:
                 for l in TUI.wrap_text(mod.description, r_content_width):
-                    info_lines.append(f"{Style.DIM}{l}{Style.RESET}")
+                    info_lines.append(f"  {Style.muted()}{l}{Style.RESET}")
             info_lines.append("")
-            info_lines.append(f"{Style.BOLD}Status:  {status_color}{('●' if is_inst else '○')} {('Installed' if is_inst else 'Not Installed')}{Style.RESET}")
+            
+            # Metadata with compact label width
+            def info_row(label, value, color=""):
+                return f"  {Style.subtext1()}{label:<10}{Style.RESET} {color}{value}{Style.RESET}"
+
+            status_text = 'Installed' if is_inst else 'Not Installed'
+            status_color = Style.blue() if is_inst else Style.muted()
+            info_lines.append(info_row("Status", status_text, status_color))
             
             cur_mgr = mod.get_manager()
             ovr_mgr = ovr.get('manager', cur_mgr)
-            is_mgr_mod = 'manager' in ovr and ovr_mgr != cur_mgr
-            info_lines.append(f"{Style.BOLD}Manager: {Style.RESET}{Style.hex('#FDCB6E') if is_mgr_mod else ''}{ovr_mgr}{'*' if is_mgr_mod else ''}{Style.RESET}")
+            info_lines.append(info_row("Manager", f"{ovr_mgr}{'*' if ovr_mgr != cur_mgr else ''}"))
             
             cur_pkg = mod.get_package_name()
             ovr_pkg = ovr.get('pkg_name', cur_pkg)
-            is_pkg_mod = 'pkg_name' in ovr and ovr_pkg != cur_pkg
-            info_lines.append(f"{Style.BOLD}Package: {Style.RESET}{Style.hex('#FDCB6E') if is_pkg_mod else ''}{ovr_pkg}{'*' if is_pkg_mod else ''}{Style.RESET}")
+            info_lines.append(info_row("Package", f"{ovr_pkg}{'*' if ovr_pkg != cur_pkg else ''}"))
+            
+            # Show custom target if changed
+            cur_target = mod.stow_target
+            ovr_target = ovr.get('stow_target', cur_target)
+            if ovr_target != cur_target:
+                info_lines.append(info_row("Target", f"{ovr_target}*"))
             
             tree = mod.get_config_tree()
             if tree:
                 info_lines.append("")
-                info_lines.append(f"{Style.BOLD}CONFIG TREE:{Style.RESET}")
+                info_lines.append(f"  {Style.BOLD}{Style.subtext0()}CONFIG TREE{Style.RESET}")
+                info_lines.append(f"  {Style.surface1()}{'─' * 11}{Style.RESET}")
                 for l in tree:
                     for wl in TUI.wrap_text(l, r_content_width - 2):
-                        info_lines.append(f"  {wl}")
+                        info_lines.append(f"    {Style.muted()}{wl}{Style.RESET}")
         else:
             cat_name = current_item['obj']
-            info_lines.append(f"{Style.BOLD}{Style.hex('#FDCB6E')}{cat_name.upper()}{Style.RESET}")
-            info_lines.append(f"{Style.DIM}Packages in this group:{Style.RESET}")
+            info_lines.append(f"  {Style.BOLD}{Style.highlight()}{cat_name.upper()}{Style.RESET}")
+            info_lines.append(f"  {Style.surface1()}{'─' * r_content_width}{Style.RESET}")
+            info_lines.append(f"  {Style.muted()}Packages in this group:{Style.RESET}")
             info_lines.append("")
             for m in self.categories[cat_name]:
-                info_lines.append(f"  {('●' if m.is_installed() else '○')} {m.label}")
+                status_mark = "■" if self.is_active(m.id) else " "
+                color = Style.green() if self.is_active(m.id) else Style.muted()
+                info_lines.append(f"    {color}[{status_mark}] {m.label}{Style.RESET}")
         return info_lines
 
     def render(self):
@@ -137,77 +160,127 @@ class MenuScreen(Screen):
         
         # 1. Header & Layout Metrics
         title_text = " PACKAGES SELECTOR "
-        bg_blue = Style.hex("89B4FA", bg=True)
-        text_black = "\033[30m"
+        bg_blue = Style.blue(bg=True)
         padding = (term_width - len(title_text)) // 2
-        header_bar = f"{bg_blue}{text_black}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
+        header_bar = f"{bg_blue}{Style.crust()}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
+        
+        # Footer & Available space calculation
+        footer_pills = [
+            TUI.pill("h/j/k/l", "Navigate", Theme.SKY),
+            TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE),
+            TUI.pill("SPACE", "Select", Theme.BLUE),
+            TUI.pill("TAB", "Overrides", Theme.MAUVE),
+            TUI.pill("ENTER", "Install", Theme.GREEN),
+            TUI.pill("Q", "Back", Theme.RED)
+        ]
+        footer_lines = TUI.wrap_pills(footer_pills, term_width - 4)
+        footer_height = len(footer_lines)
         
         # Available space for boxes
-        # Overhead calculation: Header(1) + Spacer(1) + Spacer(1) + Pills(1) = 4 lines
-        available_height = term_height - 5
-        if self.exit_pending: available_height -= 1
-        available_height = max(10, available_height)
+        available_height = max(10, term_height - 4 - footer_height)
         
         # Box Widths
-        safe_width = term_width - 2
-        left_width = int(safe_width * 0.50)
-        right_width = safe_width - left_width - 1
+        left_width = term_width // 2
+        right_width = term_width - left_width - 1
         
         # Build Left Content
-        if self.cursor_idx < self.list_offset:
-            self.list_offset = self.cursor_idx
-        elif self.cursor_idx >= self.list_offset + (available_height - 2):
-            self.list_offset = self.cursor_idx - (available_height - 2) + 1
+        # Window size for items is available_height - 3 (excluding header, footer, pills, and status line)
+        window_size = available_height - 3
+        # First item is at list_lines[1] due to top spacer
+        item_line_idx = self.cursor_idx + 1
+        
+        if item_line_idx < self.list_offset + 1:
+            self.list_offset = max(0, item_line_idx - 1)
+        elif item_line_idx >= self.list_offset + window_size:
+            self.list_offset = item_line_idx - window_size + 1
 
-        list_lines = []
+        list_lines = [""]
         for idx, item in enumerate(self.flat_items):
             is_cursor = (idx == self.cursor_idx)
+            # Use 4-space total margin (2 left + 2 right) for perfect symmetry
+            content_width = left_width - 6
             
             if item['type'] == 'header':
+                # Add vertical spacing before new category (except the first one)
+                if idx > 0:
+                    list_lines.append("")
+                
                 cat_name = item['obj']
-                icon = "▼" if self.expanded[cat_name] else "►"
-                mods_in_cat = self.categories[cat_name]
-                active_count = sum(1 for m in mods_in_cat if self.is_active(m.id))
                 
-                if active_count == 0: sel_mark, header_color = "[ ]", ""
-                elif active_count == len(mods_in_cat): sel_mark, header_color = "[■]", Style.hex("55E6C1")
-                else: sel_mark, header_color = "[-]", Style.hex("FDCB6E")
+                # Header style: ─── CATEGORY ─── (Centered)
+                label = f" {cat_name.upper()} "
+                # Re-calculate centering for the label within the available content width
+                gap = content_width - len(label)
+                left_p = gap // 2
+                centered_label = ("─" * left_p) + label + ("─" * (gap - left_p))
                 
-                line = f"  {icon} {sel_mark} {cat_name.upper()}"
-                # If cursor is here, use Purple + BOLD
-                if is_cursor: 
-                    style = Style.hex("#CBA6F7") + Style.BOLD
-                    list_lines.append(f"{style}{line}{Style.RESET}")
-                else: 
-                    list_lines.append(f"{Style.BOLD}{header_color}{line}{Style.RESET}")
+                color = Style.highlight() if is_cursor else Style.normal()
+                bold = Style.BOLD if is_cursor else ""
+                list_lines.append(f"  {color}{bold}{centered_label}{Style.RESET}")
 
             elif item['type'] == 'module':
                 mod = item['obj']
                 installed = mod.is_installed()
                 has_override = mod.id in self.overrides
                 
-                if mod.id in self.auto_locked: mark, color, suffix = "[■]", Style.hex("FF6B6B"), " "
+                # Determine mark and status
+                if mod.id in self.auto_locked: 
+                    mark = "[■]"
+                    status = "[ LOCKED ]"
+                    color = Style.red()
                 elif mod.id in self.selected:
                     ovr = self.overrides.get(mod.id)
-                    is_full = ovr['install_pkg'] and (not mod.stow_pkg or ovr['install_dots']) if ovr else True
-                    mark, color, suffix = ("[■]" if is_full else "[-]"), (Style.hex("FDCB6E") if has_override else Style.hex("55E6C1")), ("*" if has_override else "")
-                elif installed: mark, color, suffix = "[ ]", Style.hex("89B4FA"), " ●"
-                else: mark, color, suffix = "[ ]", "", ""
+                    is_partial = False
+                    if ovr:
+                        has_dots = mod.stow_pkg is not None
+                        if has_dots:
+                            if not ovr.get('install_pkg', True) or not ovr.get('install_dots', True):
+                                is_partial = True
+                        else:
+                            if not ovr.get('install_pkg', True):
+                                is_partial = True
+                    
+                    mark = "[-]" if is_partial else "[■]"
+                    status = "[ SELECTED ]"
+                    color = Style.green() if not has_override else Style.yellow()
+                elif installed:
+                    mark = "[ ]"
+                    status = "[ INSTALLED ]"
+                    color = Style.blue()
+                else:
+                    mark = "[ ]"
+                    status = "" 
+                    color = Style.muted()
                 
-                line = f"    │     {mark} {mod.label}{suffix}"
-                # If cursor is here, use Purple + BOLD
-                if is_cursor: 
-                    style = Style.hex("#CBA6F7") + Style.BOLD
-                    list_lines.append(f"{style}{line}{Style.RESET}")
-                else: 
-                    list_lines.append(f"    {Style.DIM}│{Style.RESET}     {color}{mark} {mod.label}{suffix}{Style.RESET}")
+                if is_cursor:
+                    # CURSOR FOCUS
+                    f_name = f" {Style.highlight()}{Style.BOLD}{mark}  {mod.label}{Style.RESET}"
+                    f_status = f"{Style.highlight()}{Style.BOLD}{status}{Style.RESET}" if status else ""
+                    line = TUI.split_line(f_name, f_status, content_width)
+                    list_lines.append(f"  {line}")
+                else:
+                    # NORMAL STATE
+                    is_act = self.is_active(mod.id)
+                    line_color = color if (is_act or installed) else Style.muted()
+                    name_style = Style.BOLD if is_act else ""
+                    label_color = Style.normal() if not (is_act or installed) else line_color
+                    
+                    n_name = f" {line_color}{mark}  {label_color}{name_style}{mod.label}{Style.RESET}"
+                    n_status = f"{line_color}{status}{Style.RESET}" if status else ""
+                    line = TUI.split_line(n_name, n_status, content_width)
+                    list_lines.append(f"  {line}")
 
         visible_list = list_lines[self.list_offset : self.list_offset + (available_height - 3)]
 
         while len(visible_list) < (available_height - 3):
             visible_list.append("")
         
-        status_text = f" {Style.DIM}Selected: {len(self.selected.union(self.auto_locked))} packages{Style.RESET}"
+        # Centered selection status
+        count = len(self.selected.union(self.auto_locked))
+        raw_status = f"Selected: {count} packages"
+        # left_width is the total box width, internal is left_width - 2
+        pad = (left_width - 2 - len(raw_status)) // 2
+        status_text = f"{' ' * max(0, pad)}{Style.muted()}{raw_status}{Style.RESET}"
         visible_list.append(status_text)
 
         # Build Right Content
@@ -216,40 +289,27 @@ class MenuScreen(Screen):
             self.info_offset = max(0, len(info_lines) - (available_height - 2))
         visible_info = info_lines[self.info_offset : self.info_offset + (available_height - 2)]
 
-        # Generate Boxes
-        left_box = TUI.create_container(visible_list, left_width, available_height, title="PACKAGES", is_focused=(self.active_panel == 0 and not self.modal))
-        right_box = TUI.create_container(visible_info, right_width, available_height, title="INFORMATION", is_focused=(self.active_panel == 1 and not self.modal))
-        
-        # Integrated Scrollbars
-        # Left Box
+        # 4. Generate Boxes
+        # Calculate Scroll Parameters
+        l_scroll_pos, l_scroll_size = None, None
         if len(list_lines) > (available_height - 2):
+            thumb_size = max(1, int((available_height - 2)**2 / len(list_lines)))
             max_off = len(list_lines) - (available_height - 2)
             prog = self.list_offset / max_off
-            thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(list_lines)))
-            start_pos = int(prog * (available_height - 2 - thumb_size))
-            for i in range(available_height - 2):
-                is_focus = (self.active_panel == 0 and not self.modal)
-                border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
-                thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
-                char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
-                line = left_box[i+1]
-                left_box[i+1] = line[:-10] + char + Style.RESET
+            l_scroll_pos = int(prog * (available_height - 2 - thumb_size))
+            l_scroll_size = thumb_size
 
-        # Right Box
+        r_scroll_pos, r_scroll_size = None, None
         if len(info_lines) > (available_height - 2):
+            thumb_size = max(1, int((available_height - 2)**2 / len(info_lines)))
             max_off = len(info_lines) - (available_height - 2)
             prog = self.info_offset / max_off
-            thumb_size = max(1, int((available_height - 2) * (available_height - 2) / len(info_lines)))
-            start_pos = int(prog * (available_height - 2 - thumb_size))
-            for i in range(available_height - 2):
-                is_focus = (self.active_panel == 1 and not self.modal)
-                border_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#585B70")
-                thumb_color = Style.hex("#CBA6F7") if is_focus else Style.hex("#89B4FA")
-                
-                char = f"{thumb_color}┃{Style.RESET}" if start_pos <= i < start_pos + thumb_size else f"{border_color}│{Style.RESET}"
-                line = right_box[i+1]
-                right_box[i+1] = line[:-10] + char + Style.RESET
+            r_scroll_pos = int(prog * (available_height - 2 - thumb_size))
+            r_scroll_size = thumb_size
 
+        left_box = TUI.create_container(visible_list, left_width, available_height, title="PACKAGES", is_focused=(self.active_panel == 0 and not self.modal), scroll_pos=l_scroll_pos, scroll_size=l_scroll_size)
+        right_box = TUI.create_container(visible_info, right_width, available_height, title="INFORMATION", is_focused=(self.active_panel == 1 and not self.modal), scroll_pos=r_scroll_pos, scroll_size=r_scroll_size)
+ 
         main_content = TUI.stitch_containers(left_box, right_box, gap=1)
         
         buffer = [header_bar, ""]
@@ -257,15 +317,9 @@ class MenuScreen(Screen):
         buffer.append("")
         
         # Footer
-        f_move = TUI.pill("↑↓←→", "Navigate", "81ECEC")
-        f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", "89B4FA")
-        f_space = TUI.pill("SPACE", "Select", "89B4FA")
-        f_tab = TUI.pill("TAB", "Overrides", "CBA6F7")
-        f_enter = TUI.pill("ENTER", "Install", "a6e3a1")
-        f_quit = TUI.pill("Q", "Exit", "f38ba8")
-        pills_line = f"{f_move}    {f_scroll}    {f_space}    {f_tab}    {f_enter}    {f_quit}"
-        buffer.append(f"{' ' * ((term_width - TUI.visible_len(pills_line)) // 2)}{pills_line}")
-        if self.exit_pending: buffer.append(f"  {Style.hex('FF6B6B')}Press ESC again to exit...{Style.RESET}")
+        for f_line in footer_lines:
+            f_pad = max(0, (term_width - TUI.visible_len(f_line)) // 2)
+            buffer.append(f"{' ' * f_pad}{f_line}")
 
         # Modal Overlay
         if self.modal:
@@ -275,43 +329,33 @@ class MenuScreen(Screen):
                 if 0 <= target_y < len(buffer):
                     buffer[target_y] = self._overlay_string(buffer[target_y], m_line, m_x)
 
-        # Final buffer management to prevent terminal scroll
-        final_output = "\n".join(buffer[:term_height])
+        # Global Notifications Overlay
+        buffer = TUI.draw_notifications(buffer)
+
+        # Final buffer management
+        final_output = "\n".join([TUI.visible_ljust(line, term_width) for line in buffer[:term_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
-
-
 
     def toggle_selection(self, item):
         """Handles item selection and group toggling."""
         self._resolve_dependencies()
-        
         if item['type'] == 'module':
             mod_id = item['obj'].id
-            
-            # Prevent manual toggle if locked by dependency
-            if mod_id in self.auto_locked:
-                return 
-
+            if mod_id in self.auto_locked: return 
             if mod_id in self.selected:
                 self.selected.remove(mod_id)
-                # Clear overrides when manually deselecting
                 self.overrides.pop(mod_id, None)
             else:
                 self.selected.add(mod_id)
-                
         elif item['type'] == 'header':
             cat = item['obj']
             mods = self.categories[cat]
-            
-            # Toggle group state
             all_active = all(self.is_active(m.id) for m in mods)
-            
             if all_active:
                 for m in mods: 
                     if m.id in self.selected: 
                         self.selected.remove(m.id)
-                        # Clear overrides when mass-deselecting
                         self.overrides.pop(m.id, None)
             else:
                 for m in mods: 
@@ -320,25 +364,6 @@ class MenuScreen(Screen):
 
     def handle_input(self, key):
         """Processes keyboard input and returns navigation actions."""
-        # Global Exit Keys (Priority when no modal is blocking)
-        if not self.modal:
-            if key in [Keys.Q, Keys.Q_UPPER]:
-                return "EXIT"
-                
-            # Double ESC safety mechanism
-            if key == Keys.ESC:
-                now = time.time()
-                if now - self.last_esc_time < 1.0: 
-                    return "EXIT"
-                self.last_esc_time = now
-                self.exit_pending = True
-                return None
-            
-            if key != Keys.ESC and self.exit_pending:
-                self.exit_pending = False 
-
-        self.flat_items = self._build_flat_list() 
-        
         # Priority 1: Handle Active Modal
         if self.modal:
             action = self.modal.handle_input(key)
@@ -347,7 +372,6 @@ class MenuScreen(Screen):
             if isinstance(self.modal, OverrideModal):
                 if action == "ACCEPT":
                     mod = self.flat_items[self.cursor_idx]['obj']
-                    mod_id = mod.id
                     ovr = self.modal.get_overrides()
                     if not ovr['install_pkg'] and not (mod.stow_pkg and ovr['install_dots']):
                         self.selected.discard(mod.id)
@@ -356,6 +380,7 @@ class MenuScreen(Screen):
                         self.selected.add(mod.id)
                         self.overrides[mod.id] = ovr
                     self.modal = None
+                    TUI.push_notification(f"Changes saved for {mod.label}", type="INFO")
                 elif action == "CANCEL":
                     self.modal = None
                     
@@ -364,28 +389,43 @@ class MenuScreen(Screen):
                 if action == "INSTALL":
                     self.modal = None
                     return "CONFIRM"
-                elif action == "CANCEL":
+                elif action in ["CANCEL", "CLOSE"]:
                     self.modal = None
-                    
+
+            # Handling ConfirmModal (Discard)
+            elif isinstance(self.modal, ConfirmModal):
+                if action == "YES":
+                    self.selected.clear()
+                    self.overrides.clear()
+                    self.modal = None
+                    TUI.push_notification("Changes discarded", type="INFO")
+                    return "WELCOME"
+                elif action == "NO":
+                    self.modal = None
             return None
 
-        if key == Keys.R or key == Keys.BACKSPACE:
-            return "BACK"
+        # Global Back Key
+        if key in [Keys.Q, Keys.Q_UPPER]:
+            if self.selected:
+                self.modal = ConfirmModal("DISCARD CHANGES", "Are you sure you want to discard all changes?")
+                return None
+            return "WELCOME"
+
 
         # --- PANEL-SPECIFIC LOGIC ---
         
         # Determine info panel scroll limit for shared use
         term_height = shutil.get_terminal_size().lines
-        available_height = max(10, term_height - 7 - (1 if self.exit_pending else 0))
+        available_height = max(10, term_height - 5)
         right_width = int((shutil.get_terminal_size().columns - 2) * 0.5)
         info_lines = self._get_info_lines(right_width)
         max_info_off = max(0, len(info_lines) - (available_height - 2))
 
         if self.active_panel == 1:
             # INFORMATION PANEL FOCUS
-            if key in [Keys.UP, Keys.K, 65]:
+            if key in [Keys.UP, Keys.K]:
                 self.info_offset = max(0, self.info_offset - 1)
-            elif key in [Keys.DOWN, Keys.J, 66]:
+            elif key in [Keys.DOWN, Keys.J]:
                 self.info_offset = min(max_info_off, self.info_offset + 1)
             elif key in [Keys.H, Keys.LEFT]:
                 self.active_panel = 0
@@ -393,15 +433,14 @@ class MenuScreen(Screen):
                 self.info_offset = max(0, self.info_offset - 5)
             elif key == Keys.PGDN:
                 self.info_offset = min(max_info_off, self.info_offset + 5)
-            # SPACE, TAB, ENTER, L/RIGHT are blocked here
             return None
 
         # PACKAGES PANEL FOCUS (active_panel == 0)
-        if key in [Keys.UP, Keys.K, 65]: 
+        if key in [Keys.UP, Keys.K]: 
             self.cursor_idx = max(0, self.cursor_idx - 1)
             self.info_offset = 0
         
-        elif key in [Keys.DOWN, Keys.J, 66]: 
+        elif key in [Keys.DOWN, Keys.J]: 
             self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 1)
             self.info_offset = 0
 
@@ -410,7 +449,6 @@ class MenuScreen(Screen):
             self.info_offset = max(0, self.info_offset - 5)
         elif key == Keys.PGDN:
             self.info_offset = min(max_info_off, self.info_offset + 5)
-
         elif key == Keys.CTRL_K: self.cursor_idx = max(0, self.cursor_idx - 5)
         elif key == Keys.CTRL_J: self.cursor_idx = min(len(self.flat_items) - 1, self.cursor_idx + 5)
         elif key == Keys.SPACE: self.toggle_selection(self.flat_items[self.cursor_idx])
@@ -428,6 +466,9 @@ class MenuScreen(Screen):
              else: self.active_panel = 1
         elif key == Keys.ENTER:
             total_selection = self.selected.union(self.auto_locked)
-            if len(total_selection) > 0: self.modal = SummaryModal(self.modules, total_selection, self.overrides)
+            if len(total_selection) > 0: 
+                self.modal = SummaryModal(self.modules, total_selection, self.overrides)
+            else:
+                TUI.push_notification("Select at least one package to install", type="ERROR")
         
         return None

@@ -1,5 +1,5 @@
 import shutil
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 
 class SummaryModal:
     """
@@ -33,11 +33,11 @@ class SummaryModal:
             label = mod.label
             if is_custom:
                 label += "*"
-                color = Style.hex("#FDCB6E") # Yellow for custom
+                color = Style.yellow() # Yellow for custom
             else:
-                color = Style.hex("#55E6C1") # Green for standard
+                color = Style.green() # Green for standard
             
-            lines.append({'text': f"- {label}", 'color': color})
+            lines.append({'text': f"{Style.muted()}- {Style.RESET}{color}{label}", 'color': ""})
             
             # Children data resolution
             pkg_name = ovr['pkg_name'] if is_custom else mod.get_package_name()
@@ -52,38 +52,40 @@ class SummaryModal:
                 # Package result icon
                 success_pkg = res.get('pkg')
                 if not do_pkg or success_pkg is None: 
-                    pkg_icon, pkg_color = "○", Style.DIM
+                    pkg_icon, pkg_color = "○", Style.muted()
                 else: 
                     pkg_icon = "✔" if success_pkg else "✘"
-                    pkg_color = Style.hex("#55E6C1") if success_pkg else Style.hex("#FF6B6B")
+                    pkg_color = Style.green() if success_pkg else Style.red()
                 
                 # Dots result icon
                 success_dots = res.get('dots')
                 if not do_dots or not has_config or success_dots is None: 
-                    dots_icon, dots_color = "○", Style.DIM
+                    dots_icon, dots_color = "○", Style.muted()
                 else: 
                     dots_icon = "✔" if success_dots else "✘"
-                    dots_color = Style.hex("#55E6C1") if success_dots else Style.hex("#FF6B6B")
+                    dots_color = Style.green() if success_dots else Style.red()
             else:
                 pkg_icon = "■" if do_pkg else " "
                 dots_icon = "■" if do_dots else " "
-                pkg_color = dots_color = Style.RESET
+                pkg_color = dots_color = Style.normal()
 
             # Child 1: Package/Binary
-            connector = " ├" if has_config else " └"
-            text_pkg = f"{connector}[{pkg_icon}] Package: '{pkg_name}', Manager: '{manager}'"
-            lines.append({'text': text_pkg, 'color': pkg_color})
+            connector = f"{Style.muted()} ├{Style.RESET}" if has_config else f"{Style.muted()} └{Style.RESET}"
+            text_pkg = f"{connector}{pkg_color}[{pkg_icon}]{Style.RESET} {Style.muted()}Package:{Style.RESET} {Style.normal()}'{pkg_name}'{Style.RESET}{Style.muted()}, Manager:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}"
+            lines.append({'text': text_pkg, 'color': ""})
             
             # Child 2: Configuration (Optional)
             if has_config:
                 label_dots = "Configuration files" if mod.id == "refind" else "Dotfiles (Stow)"
-                text_dots = f" └[{dots_icon}] {label_dots}"
-                lines.append({'text': text_dots, 'color': dots_color})
+                connector_dots = f"{Style.muted()} └{Style.RESET}"
+                text_dots = f"{connector_dots}{dots_color}[{dots_icon}]{Style.RESET} {Style.normal()}{label_dots}{Style.RESET}"
+                lines.append({'text': text_dots, 'color': ""})
                 
                 # Info: Target path (Only in audit mode and if dots are active)
                 if not self.is_results_mode and do_dots:
                     target = mod.stow_target or "~/"
-                    lines.append({'text': f"     Target: {Style.hex('#89B4FA')}{target}", 'color': ""})
+                    lines.append({'text': f"     {Style.muted()}Target: {Style.normal()}{target}", 'color': ""})
+
                 
         return lines
 
@@ -150,25 +152,24 @@ class SummaryModal:
         if len(self.content_lines) > self.max_visible_rows:
             remaining = len(self.content_lines) - self.max_visible_rows - self.scroll_offset
             scroll_text = f"--- {max(0, remaining)} more entries ---" if remaining > 0 else "--- End of list ---"
-            inner_lines.append(f"{Style.DIM}{scroll_text.center(width-2)}{Style.RESET}")
+            inner_lines.append(f"{Style.muted()}{scroll_text.center(width-2)}{Style.RESET}")
         
         inner_lines.append("") # Spacer
         
         if self.is_results_mode:
             stats = self._get_summary_stats()
             # Colored counts in pastel
-            c_inst = f"{Style.hex('#55E6C1')}{stats['installed']} installed{Style.RESET}"
-            c_can  = f"{Style.hex('#89B4FA')}{stats['cancelled']} cancelled{Style.RESET}"
-            c_fail = f"{Style.hex('#FF6B6B')}{stats['failed']} failed{Style.RESET}"
+            c_inst = f"{Style.green()}{stats['installed']} installed{Style.RESET}"
+            c_can  = f"{Style.blue()}{stats['cancelled']} cancelled{Style.RESET}"
+            c_fail = f"{Style.red()}{stats['failed']} failed{Style.RESET}"
             
             stats_line = f"{c_inst}, {c_can}, {c_fail}"
-            # Centering a string with ANSI codes is tricky, we use visible_len
             v_len = TUI.visible_len(stats_line)
             padding = (width - 2 - v_len) // 2
             inner_lines.append(f"{' ' * padding}{stats_line}")
         else:
             footer_msg = "Confirm and start installation?"
-            inner_lines.append(f"{Style.DIM}{footer_msg.center(width-2)}{Style.RESET}")
+            inner_lines.append(f"{Style.muted()}{footer_msg.center(width-2)}{Style.RESET}")
         
         # Buttons
         if self.is_results_mode:
@@ -176,18 +177,12 @@ class SummaryModal:
         else:
             btn_left, btn_right = "  INSTALL  ", "  CANCEL  "
         
-        purple_bg = Style.hex("#CBA6F7", bg=True)
-        text_black = "\033[30m"
-        
         if self.focus_idx == 0:
-            l_styled = f"{purple_bg}{text_black}{btn_left}{Style.RESET}"
+            l_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_left}{Style.RESET}"
+            r_styled = f"{Style.muted()}[ {btn_right.strip()} ]{Style.RESET}"
         else:
-            l_styled = f"[{btn_left.strip()}]"
-            
-        if self.focus_idx == 1:
-            r_styled = f"{purple_bg}{text_black}{btn_right}{Style.RESET}"
-        else:
-            r_styled = f"[{btn_right.strip()}]"
+            l_styled = f"{Style.muted()}[ {btn_left.strip()} ]{Style.RESET}"
+            r_styled = f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn_right}{Style.RESET}"
         
         btn_row = f"{l_styled}     {r_styled}"
         v_len = TUI.visible_len(btn_row)
@@ -214,11 +209,17 @@ class SummaryModal:
 
     def handle_input(self, key):
         """Manages modal navigation and confirmation."""
-        if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
+        if key in [Keys.Q, Keys.Q_UPPER]:
             if self.is_results_mode:
                 return "CLOSE"
             return "CANCEL"
             
+        if key == Keys.ESC:
+            if self.focus_idx != 1:
+                self.focus_idx = 1
+            else:
+                return "CLOSE" if self.is_results_mode else "CANCEL"
+
         if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
             self.focus_idx = 1 if self.focus_idx == 0 else 0
             

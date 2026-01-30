@@ -56,13 +56,12 @@ def main():
 
             if state == "WELCOME":
                 scr = WelcomeScreen(sys_mgr)
-                scr.render()
                 # Wait for input
                 while True:
+                    scr.render()
                     key = TUI.get_key(blocking=True)
                     if key == Keys.RESIZE:
                         TUI.clear_screen()
-                        scr.render()
                         continue
                     if key is not None: break
                 
@@ -100,18 +99,17 @@ def main():
                     if action == "EXIT": sys.exit(0)
                 
             elif state == "MENU":
-                menu_screen.render()
                 while True:
+                    menu_screen.render()
                     key = TUI.get_key(blocking=True)
                     if key == Keys.RESIZE:
                         TUI.clear_screen()
-                        menu_screen.render()
                         continue
                     if key is not None: break
                 
                 action = menu_screen.handle_input(key)
                 if action == "EXIT": sys.exit(0)
-                if action == "BACK": 
+                if action in ["WELCOME"]: 
                     TUI.clear_screen()
                     state = "WELCOME"
                 if action == "CONFIRM": 

@@ -1,11 +1,11 @@
 import shutil
 import os
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 
 class OverrideModal:
     """
     Floating window for package-specific installation overrides.
-    Allows toggling bin/dots and selecting alternative package managers.
+    Features a dashboard layout with smart navigation and split alignment.
     """
     def __init__(self, module, current_overrides=None):
         self.mod = module
@@ -16,6 +16,7 @@ class OverrideModal:
         self.pkg_name = current_overrides.get('pkg_name', module.get_package_name()) if current_overrides else module.get_package_name()
         self.install_pkg = current_overrides.get('install_pkg', True) if current_overrides else True
         self.install_dots = current_overrides.get('install_dots', True) if current_overrides else True
+        self.stow_target = current_overrides.get('stow_target', module.stow_target) if current_overrides else module.stow_target
         
         # Resolve available managers
         self.managers = []
@@ -37,181 +38,211 @@ class OverrideModal:
             self.selected_manager = current_overrides['manager']
         else:
             self.selected_manager = native_manager
-
-
         
-        # UI Focus: 0:Package, 1:Manager, 2:Dotfiles, 3:Accept, 4:Cancel
-        self.focus_idx = 3
-        self.editing_name = False
+        # UI Focus: 0:Install, 1:Name, 2:Manager, 3:DeployConfig, 4:TargetPath
+        self.focus_idx = 0
+        self.editing_field = None # 'pkg_name' or 'stow_target'
+        self.text_cursor_pos = 0
+        self.old_value = ""
 
     def render(self):
-        """Draws the modal on top of the existing screen."""
+        """Draws the dashboard modal with margins and centered managers."""
         term_width = shutil.get_terminal_size().columns
         term_height = shutil.get_terminal_size().lines
         
-        # 1. Prepare Content and Measure Width
-        title_text = f"OVERRIDE: {self.mod.label.upper()}"
-        pkg_measure = f"> [ ] Install Package: '{self.pkg_name}' ✎"
+        width = 68
+        # Internal width with 4 spaces margin on each side (4 left + 4 right = 8)
+        content_width = width - 10 
         
-        # Prepare managers line for measurement
-        mgr_styled_items = []
-        for mgr in self.managers:
-            mark = "●" if self.selected_manager == mgr else "○"
-            is_focused = (self.focus_idx == 1 and self.selected_manager == mgr)
-
+        inner_lines = [""] # Top spacer
+        
+        def draw_row(idx, label, value, is_dim=False):
+            is_focused = (self.focus_idx == idx)
+            # Baseline style
             if is_focused:
-                # Purple + BOLD for selection
-                style = Style.hex("#CBA6F7") + Style.BOLD
-                mgr_styled_items.append(f"{style}{mark} {mgr}{Style.RESET}")
+                row_style = Style.highlight()
+            elif is_dim:
+                row_style = Style.muted()
             else:
-                mgr_styled_items.append(f"{mark} {mgr}")
+                row_style = Style.normal()
+                
+            bold = Style.BOLD if is_focused else ""
+            line = TUI.split_line(label, value, content_width)
+            return f"    {row_style}{bold}{line}{Style.RESET}"
+
+        # 0. Install Package
+        pkg_toggle = "YES [■]" if self.install_pkg else "NO [ ]"
+        inner_lines.append(draw_row(0, "Install Package", pkg_toggle))
         
-        mgr_content = "   ".join(mgr_styled_items)
-        mgr_v_len = TUI.visible_len(mgr_content)
+        # 1. Package Name
+        is_name_dim = not self.install_pkg
+        name_val = self.pkg_name
+        if self.editing_field == 'pkg_name':
+            pre = name_val[:self.text_cursor_pos]
+            char = name_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
+            post = name_val[self.text_cursor_pos+1:]
+            name_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
+        inner_lines.append(draw_row(1, "Package Name", f"✎ [ {name_val} ]", is_dim=is_name_dim))
         
-        # Determine optimal modal width
-        width = max(54, len(title_text) + 10, TUI.visible_len(pkg_measure) + 6, mgr_v_len + 6)
-        width = min(width, term_width - 4)
-        
-        # 2. Build Inner Lines (without borders)
-        inner_lines = []
-        inner_lines.append("") # Top spacer
-        
-        # Option 0: Package Toggle
-        pkg_mark = "■" if self.install_pkg else " "
-        is_focused = (self.focus_idx == 0)
-        label = f"  [{pkg_mark}] Install Package: '{self.pkg_name}'"
-        if self.editing_name: label += " ✎"
-        
-        if is_focused:
-            style = Style.hex("#CBA6F7") + Style.BOLD
-            inner_lines.append(f"{style}{label}{Style.RESET}")
+        # 2. Manager (Grid Layout)
+        is_mgr_focused = (self.focus_idx == 2)
+        if is_mgr_focused:
+            mgr_label_style = Style.highlight() + Style.BOLD
+        elif is_name_dim:
+            mgr_label_style = Style.muted()
         else:
-            inner_lines.append(label)
-        
-        # Option 1: Managers
-        if self.install_pkg:
-            padding_total = width - 2 - mgr_v_len
-            l_p = " " * (padding_total // 2)
-            inner_lines.append(f"{l_p}{mgr_content}")
-        else:
-            inner_lines.append("")
+            mgr_label_style = Style.normal()
             
+        inner_lines.append(f"    {mgr_label_style}Package Manager:{Style.RESET}")
+        
+        mgr_items = []
+        for mgr in self.managers:
+            is_sel = (self.selected_manager == mgr)
+            mark = "●" if is_sel else "○"
+            
+            # Unified color logic: Focus overrides state color
+            if is_mgr_focused:
+                # Highlight ONLY the selected one when row is focused
+                if is_sel:
+                    item = f"{Style.highlight()}{Style.BOLD}{mark} {mgr}{Style.RESET}"
+                else:
+                    item = f"{Style.muted()}{mark} {mgr}{Style.RESET}"
+            elif is_name_dim:
+                # Row is disabled - extreme dim
+                item = f"{Style.muted()}{mark} {mgr}{Style.RESET}"
+            else:
+                # Row is active but not focused
+                m_color = Style.green() if is_sel else Style.muted()
+                item = f"{m_color}{mark} {mgr}{Style.RESET}"
+            mgr_items.append(item)
+        
+        mgrs_raw = "    ".join(mgr_items)
+        mgr_vlen = TUI.visible_len(mgrs_raw)
+        mgr_pad = (content_width - mgr_vlen) // 2
+        mgr_prefix = " " * max(0, mgr_pad + 4)
+        inner_lines.append(f"{mgr_prefix}{mgrs_raw}")
+        
         inner_lines.append("") # Spacer
         
-        # Option 2: Dotfiles
-        if self.has_dots:
-            label_text = "Configure Dotfiles (Stow)"
-            if self.mod.id == "refind": label_text = "Copy Configuration files"
-            
-            dot_mark = "■" if self.install_dots else " "
-            is_focused = (self.focus_idx == 2)
-            label = f"  [{dot_mark}] {label_text}"
-            
-            if is_focused:
-                style = Style.hex("#CBA6F7") + Style.BOLD
-                inner_lines.append(f"{style}{label}{Style.RESET}")
-            else:
-                inner_lines.append(label)
-            inner_lines.append("")
+        # 3. Deploy Config
+        dot_toggle = "YES [■]" if self.install_dots else "NO [ ]"
+        dot_label = "Copy Configuration Files" if self.mod.id == "refind" else "Deploy Config (Stow)"
+        is_dot_disabled = not self.has_dots
+        inner_lines.append(draw_row(3, dot_label, dot_toggle, is_dim=is_dot_disabled))
         
-        # Instructions
-        instr = "(Press R to rename)" if self.focus_idx == 0 else ""
-        inner_lines.append(f"{Style.DIM}{instr.center(width-2)}{Style.RESET}")
-        
-        # Buttons
-        btn_acc = "  ACCEPT  "
-        btn_can = "  CANCEL  "
-        
-        purple_bg = Style.hex("#CBA6F7", bg=True)
-        text_black = "\033[30m"
-        
-        if self.focus_idx == 3:
-            acc_styled = f"{purple_bg}{text_black}{btn_acc}{Style.RESET}"
-        else:
-            acc_styled = f"[{btn_acc.strip()}]"
-            
-        if self.focus_idx == 4:
-            can_styled = f"{purple_bg}{text_black}{btn_can}{Style.RESET}"
-        else:
-            can_styled = f"[{btn_can.strip()}]"
-        
-        btn_row = f"{acc_styled}     {can_styled}"
-        v_len = TUI.visible_len(btn_row)
-        padding = (width - 2 - v_len) // 2
-        inner_lines.append(f"{' ' * padding}{btn_row}")
+        # 4. Target Path
+        is_path_dim = not (self.has_dots and self.install_dots)
+        path_val = self.stow_target
+        if self.editing_field == 'stow_target':
+            pre = path_val[:self.text_cursor_pos]
+            char = path_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
+            post = path_val[self.text_cursor_pos+1:]
+            path_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
+        inner_lines.append(draw_row(4, "Target Path", f"✎ [ {path_val} ]", is_dim=is_path_dim))
 
-        # 3. Wrap in Container
+        inner_lines.append("") # Extra spacer
+        inner_lines.append("") # Extra spacer
+        
+        # Sobere Hints
+        h1 = "SPACE: Toggle   E: Edit   h/l: Select"
+        h2 = "ENTER: Accept   Q: Cancel"
+        
+        h1_pad = (width - 2 - TUI.visible_len(h1)) // 2
+        h2_pad = (width - 2 - TUI.visible_len(h2)) // 2
+        
+        inner_lines.append(f"{' ' * h1_pad}{Style.muted()}{h1}{Style.RESET}")
+        inner_lines.append(f"{' ' * h2_pad}{Style.muted()}{h2}{Style.RESET}")
+
+        
         height = len(inner_lines) + 2
+        # Use clean title, TUI.create_container will add the borders correctly
+        title_text = f"OVERRIDE: {self.mod.label.upper()}"
         lines = TUI.create_container(inner_lines, width, height, title=title_text, is_focused=True)
         
-        start_x = (term_width - width) // 2
-        start_y = (term_height - height) // 2
-        
-        return lines, start_y, start_x
+        return lines, (term_height - height) // 2, (term_width - width) // 2
+
 
     def handle_input(self, key):
-        """Internal logic for modal navigation."""
-        if self.editing_name:
+        """Processes navigation and dashboard inputs with smart skipping."""
+        if self.editing_field:
+            curr_val = getattr(self, self.editing_field)
             if key == Keys.ENTER:
-                self.editing_name = False
+                self.editing_field = None
+            elif key == Keys.ESC:
+                setattr(self, self.editing_field, self.old_value)
+                self.editing_field = None
             elif key == Keys.BACKSPACE:
-                self.pkg_name = self.pkg_name[:-1]
+                if self.text_cursor_pos > 0:
+                    new_val = curr_val[:self.text_cursor_pos-1] + curr_val[self.text_cursor_pos:]
+                    setattr(self, self.editing_field, new_val)
+                    self.text_cursor_pos -= 1
+            elif key == Keys.DEL:
+                if self.text_cursor_pos < len(curr_val):
+                    new_val = curr_val[:self.text_cursor_pos] + curr_val[self.text_cursor_pos+1:]
+                    setattr(self, self.editing_field, new_val)
+            elif key in [Keys.LEFT, Keys.H]:
+                self.text_cursor_pos = max(0, self.text_cursor_pos - 1)
+            elif key in [Keys.RIGHT, Keys.L]:
+                self.text_cursor_pos = min(len(curr_val), self.text_cursor_pos + 1)
             elif 32 <= key <= 126: # Printable chars
-                self.pkg_name += chr(key)
+                new_val = curr_val[:self.text_cursor_pos] + chr(key) + curr_val[self.text_cursor_pos:]
+                setattr(self, self.editing_field, new_val)
+                self.text_cursor_pos += 1
             return None
 
-        # Modal close keys
-        if key == Keys.ESC or key == Keys.Q:
-            return "CANCEL"
-            
-        # Vertical Navigation
+        # Global Actions
+        if key in [Keys.Q, Keys.Q_UPPER, Keys.ESC]: return "CANCEL"
+        if key == Keys.ENTER: return "ACCEPT"
+
+        # 1. Determine reachable fields based on toggles
+        reachable = [0]
+        if self.install_pkg:
+            reachable.extend([1, 2])
+        if self.has_dots:
+            reachable.append(3)
+            if self.install_dots:
+                reachable.append(4)
+
+        # 2. Infinite Circular Navigation
         if key in [Keys.UP, Keys.K]:
-            if self.focus_idx in [3, 4]: # From buttons row
-                self.focus_idx = 2 if self.has_dots else 0
-            elif self.focus_idx == 2:
-                self.focus_idx = 1 if self.install_pkg else 0
-            elif self.focus_idx == 1:
+            try:
+                curr_idx = reachable.index(self.focus_idx)
+                self.focus_idx = reachable[(curr_idx - 1) % len(reachable)]
+            except ValueError:
                 self.focus_idx = 0
-            else:
-                # Wrap from Top to Buttons row (Standard entry: ACCEPT)
-                self.focus_idx = 3
                 
         elif key in [Keys.DOWN, Keys.J]:
-            if self.focus_idx == 0:
-                self.focus_idx = 1 if self.install_pkg else (2 if self.has_dots else 3)
-            elif self.focus_idx == 1:
-                self.focus_idx = 2 if self.has_dots else 3
-            elif self.focus_idx == 2:
-                # From Bottom list item to Buttons row
-                self.focus_idx = 3
-            else:
-                # Wrap from Buttons row to Top
+            try:
+                curr_idx = reachable.index(self.focus_idx)
+                self.focus_idx = reachable[(curr_idx + 1) % len(reachable)]
+            except ValueError:
                 self.focus_idx = 0
+        
+        # Action: Toggle
+        elif key == Keys.SPACE:
+            if self.focus_idx == 0: self.install_pkg = not self.install_pkg
+            elif self.focus_idx == 3 and self.has_dots: self.install_dots = not self.install_dots
+        
+        # Action: Edit
+        elif key in [ord('e'), ord('E')]:
+            if self.focus_idx == 1 and self.install_pkg:
+                self.editing_field = 'pkg_name'
+                self.old_value = self.pkg_name
+                self.text_cursor_pos = len(self.pkg_name)
+            elif self.focus_idx == 4 and self.has_dots and self.install_dots:
+                self.editing_field = 'stow_target'
+                self.old_value = self.stow_target
+                self.text_cursor_pos = len(self.stow_target)
 
-                
-        # Horizontal Navigation (Strictly for Managers and Buttons)
+        # Action: Cycle Manager
         elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L]:
-            if self.focus_idx == 1: # Managers list
+            if self.focus_idx == 2 and self.install_pkg:
                 try:
                     curr_idx = self.managers.index(self.selected_manager)
                     step = 1 if key in [Keys.RIGHT, Keys.L] else -1
                     self.selected_manager = self.managers[(curr_idx + step) % len(self.managers)]
                 except ValueError:
                     if self.managers: self.selected_manager = self.managers[0]
-            elif self.focus_idx in [3, 4]: # Buttons row
-                self.focus_idx = 4 if self.focus_idx == 3 else 3
-            
-        elif key == Keys.SPACE:
-            if self.focus_idx == 0: self.install_pkg = not self.install_pkg
-            elif self.focus_idx == 2: self.install_dots = not self.install_dots
-            
-        elif key == Keys.R and self.focus_idx == 0:
-            self.editing_name = True
-            
-        elif key == Keys.ENTER:
-            if self.focus_idx == 3: return "ACCEPT"
-            if self.focus_idx == 4: return "CANCEL"
             
         return None
 
@@ -221,5 +252,6 @@ class OverrideModal:
             'pkg_name': self.pkg_name,
             'manager': self.selected_manager,
             'install_pkg': self.install_pkg,
-            'install_dots': self.install_dots
+            'install_dots': self.install_dots,
+            'stow_target': self.stow_target
         }

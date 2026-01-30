@@ -34,16 +34,45 @@ class Keys:
     R = 114 # Refresh/Back
     RESIZE = -2 # Virtual key for terminal resize
 
+class Theme:
+    """Catppuccin Mocha Color Palette"""
+    ROSEWATER = "#f5e0dc"
+    FLAMINGO  = "#f2cdcd"
+    PINK      = "#f5c2e7"
+    MAUVE     = "#cba6f7"
+    RED       = "#f38ba8"
+    MAROON    = "#eba0ac"
+    PEACH     = "#fab387"
+    YELLOW    = "#f9e2af"
+    GREEN     = "#a6e3a1"
+    TEAL      = "#94e2d5"
+    SKY       = "#89dceb"
+    SAPPHIRE  = "#74c7ec"
+    BLUE      = "#89b4fa"
+    LAVENDER  = "#b4befe"
+    TEXT      = "#cdd6f4"
+    SUBTEXT1  = "#bac2de"
+    SUBTEXT0  = "#a6adc8"
+    OVERLAY2  = "#9399b2"
+    OVERLAY1  = "#7f849c"
+    OVERLAY0  = "#6c7086"
+    SURFACE2  = "#585b70"
+    SURFACE1  = "#45475a"
+    SURFACE0  = "#313244"
+    BASE      = "#1e1e2e"
+    MANTLE    = "#181825"
+    CRUST     = "#11111b"
+
 class Style:
     """ANSI TrueColor and text attribute escape sequences."""
     RESET = "\033[0m"
     BOLD = "\033[1m"
-    DIM = "\033[2m"
     INVERT = "\033[7m"
 
     @staticmethod
     def hex(hex_color, bg=False):
         """Converts a HEX string to a 24-bit ANSI escape sequence."""
+        if not hex_color: return ""
         hex_color = hex_color.lstrip('#')
         if len(hex_color) == 3:
             hex_color = ''.join([c*2 for c in hex_color])
@@ -56,6 +85,56 @@ class Style:
         except ValueError:
             return ""
 
+    # --- Semantic Levels ---
+    @classmethod
+    def highlight(cls, bg=False): return cls.mauve(bg)
+    @classmethod
+    def normal(cls, bg=False): return cls.text(bg)
+    @classmethod
+    def muted(cls, bg=False): return cls.surface2(bg)
+
+    # --- Theme Helpers ---
+    @classmethod
+    def mauve(cls, bg=False): return cls.hex(Theme.MAUVE, bg)
+    @classmethod
+    def red(cls, bg=False): return cls.hex(Theme.RED, bg)
+    @classmethod
+    def green(cls, bg=False): return cls.hex(Theme.GREEN, bg)
+    @classmethod
+    def yellow(cls, bg=False): return cls.hex(Theme.YELLOW, bg)
+    @classmethod
+    def blue(cls, bg=False): return cls.hex(Theme.BLUE, bg)
+    @classmethod
+    def sky(cls, bg=False): return cls.hex(Theme.SKY, bg)
+    @classmethod
+    def teal(cls, bg=False): return cls.hex(Theme.TEAL, bg)
+    @classmethod
+    def peach(cls, bg=False): return cls.hex(Theme.PEACH, bg)
+    @classmethod
+    def surface2(cls, bg=False): return cls.hex(Theme.SURFACE2, bg)
+    @classmethod
+    def surface1(cls, bg=False): return cls.hex(Theme.SURFACE1, bg)
+    @classmethod
+    def surface0(cls, bg=False): return cls.hex(Theme.SURFACE0, bg)
+    @classmethod
+    def overlay2(cls, bg=False): return cls.hex(Theme.OVERLAY2, bg)
+    @classmethod
+    def overlay1(cls, bg=False): return cls.hex(Theme.OVERLAY1, bg)
+    @classmethod
+    def overlay0(cls, bg=False): return cls.hex(Theme.OVERLAY0, bg)
+    @classmethod
+    def crust(cls, bg=False): return cls.hex(Theme.CRUST, bg)
+    @classmethod
+    def mantle(cls, bg=False): return cls.hex(Theme.MANTLE, bg)
+    @classmethod
+    def base(cls, bg=False): return cls.hex(Theme.BASE, bg)
+    @classmethod
+    def text(cls, bg=False): return cls.hex(Theme.TEXT, bg)
+    @classmethod
+    def subtext1(cls, bg=False): return cls.hex(Theme.SUBTEXT1, bg)
+    @classmethod
+    def subtext0(cls, bg=False): return cls.hex(Theme.SUBTEXT0, bg)
+
 class TUI:
     """
     Core utility for low-level terminal manipulation and input capture.
@@ -63,6 +142,9 @@ class TUI:
     _old_settings = None
     _raw_ref_count = 0
     _resize_pending = False
+    
+    # Notification System State
+    _notifications = [] # List of {'msg': str, 'type': str, 'time': float}
 
     @staticmethod
     def init_signal_handler():
@@ -224,6 +306,81 @@ class TUI:
             return None
 
     @staticmethod
+    def push_notification(message, type="INFO"):
+        """Adds a new notification to the global stack."""
+        TUI._notifications.append({
+            'msg': message,
+            'type': type,
+            'time': time.time()
+        })
+
+    @staticmethod
+    def _clean_notifications():
+        """Removes expired notifications (3 seconds)."""
+        now = time.time()
+        TUI._notifications = [n for n in TUI._notifications if now - n['time'] < 5.0]
+
+    @staticmethod
+    def draw_notifications(buffer):
+        """Overlays active notifications onto the provided buffer."""
+        TUI._clean_notifications()
+        
+        term_size = shutil.get_terminal_size()
+        term_width = term_size.columns
+        term_height = term_size.lines
+
+        # Prevent ghosting
+        if len(buffer) < term_height:
+            buffer.extend([""] * (term_height - len(buffer)))
+
+        if not TUI._notifications:
+            return buffer
+
+        width = 40
+        margin_right = 2
+        current_y = 1
+        
+        for n in TUI._notifications:
+            border_color = Style.blue() if n['type'] == "INFO" else Style.red()
+            title = " [i] INFO " if n['type'] == "INFO" else " [!] ERROR "
+                
+            # Wrap message
+            wrapped = TUI.wrap_text(n['msg'], width - 4)
+            height = len(wrapped) + 2
+            
+            # Build notification lines
+            n_lines = []
+            
+            # Top Border (Exactly 40 chars)
+            title_len = len(title)
+            # ╭─ (2) + title (11) + ─ * (40 - 11 - 3 = 26) + ╮ (1) = 40
+            top_str = "╭─" + title + "─" * (width - title_len - 3) + "╮"
+            n_lines.append(f"{border_color}{top_str}{Style.RESET}")
+            
+            # Content
+            # Width calculation: │ (1) + " " (1) + line + padding + │ (1) = 40
+            for line in wrapped:
+                padding = " " * (37 - TUI.visible_len(line))
+                n_lines.append(f"{border_color}│{Style.RESET} {Style.normal()}{line}{Style.RESET}{padding}{border_color}│{Style.RESET}")
+            
+            # Bottom Border
+            bot_str = "╰" + "─" * (width - 2) + "╯"
+            n_lines.append(f"{border_color}{bot_str}{Style.RESET}")
+            
+            # Overlay onto buffer
+            start_x = term_width - width - margin_right
+            for i, line in enumerate(n_lines):
+                target_y = current_y + i
+                if 0 <= target_y < len(buffer):
+                    buffer[target_y] = TUI.overlay(buffer[target_y], line, start_x)
+            
+            current_y += len(n_lines) + 1
+            
+        return buffer
+
+        term_width = shutil.get_terminal_size().columns
+
+    @staticmethod
     def truncate_ansi(text, max_len):
         """Truncates a string containing ANSI codes without breaking them."""
         if TUI.visible_len(text) <= max_len:
@@ -263,7 +420,7 @@ class TUI:
 
     @staticmethod
     def ansi_slice(text, start, end=None):
-        """Slices a string by its visible length, preserving all ANSI codes."""
+        """Slices a string by its visible length, preserving necessary ANSI codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         result = ""
         current_visible_pos = 0
@@ -277,8 +434,10 @@ class TUI:
                     result += char
                 current_visible_pos += 1
             
-            # Always include the ANSI sequence itself
-            result += match.group()
+            # Only include ANSI sequence
+            if end is None or current_visible_pos < end:
+                result += match.group()
+                
             last_match_end = match.end()
             
         # Process remaining plain text
@@ -293,16 +452,22 @@ class TUI:
     @staticmethod
     def overlay(bg, fg, x):
         """Composites foreground text onto background text at a specific x-offset."""
-        fg_len = TUI.visible_len(fg)
-        left = TUI.ansi_slice(bg, 0, x)
-        right = TUI.ansi_slice(bg, x + fg_len)
+        bg_vlen = TUI.visible_len(bg)
+        if bg_vlen < x:
+            left = bg + " " * (x - bg_vlen)
+        else:
+            left = TUI.ansi_slice(bg, 0, x)
+            
+        fg_vlen = TUI.visible_len(fg)
+        right = TUI.ansi_slice(bg, x + fg_vlen)
+        
         return left + fg + right
 
     @staticmethod
     def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
         """Wraps a list of lines in a rounded box with an optional title and integrated scrollbar."""
-        base_border_color = color if color else (Style.hex("#CBA6F7") if is_focused else Style.hex("#585B70"))
-        thumb_color = Style.hex("#CBA6F7") if is_focused else Style.hex("#89B4FA")
+        base_border_color = color if color else (Style.highlight() if is_focused else Style.muted())
+        thumb_color = Style.highlight() if is_focused else Style.blue()
         reset = Style.RESET
         
         # 1. Top border with title
@@ -405,12 +570,12 @@ class TUI:
         margin = max(0, margin)
         indent = " " * margin
             
-        print(f"{indent}╭" + "─" * (width - 2) + "╮")
+        print(f"{indent}{Style.normal()}╭" + "─" * (width - 2) + f"╮{Style.RESET}")
         if title:
             padding = (width - 2 - len(title) - 2) // 2
             padding = max(0, padding)
-            print(f"{indent}│" + " " * padding + f" {Style.BOLD}{title}{Style.RESET} " + " " * (width - 2 - padding - len(title) - 2) + "│")
-            print(f"{indent}├" + "─" * (width - 2) + "┤")
+            print(f"{indent}{Style.normal()}│{Style.RESET}" + " " * padding + f" {Style.normal()}{Style.BOLD}{title}{Style.RESET} " + " " * (width - 2 - padding - len(title) - 2) + f"{Style.normal()}│{Style.RESET}")
+            print(f"{indent}{Style.normal()}├" + "─" * (width - 2) + f"┤{Style.RESET}")
             
         for line in lines:
             # Calculate visible length to handle padding correctly
@@ -421,17 +586,61 @@ class TUI:
             
             if ":" in line:
                 label, value = line.split(":", 1)
-                formatted_line = f"{Style.BOLD}{label}:{Style.RESET}{value}"
-                print(f"{indent}│ {' ' * left_pad}{formatted_line}{' ' * right_pad} │")
+                formatted_line = f"{Style.normal()}{Style.BOLD}{label}:{Style.RESET}{Style.normal()}{value}{Style.RESET}"
+                print(f"{indent}{Style.normal()}│{Style.RESET} {' ' * left_pad}{formatted_line}{' ' * right_pad} {Style.normal()}│{Style.RESET}")
             else:
-                print(f"{indent}│ {' ' * left_pad}{line}{' ' * right_pad} │")
-        print(f"{indent}╰" + "─" * (width - 2) + "╯")
+                print(f"{indent}{Style.normal()}│{Style.RESET} {' ' * left_pad}{Style.normal()}{line}{Style.RESET}{' ' * right_pad} {Style.normal()}│{Style.RESET}")
+        print(f"{indent}{Style.normal()}╰" + "─" * (width - 2) + f"╯{Style.RESET}")
+
+    @staticmethod
+    def wrap_pills(pills, width, gap=4):
+        """Groups pills into multiple lines based on available width."""
+        lines = []
+        current_line = []
+        current_len = 0
+        
+        for pill in pills:
+            p_len = TUI.visible_len(pill)
+            if not current_line:
+                current_line.append(pill)
+                current_len = p_len
+            elif current_len + gap + p_len <= width:
+                current_line.append(pill)
+                current_len += gap + p_len
+            else:
+                lines.append((" " * gap).join(current_line))
+                current_line = [pill]
+                current_len = p_len
+        
+        if current_line:
+            lines.append((" " * gap).join(current_line))
+        return lines
 
     @staticmethod
     def visible_len(text):
         """Calculates character count excluding ANSI control codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         return len(ansi_escape.sub('', text))
+
+    @staticmethod
+    def visible_ljust(text, width):
+        """Pads string to width based on visible characters, truncating if necessary to prevent overflow."""
+        v_len = TUI.visible_len(text)
+        if v_len > width:
+            return TUI.truncate_ansi(text, width)
+        return text + " " * max(0, width - v_len)
+
+    @staticmethod
+    def split_line(left, right, width, fill=' '):
+        """Creates a line with 'left' aligned left and 'right' aligned right."""
+        l_vlen = TUI.visible_len(left)
+        r_vlen = TUI.visible_len(right)
+        gap = width - l_vlen - r_vlen
+        if gap < 0:
+            left = TUI.truncate_ansi(left, max(0, width - r_vlen - 1))
+            l_vlen = TUI.visible_len(left)
+            gap = width - l_vlen - r_vlen
+        return left + (fill * gap) + right
 
     @staticmethod
     def hex_to_ansi(hex_color, bg=False):
@@ -443,5 +652,6 @@ class TUI:
         """Renders a styled command shortcut pill."""
         bg = Style.hex(color_hex, bg=True)
         fg = Style.hex(color_hex, bg=False)
-        # Structure: [BG_COLOR][BLACK_TEXT] KEY [RESET] [COLOR_TEXT] Action
-        return f"{bg}\033[30m {key} {Style.RESET} {fg}{action}{Style.RESET}"
+        # Structure: [BG_COLOR][CRUST_TEXT] KEY [RESET] [COLOR_TEXT] Action
+        return f"{bg}{Style.crust()} {key} {Style.RESET} {fg}{action}{Style.RESET}"
+

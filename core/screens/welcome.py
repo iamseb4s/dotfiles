@@ -2,7 +2,7 @@ import shutil
 import platform
 import os
 import sys
-from core.tui import TUI, Keys, Style
+from core.tui import TUI, Keys, Style, Theme
 
 class Screen:
     """Interface for terminal screens."""
@@ -47,18 +47,17 @@ class WelcomeScreen(Screen):
         
         content = []
         # Banner
-        content.append(f"{Style.hex('#81ECEC')}") # Cyan accent
         for line in banner:
             padding = (term_width - len(line)) // 2
             padding = max(0, padding)
-            content.append(f"{' ' * padding}{line}")
-        content.append(f"{Style.RESET}")
+            # Each line is now atomic with its own color and reset
+            content.append(f"{Style.sky()}{' ' * padding}{line}{Style.RESET}")
         
         # Subtitle
         subtitle = "─ Dotfiles & Packages Installer ─"
         s_padding = (term_width - len(subtitle)) // 2
         content.append("")
-        content.append(f"{Style.DIM}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}")
+        content.append(f"{Style.muted()}{' ' * max(0, s_padding)}{subtitle}{Style.RESET}")
         content.append("")
         
         # Information Box
@@ -70,14 +69,15 @@ class WelcomeScreen(Screen):
         content.append(f.getvalue().strip("\n"))
         
         # Navigation Hints
-        p_enter = TUI.pill("ENTER", "Install", "a6e3a1") # Success Green
-        p_new   = TUI.pill("N", "New Package", "CBA6F7") # Purple Pastel
-        p_quit  = TUI.pill("Q", "Exit", "f38ba8")      # Danger Red
+        p_enter = TUI.pill("ENTER", "Install", Theme.GREEN) # Success Green
+        p_new   = TUI.pill("N", "New Package", Theme.MAUVE) # Mauve Pastel
+        p_quit  = TUI.pill("Q", "Exit", Theme.RED)      # Red Pastel
         
         pills_line = f"{p_enter}     {p_new}     {p_quit}"
         p_padding = (term_width - TUI.visible_len(pills_line)) // 2
         p_padding = max(0, p_padding)
         
+        content.append("")
         content.append("")
         content.append(f"{' ' * p_padding}{pills_line}")
 
@@ -92,8 +92,12 @@ class WelcomeScreen(Screen):
         buffer = [""] * top_pad
         buffer.extend(real_lines)
 
+        # Global Notifications Overlay
+        buffer = TUI.draw_notifications(buffer)
+
         # Atomic Draw
-        sys.stdout.write("\033[H" + "\n".join(buffer) + "\n\033[J")
+        final_output = "\n".join([TUI.visible_ljust(line, term_width) for line in buffer[:term_height]])
+        sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
         
@@ -103,6 +107,6 @@ class WelcomeScreen(Screen):
             return "MENU"
         if key in [ord('n'), ord('N')]:
             return "CREATE"
-        if key == Keys.ESC or key in [Keys.Q, Keys.Q_UPPER]:
+        if key in [Keys.Q, Keys.Q_UPPER]:
             return "EXIT"
         return None
