@@ -9,9 +9,9 @@ sys.path.append(os.getcwd())
 from core.system import System
 from core.tui import TUI, Keys
 from core.screens.welcome import WelcomeScreen
-from core.screens.menu import MenuScreen
-from core.screens.install import InstallScreen
-from core.screens.create import CreateScreen
+from core.screens.selector import SelectorScreen
+from core.screens.installer import InstallerScreen
+from core.screens.wizard import WizardScreen
 
 def load_modules(sys_manager):
     """Scan and initialize all available installation modules."""
@@ -48,7 +48,7 @@ def main():
         
         # Global state machine
         state = "WELCOME"
-        menu_screen = MenuScreen(modules)
+        selector_screen = SelectorScreen(modules)
         
         while True:
             if TUI.is_resize_pending():
@@ -66,25 +66,25 @@ def main():
                     if key is not None: break
                 
                 action = scr.handle_input(key)
-                if action == "MENU": 
+                if action == "SELECTOR": 
                     TUI.clear_screen()
-                    state = "MENU"
-                elif action == "CREATE":
+                    state = "SELECTOR"
+                elif action == "WIZARD":
                     TUI.clear_screen()
-                    state = "CREATE"
+                    state = "WIZARD"
                 if action == "EXIT": sys.exit(0)
                 
-            elif state == "CREATE":
-                create_screen = CreateScreen(modules)
+            elif state == "WIZARD":
+                wizard_screen = WizardScreen(modules)
                 while True:
-                    create_screen.render()
+                    wizard_screen.render()
                     key = TUI.get_key(blocking=True)
                     if key == Keys.RESIZE:
                         TUI.clear_screen()
                         continue
                     if key is None: continue
                     
-                    action = create_screen.handle_input(key)
+                    action = wizard_screen.handle_input(key)
                     if action == "WELCOME":
                         state = "WELCOME"
                         TUI.clear_screen()
@@ -92,22 +92,22 @@ def main():
                     elif action == "RELOAD_AND_WELCOME":
                         # Reload all modules to include the new one
                         modules = load_modules(sys_mgr)
-                        menu_screen = MenuScreen(modules) # Refresh menu too
+                        selector_screen = SelectorScreen(modules) # Refresh selector too
                         state = "WELCOME"
                         TUI.clear_screen()
                         break
                     if action == "EXIT": sys.exit(0)
                 
-            elif state == "MENU":
+            elif state == "SELECTOR":
                 while True:
-                    menu_screen.render()
+                    selector_screen.render()
                     key = TUI.get_key(blocking=True)
                     if key == Keys.RESIZE:
                         TUI.clear_screen()
                         continue
                     if key is not None: break
                 
-                action = menu_screen.handle_input(key)
+                action = selector_screen.handle_input(key)
                 if action == "EXIT": sys.exit(0)
                 if action in ["WELCOME"]: 
                     TUI.clear_screen()
@@ -118,14 +118,14 @@ def main():
             
             elif state == "INSTALL":
                 # Transfer control to the installation runner with user overrides
-                installer = InstallScreen(modules, menu_screen.selected, menu_screen.overrides)
+                installer = InstallerScreen(modules, selector_screen.selected, selector_screen.overrides)
                 result = installer.run()
                 
                 if result == "WELCOME":
-                    # Reset state and menu for a clean start
+                    # Reset state and selector for a clean start
                     state = "WELCOME"
                     TUI.clear_screen()
-                    menu_screen = MenuScreen(modules)
+                    selector_screen = SelectorScreen(modules)
                 else:
                     sys.exit(0)
     finally:

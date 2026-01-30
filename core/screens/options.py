@@ -2,16 +2,16 @@ import shutil
 from core.tui import TUI, Keys, Style, Theme
 from core.screens.shared_modals import BaseModal
 
-class OverrideModal(BaseModal):
+class OptionsModal(BaseModal):
     """
-    Floating window for package-specific installation overrides.
+    Floating window for package-specific installation options.
     Features a dashboard layout with smart navigation and split alignment.
     """
     # UI Symbols
     SYM_EDIT, SYM_RADIO, SYM_RADIO_OFF, SYM_CHECK = "✎", "●", "○", "[■]"
 
     def __init__(self, module, current_overrides=None):
-        super().__init__(f"OVERRIDE: {module.label.upper()}", width=68)
+        super().__init__(f" PACKAGE OPTIONS: {module.label.upper()} ", width=68)
         self.mod = module
         # Determine if module has dotfiles configuration
         self.has_dots = module.stow_pkg is not None
@@ -87,6 +87,8 @@ class OverrideModal(BaseModal):
         mgrs_raw = "    ".join(mgr_items); mgr_pad = (content_width - TUI.visible_len(mgrs_raw)) // 2
         inner_lines.append(f"{' ' * max(0, mgr_pad + 4)}{mgrs_raw}")
         inner_lines.append("") # Spacer
+        
+        # 3. Deploy Config
         dot_toggle = f"YES {self.SYM_CHECK}" if self.install_dots else "NO [ ]"
         dot_label = "Copy Configuration Files" if self.mod.id == "refind" else "Deploy Config (Stow)"
         inner_lines.append(draw_row(3, dot_label, dot_toggle, is_dim=not self.has_dots))
@@ -94,12 +96,15 @@ class OverrideModal(BaseModal):
         # 4. Target Path
         is_path_dim = not (self.has_dots and self.install_dots); path_val = self.stow_target
         if self.editing_field == 'stow_target':
-            pre, char, post = path_val[:self.text_cursor_pos], path_val[self.text_cursor_pos:self.text_cursor_pos+1] or " ", path_val[self.text_cursor_pos+1:]
+            pre = path_val[:self.text_cursor_pos]
+            char = path_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
+            post = path_val[self.text_cursor_pos+1:]
             path_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
         inner_lines.append(draw_row(4, "Target Path", f"{self.SYM_EDIT} [ {path_val} ]", is_dim=is_path_dim))
 
         inner_lines.extend(["", ""])
-        h1, h2 = "SPACE: Toggle   E: Edit   h/l: Select", "ENTER: Accept   Q: Cancel"
+        h1 = "SPACE: Toggle   E: Edit   h/l: Select"
+        h2 = "ENTER: Accept   Q: Cancel"
         for h in [h1, h2]:
             inner_lines.append(f"{' ' * ((self.width - 2 - TUI.visible_len(h)) // 2)}{Style.muted()}{h}{Style.RESET}")
         
@@ -111,7 +116,7 @@ class OverrideModal(BaseModal):
         if key in [Keys.Q, Keys.Q_UPPER, Keys.ESC]: return "CANCEL"
         if key == Keys.ENTER: return "ACCEPT"
 
-        # 1. Determine reachable fields based on toggles
+        # Determine reachable fields
         r = [0]
         if self.install_pkg: r.extend([1, 2])
         if self.has_dots:
@@ -129,7 +134,8 @@ class OverrideModal(BaseModal):
             elif self.focus_idx == 4 and self.has_dots and self.install_dots: self._start_edit('stow_target')
         elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L] and self.focus_idx == 2 and self.install_pkg:
             try:
-                idx = self.managers.index(self.selected_manager); step = 1 if key in [Keys.RIGHT, Keys.L] else -1
+                idx = self.managers.index(self.selected_manager)
+                step = 1 if key in [Keys.RIGHT, Keys.L] else -1
                 self.selected_manager = self.managers[(idx + step) % len(self.managers)]
             except: self.selected_manager = self.managers[0] if self.managers else self.selected_manager
         return None

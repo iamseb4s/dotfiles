@@ -3,10 +3,10 @@ import shutil
 import sys
 from core.tui import TUI, Style, Keys, Theme
 from core.screens.welcome import Screen
-from core.screens.summary import SummaryModal
+from core.screens.review import ReviewModal
 from core.screens.shared_modals import ConfirmModal
 
-class InstallScreen(Screen):
+class InstallerScreen(Screen):
     """
     Advanced installation dashboard with split-view, real-time logs,
     and soft-cancellation support.
@@ -80,7 +80,7 @@ class InstallScreen(Screen):
         tw, th = shutil.get_terminal_size()
         
         # 1. Header & Footer
-        header = f"{Style.blue(bg=True)}{Style.crust()}{' DEPLOYING PACKAGES '.center(tw)}{Style.RESET}"
+        header = f"{Style.blue(bg=True)}{Style.crust()}{' DEPLOYMENT PROGRESS '.center(tw)}{Style.RESET}"
         pills = self._get_footer_pills()
         footer_lines = TUI.wrap_pills(pills, tw - 4)
         avail_h = max(10, th - 6 - len(footer_lines))
@@ -191,8 +191,8 @@ class InstallScreen(Screen):
                 if not success and t_type == 'pkg': self.status[mod.id]['dots'] = 'skipped'; break
 
         self.is_finished = True
-        # Always force SummaryModal on completion, overwriting any pending ConfirmModal
-        self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
+        # Always force ReviewModal on completion, overwriting any pending ConfirmModal
+        self.modal = ReviewModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
         
         while True:
             self.render()
@@ -223,7 +223,7 @@ class InstallScreen(Screen):
             return None
 
         if key == Keys.ENTER:
-            self.modal = SummaryModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
+            self.modal = ReviewModal(self.modules, [m.id for m in self.queue], self.overrides, self.results)
         elif key in [Keys.Q, Keys.Q_UPPER]:
             if self.is_finished: return "WELCOME"
             self.modal = ConfirmModal("EXIT", "Are you sure you want to stop?")

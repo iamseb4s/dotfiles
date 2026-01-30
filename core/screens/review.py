@@ -2,15 +2,15 @@ import shutil
 from core.tui import TUI, Keys, Style, Theme
 from core.screens.shared_modals import BaseModal
 
-class SummaryModal(BaseModal):
+class ReviewModal(BaseModal):
     """
-    Final confirmation modal listing all selected modules and their configurations
+    Final review modal listing all selected modules and their configurations
     using a tree-like hierarchical structure.
     Supports 'Audit' mode (pre-install) and 'Results' mode (post-install).
     """
     def __init__(self, modules, selected_ids, overrides, results=None):
         self.is_results_mode = results is not None
-        title = "INSTALLATION RESULTS" if self.is_results_mode else "INSTALLATION SUMMARY"
+        title = " INSTALLATION RESULTS " if self.is_results_mode else " FINAL REVIEW "
         super().__init__(title, width=64)
         
         self.active_modules = [m for m in modules if m.id in selected_ids]

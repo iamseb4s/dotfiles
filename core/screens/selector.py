@@ -4,11 +4,11 @@ import time
 from collections import defaultdict
 from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
-from core.screens.overrides import OverrideModal
-from core.screens.summary import SummaryModal
+from core.screens.options import OptionsModal
+from core.screens.review import ReviewModal
 from core.screens.shared_modals import ConfirmModal
 
-class MenuScreen(Screen):
+class SelectorScreen(Screen):
     """
     Manages the interactive selection menu, including category grouping,
     dependency resolution, and rendering state.
@@ -72,7 +72,7 @@ class MenuScreen(Screen):
         tw, th = shutil.get_terminal_size()
         
         header = f"{Style.blue(bg=True)}{Style.crust()}{' PACKAGES SELECTOR '.center(tw)}{Style.RESET}"
-        pills = [TUI.pill("h/j/k/l", "Navigate", Theme.SKY), TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE), TUI.pill("SPACE", "Select", Theme.BLUE), TUI.pill("TAB", "Overrides", Theme.MAUVE), TUI.pill("ENTER", "Install", Theme.GREEN), TUI.pill("Q", "Back", Theme.RED)]
+        pills = [TUI.pill("h/j/k/l", "Navigate", Theme.SKY), TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE), TUI.pill("SPACE", "Select", Theme.BLUE), TUI.pill("TAB", "Options", Theme.MAUVE), TUI.pill("ENTER", "Install", Theme.GREEN), TUI.pill("Q", "Back", Theme.RED)]
         footer = TUI.wrap_pills(pills, tw - 4)
         av_h = max(10, th - 4 - len(footer))
         lw, rw = tw // 2, tw - (tw // 2) - 1
@@ -191,13 +191,13 @@ class MenuScreen(Screen):
         m = self.modal
         if not m: return None
         res = m.handle_input(key)
-        if isinstance(m, OverrideModal) and res == "ACCEPT":
+        if isinstance(m, OptionsModal) and res == "ACCEPT":
             mod = self.flat_items[self.cursor_idx]['obj']; ovr = m.get_overrides()
             if not ovr['install_pkg'] and not (mod.stow_pkg and ovr['install_dots']):
                 self.selected.discard(mod.id); self.overrides.pop(mod.id, None)
             else: self.selected.add(mod.id); self.overrides[mod.id] = ovr
             self.modal = None; TUI.push_notification(f"Changes saved for {mod.label}", type="INFO")
-        elif isinstance(m, SummaryModal) and res == "INSTALL": self.modal = None; return "CONFIRM"
+        elif isinstance(m, ReviewModal) and res == "INSTALL": self.modal = None; return "CONFIRM"
         elif isinstance(m, ConfirmModal) and res == "YES":
             self.selected.clear(); self.overrides.clear(); self.modal = None; return "WELCOME"
         elif res in ["CANCEL", "CLOSE", "NO"]: self.modal = None
@@ -224,10 +224,10 @@ class MenuScreen(Screen):
         return None
 
     def _handle_tab(self):
-        """Handles TAB key for expanding headers or opening overrides."""
+        """Handles TAB key for expanding headers or opening options."""
         item = self.flat_items[self.cursor_idx]
         if item['type'] == 'header': self.expanded[item['obj']] = not self.expanded[item['obj']]
-        elif item['type'] == 'module': self.modal = OverrideModal(item['obj'], self.overrides.get(item['obj'].id))
+        elif item['type'] == 'module': self.modal = OptionsModal(item['obj'], self.overrides.get(item['obj'].id))
         return None
 
     def _collapse(self):
@@ -243,9 +243,9 @@ class MenuScreen(Screen):
         return None
 
     def _trigger_install(self):
-        """Shows the installation summary modal."""
+        """Shows the installation review modal."""
         all_s = self.selected.union(self.auto_locked)
-        if all_s: self.modal = SummaryModal(self.modules, all_s, self.overrides)
+        if all_s: self.modal = ReviewModal(self.modules, all_s, self.overrides)
         else: TUI.push_notification("Select at least one package to install", type="ERROR")
         return None
 
@@ -253,3 +253,4 @@ class MenuScreen(Screen):
         """Returns to the welcome screen, with confirmation if changes exist."""
         if self.selected: self.modal = ConfirmModal("DISCARD CHANGES", "Are you sure you want to discard all changes?"); return None
         return "WELCOME"
+

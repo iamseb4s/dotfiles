@@ -10,7 +10,7 @@ from core.tui import TUI, Keys, Style, Theme
 from core.screens.welcome import Screen
 from core.screens.shared_modals import DependencyModal, WizardSummaryModal, DraftSelectionModal, ConfirmModal
 
-class CreateScreen(Screen):
+class WizardScreen(Screen):
     """
     Interactive wizard for creating package modules.
     Provides a modular triple-box interface (Form, Help, Preview).
@@ -158,7 +158,7 @@ class CreateScreen(Screen):
         if f['type'] == 'text': res.append(TUI.pill('E', 'Edit', Theme.BLUE))
         res.extend([TUI.pill('D', 'Draft', Theme.PEACH)])
         if self.active_draft_path: res.append(TUI.pill('X', 'Delete Draft', Theme.RED))
-        res.append(TUI.pill('ENTER', "Select" if f['type'] == 'multi' else "Summary & Save", Theme.GREEN))
+        res.append(TUI.pill('ENTER', "Select" if f['type'] == 'multi' else "Review & Save", Theme.GREEN))
         res.append(TUI.pill('Q', 'Back', Theme.RED))
         return res
 
@@ -291,7 +291,9 @@ class CreateScreen(Screen):
         elif isinstance(res, tuple):
             if res[0] == "LOAD": self.form.update(res[1][1]); self.active_draft_path = os.path.join(self.DRAFTS_DIR, res[1][0]); self.modal = None
             elif res[0] == "DELETE_REQ":
-                self.pending_delete = res[1]; self.modal = ConfirmModal("DELETE DRAFT?", f"Delete '{res[1][1].get('id', 'unnamed')}'?"); self.modal_type = "DELETE_MODAL_DRAFT"
+                self.pending_delete = res[1] # (filename, data, mtime)
+                self.modal = ConfirmModal("DELETE DRAFT?", f"Are you sure you want to permanently delete '{res[1][1].get('id', 'unnamed')}' draft?")
+                self.modal_type = "DELETE_MODAL_DRAFT"
         elif res == "SAVE":
             if self.save_package(): TUI.push_notification(f"Module '{self.form['id']}' created", type="INFO"); return "RELOAD_AND_WELCOME"
             else: self.modal = None
