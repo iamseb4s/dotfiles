@@ -593,6 +593,30 @@ class TUI:
         print(f"{indent}{Style.normal()}╰" + "─" * (width - 2) + f"╯{Style.RESET}")
 
     @staticmethod
+    def wrap_pills(pills, width, gap=4):
+        """Groups pills into multiple lines based on available width."""
+        lines = []
+        current_line = []
+        current_len = 0
+        
+        for pill in pills:
+            p_len = TUI.visible_len(pill)
+            if not current_line:
+                current_line.append(pill)
+                current_len = p_len
+            elif current_len + gap + p_len <= width:
+                current_line.append(pill)
+                current_len += gap + p_len
+            else:
+                lines.append((" " * gap).join(current_line))
+                current_line = [pill]
+                current_len = p_len
+        
+        if current_line:
+            lines.append((" " * gap).join(current_line))
+        return lines
+
+    @staticmethod
     def visible_len(text):
         """Calculates character count excluding ANSI control codes."""
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
@@ -600,8 +624,10 @@ class TUI:
 
     @staticmethod
     def visible_ljust(text, width):
-        """Pads string to width based on visible characters."""
+        """Pads string to width based on visible characters, truncating if necessary to prevent overflow."""
         v_len = TUI.visible_len(text)
+        if v_len > width:
+            return TUI.truncate_ansi(text, width)
         return text + " " * max(0, width - v_len)
 
     @staticmethod

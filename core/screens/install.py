@@ -136,9 +136,16 @@ class InstallScreen(Screen):
         padding = (term_width - len(title)) // 2
         header_bar = f"{bg_blue}{Style.crust()}{' '*padding}{title}{' '*(term_width-padding-len(title))}{Style.RESET}"
         
-        # Space for boxes: Top(2), Bottom(4)
-        available_height = term_height - 7
-        available_height = max(10, available_height)
+        # Footer & Available space calculation
+        if self.is_finished: footer_pills = [TUI.pill('ENTER', 'Results', Theme.GREEN), TUI.pill('Q', 'Finish', Theme.RED)]
+        elif self.is_cancelled: footer_pills = [TUI.pill(self.spinner_chars[self.spinner_idx], 'CANCELING...', Theme.YELLOW)]
+        else: footer_pills = [TUI.pill(self.spinner_chars[self.spinner_idx], 'INSTALLING...', Theme.YELLOW), TUI.pill('Q', 'Stop', Theme.RED)]
+        
+        footer_lines = TUI.wrap_pills(footer_pills, term_width - 4)
+        footer_height = len(footer_lines)
+        
+        # Space for boxes: Top(2), Progress(2), Footer(footer_height) + spacers
+        available_height = max(10, term_height - 6 - footer_height)
         
         left_width = int(term_width * 0.30)
         right_width = term_width - left_width - 1
@@ -222,7 +229,10 @@ class InstallScreen(Screen):
         buffer.append("")
         buffer.append(f"{' ' * ((term_width - bar_len - 10) // 2)}[ {bar_content} ] {int(progress_val*100)}%")
         buffer.append("")
-        buffer.append(f"{' ' * ((term_width - TUI.visible_len(footer)) // 2)}{footer}")
+        
+        for f_line in footer_lines:
+            f_pad = max(0, (term_width - TUI.visible_len(f_line)) // 2)
+            buffer.append(f"{' ' * f_pad}{f_line}")
 
         # Modal Overlay
         if self.modal:

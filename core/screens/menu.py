@@ -164,10 +164,20 @@ class MenuScreen(Screen):
         padding = (term_width - len(title_text)) // 2
         header_bar = f"{bg_blue}{Style.crust()}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
         
+        # Footer & Available space calculation
+        footer_pills = [
+            TUI.pill("h/j/k/l", "Navigate", Theme.SKY),
+            TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE),
+            TUI.pill("SPACE", "Select", Theme.BLUE),
+            TUI.pill("TAB", "Overrides", Theme.MAUVE),
+            TUI.pill("ENTER", "Install", Theme.GREEN),
+            TUI.pill("Q", "Back", Theme.RED)
+        ]
+        footer_lines = TUI.wrap_pills(footer_pills, term_width - 4)
+        footer_height = len(footer_lines)
+        
         # Available space for boxes
-        # Overhead calculation: Header(1) + Spacer(1) + Spacer(1) + Pills(1) = 4 lines
-        available_height = term_height - 5
-        available_height = max(10, available_height)
+        available_height = max(10, term_height - 4 - footer_height)
         
         # Box Widths
         left_width = term_width // 2
@@ -307,14 +317,9 @@ class MenuScreen(Screen):
         buffer.append("")
         
         # Footer
-        f_move = TUI.pill("h/j/k/l", "Navigate", Theme.SKY)
-        f_scroll = TUI.pill("PgUp/Dn", "Scroll Info", Theme.BLUE)
-        f_space = TUI.pill("SPACE", "Select", Theme.BLUE)
-        f_tab = TUI.pill("TAB", "Overrides", Theme.MAUVE)
-        f_enter = TUI.pill("ENTER", "Install", Theme.GREEN)
-        f_quit = TUI.pill("Q", "Back", Theme.RED)
-        pills_line = f"{f_move}    {f_scroll}    {f_space}    {f_tab}    {f_enter}    {f_quit}"
-        buffer.append(f"{' ' * ((term_width - TUI.visible_len(pills_line)) // 2)}{pills_line}")
+        for f_line in footer_lines:
+            f_pad = max(0, (term_width - TUI.visible_len(f_line)) // 2)
+            buffer.append(f"{' ' * f_pad}{f_line}")
 
         # Modal Overlay
         if self.modal:

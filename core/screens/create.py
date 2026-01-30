@@ -397,7 +397,28 @@ class CreateScreen(Screen):
         padding = (term_width - len(title_text)) // 2
         header_bar = f"{Style.mauve(bg=True)}{Style.crust()}{' '*padding}{title_text}{' '*(term_width-padding-len(title_text))}{Style.RESET}"
         
-        available_height = term_height - 5
+        # Footer & Available space calculation
+        if self.is_editing:
+            footer_pills = [TUI.pill('ENTER', 'Finish', Theme.GREEN), TUI.pill('ESC', 'Cancel', Theme.RED)]
+        else:
+            field = self.fields[self.focus_idx]
+            footer_pills = [
+                TUI.pill('h/j/k/l', 'Navigate', Theme.SKY),
+                TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE),
+            ]
+            if field['type'] == 'text':
+                footer_pills.append(TUI.pill('E', 'Edit', Theme.BLUE))
+            footer_pills.append(TUI.pill('D', 'Draft', Theme.PEACH))
+            if self.active_draft_path:
+                footer_pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
+            enter_label = "Select" if field['type'] == 'multi' else "Summary & Save"
+            footer_pills.append(TUI.pill('ENTER', enter_label, Theme.GREEN))
+            footer_pills.append(TUI.pill('Q', 'Back', Theme.RED))
+
+        footer_lines = TUI.wrap_pills(footer_pills, term_width - 4)
+        footer_height = len(footer_lines)
+        available_height = max(10, term_height - 4 - footer_height)
+        
         left_width = int(term_width * 0.40)
         right_width = term_width - left_width - 1
         
@@ -568,35 +589,17 @@ class CreateScreen(Screen):
         
         main_content = TUI.stitch_containers(left_box, help_box + preview_box, gap=1)
         
-        # 5. Footer (Pills preserved)
-        if self.is_editing:
-            p_line = f"{TUI.pill('ENTER', 'Finish', Theme.GREEN)}    {TUI.pill('ESC', 'Cancel', Theme.RED)}"
-        else:
-            field = self.fields[self.focus_idx]
-            f_pills = [
-                TUI.pill('h/j/k/l', 'Navigate', Theme.SKY),
-                TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE),
-            ]
-            
-            if field['type'] == 'text':
-                f_pills.append(TUI.pill('E', 'Edit', Theme.BLUE))
-            
-            f_pills.append(TUI.pill('D', 'Draft', Theme.PEACH))
-            if self.active_draft_path:
-                f_pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
-            
-            enter_label = "Select" if field['type'] == 'multi' else "Summary & Save"
-            f_pills.append(TUI.pill('ENTER', enter_label, Theme.GREEN))
-            f_pills.append(TUI.pill('Q', 'Back', Theme.RED))
-            
-            p_line = "    ".join(f_pills)
-        
+        # 5. Buffer Assembly
         buffer = [header_bar, ""]
         buffer.extend(main_content)
         buffer.append("")
-        buffer.append(f"{' ' * ((term_width - TUI.visible_len(p_line)) // 2)}{p_line}")
+        
+        for f_line in footer_lines:
+            f_pad = max(0, (term_width - TUI.visible_len(f_line)) // 2)
+            buffer.append(f"{' ' * f_pad}{f_line}")
 
         if self.modal:
+
             m_lines, m_y, m_x = self.modal.render()
             for i, ml in enumerate(m_lines):
                 if 0 <= m_y + i < len(buffer): buffer[m_y + i] = TUI.overlay(buffer[m_y + i], ml, m_x)
