@@ -4,7 +4,7 @@ import sys
 from core.tui import TUI, Style, Keys, Theme
 from core.screens.welcome import Screen
 from core.screens.review import ReviewModal
-from core.screens.shared_modals import ConfirmModal
+from core.screens.shared_modals import ConfirmModal, PasswordModal
 
 class InstallerScreen(Screen):
     """
@@ -160,6 +160,30 @@ class InstallerScreen(Screen):
 
     def run(self):
         """Main installation loop with real-time interruption handling."""
+        # 1. Check if sudo is needed and prompt
+        needs_sudo = False
+        for mod in self.queue:
+            ovr = self.overrides.get(mod.id, {})
+            if ovr.get('install_pkg', True):
+                needs_sudo = True
+                break
+        
+        self.password = None
+        if needs_sudo:
+            self.modal = PasswordModal()
+            while True:
+                self.render()
+                key = TUI.get_key(blocking=True)
+                if key is None: continue
+                res = self.modal.handle_input(key)
+                if isinstance(res, tuple) and res[0] == "SUBMIT":
+                    self.password = res[1]
+                    self.modal = None
+                    break
+                elif res == "CANCEL":
+                    return "SELECTOR"
+
+        # 2. Execution Loop
         for idx, mod in enumerate(self.queue):
             if self.is_cancelled: break
             
@@ -185,7 +209,7 @@ class InstallerScreen(Screen):
                     self.current_unit_progress = min(0.95, self.current_unit_progress + 0.005)
                     self._input_step()
                 
-                success = func(ovr, callback=live_cb, input_callback=self._input_step)
+                success = func(ovr, callback=live_cb, input_callback=self._input_step, password=self.password)
                 self.status[mod.id][t_type], self.results[mod.id][t_type] = ('success' if success else 'error'), success
                 self.completed_units += 1; self.current_unit_progress = 0.0
                 if not success and t_type == 'pkg': self.status[mod.id]['dots'] = 'skipped'; break

@@ -54,7 +54,7 @@ class Module:
             return shutil.which("brew") and self.sys.run(f"brew list {pkg}", shell=True)
         return False
 
-    def install(self, override=None, callback=None, input_callback=None):
+    def install(self, override=None, callback=None, input_callback=None, password=None):
         """Generic installation logic supporting user overrides and real-time feedback."""
         pkg = override['pkg_name'] if override else self.get_package_name()
         manager = override['manager'] if override else self.get_manager()
@@ -62,17 +62,18 @@ class Module:
         if not pkg and manager == "system": return True
 
         if manager == "system":
-            return self.sys.install_package(pkg if self.sys.is_arch else None, 
-                                          pkg if self.sys.is_debian else None,
-                                          callback=callback,
-                                          input_callback=input_callback)
+            return self.sys.install_package(pkg if self.sys.is_arch else None,
+            pkg if self.sys.is_debian else None,
+            callback=callback,
+            input_callback=input_callback,
+            password=password)
         elif manager == "cargo":
             return self.sys.run(f"cargo install {pkg}", shell=True, callback=callback, input_callback=input_callback)
         elif manager == "bob":
             return self.sys.run(f"bob use stable", shell=True, callback=callback, input_callback=input_callback)
         return True
 
-    def configure(self, override=None, callback=None, input_callback=None):
+    def configure(self, override=None, callback=None, input_callback=None, password=None):
         """Auto-stow if dotfiles directory exists, supporting user overrides."""
         if not self.stow_pkg:
             return True
@@ -82,9 +83,9 @@ class Module:
         if not os.path.exists(pkg_path):
             return True # Nothing to stow, not an error
             
-        return self.run_stow(self.stow_pkg, self.stow_target, callback=callback, input_callback=input_callback)
+        return self.run_stow(self.stow_pkg, self.stow_target, callback=callback, input_callback=input_callback, password=password)
 
-    def run_stow(self, package_name, target=None, callback=None, input_callback=None):
+    def run_stow(self, package_name, target=None, callback=None, input_callback=None, password=None):
         """Standard GNU Stow wrapper."""
         dotfiles_dir = os.path.join(os.getcwd(), "dots")
         target_dir = os.path.expanduser(target or "~")
@@ -98,7 +99,7 @@ class Module:
 
         try:
             cmd = ["stow", "--dir", dotfiles_dir, "--target", target_dir, "-R", package_name]
-            return self.sys.run(cmd, callback=callback, input_callback=input_callback)
+            return self.sys.run(cmd, callback=callback, input_callback=input_callback, password=password)
         except Exception as e:
             err = f"Error: {e}"
             if callback: callback(err)

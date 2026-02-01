@@ -34,21 +34,30 @@ class System:
             pass
         return self.os_id.capitalize()
 
-    def run(self, command, needs_root=False, shell=False, callback=None, input_callback=None):
+    def run(self, command, needs_root=False, shell=False, callback=None, input_callback=None, password=None):
         """
         Executes a shell command with real-time output and keyboard monitoring.
         :param callback: Function to receive output lines.
         :param input_callback: Function to check for keyboard input.
+        :param password: Optional password for sudo -S.
         """
         from core.tui import TUI
         
         if needs_root and os.getuid() != 0:
+            sudo_prefix = ["sudo", "-S"] if password else ["sudo"]
             if isinstance(command, list):
-                if command[0] != "sudo":
-                    command.insert(0, "sudo")
+                if command[0] == "sudo":
+                    if password and "-S" not in command:
+                        command.insert(1, "-S")
+                elif password:
+                    command = ["sudo", "-S"] + command
+                else:
+                    command = ["sudo"] + command
             else:
                 if not command.startswith("sudo"):
-                    command = "sudo " + command
+                    command = (" ".join(sudo_prefix)) + " " + command
+                elif password and "sudo -S" not in command:
+                    command = command.replace("sudo", "sudo -S", 1)
         
         try:
             if callback:
@@ -56,11 +65,16 @@ class System:
                 process = subprocess.Popen(
                     command, 
                     shell=shell, 
+                    stdin=subprocess.PIPE if password else None,
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.STDOUT, 
                     text=False,
                     bufsize=0
                 )
+                
+                if password and process.stdin:
+                    process.stdin.write(f"{password}\n".encode())
+                    process.stdin.flush()
                 
                 TUI.set_raw_mode(enable=True)
                 output_buffer = b""
@@ -120,18 +134,18 @@ class System:
                 callback(f"ERROR: {str(e)}")
             return False
 
-    def install_package(self, package_name_arch, package_name_debian, callback=None, input_callback=None):
+    def install_package(self, package_name_arch, package_name_debian, callback=None, input_callback=None, password=None):
         """Abstracts package installation based on detected OS."""
         if self.is_arch:
             if not package_name_arch: return True
             return self.run(["pacman", "-S", "--noconfirm", "--needed"] + package_name_arch.split(), 
-                           needs_root=True, callback=callback, input_callback=input_callback)
+                           needs_root=True, callback=callback, input_callback=input_callback, password=password)
         
         elif self.is_debian:
             if not package_name_debian: return True
-            self.run(["apt-get", "update"], needs_root=True, callback=callback, input_callback=input_callback)
+            self.run(["apt-get", "update"], needs_root=True, callback=callback, input_callback=input_callback, password=password)
             return self.run(["apt-get", "install", "-y"] + package_name_debian.split(), 
-                           needs_root=True, callback=callback, input_callback=input_callback)
+                           needs_root=True, callback=callback, input_callback=input_callback, password=password)
         
         else:
             print(f"OS {self.os_id} not supported for package installation.")

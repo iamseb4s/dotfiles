@@ -126,6 +126,9 @@ def main():
                     state = "WELCOME"
                     TUI.clear_screen()
                     selector_screen = SelectorScreen(modules)
+                elif result == "SELECTOR":
+                    state = "SELECTOR"
+                    TUI.clear_screen()
                 else:
                     sys.exit(0)
     finally:

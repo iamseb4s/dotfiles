@@ -162,3 +162,39 @@ class ConfirmModal(BaseModal):
             else: return "NO"
         elif key in [Keys.Q, Keys.Q_UPPER]: return "NO"
         return None
+
+class PasswordModal(BaseModal):
+    """Secure modal for password entry (e.g., sudo)."""
+    def __init__(self, title="PASSWORD REQUIRED", message="Please enter your sudo password:"):
+        super().__init__(title, width=54)
+        self.message = message
+        self.password = ""
+
+    def render(self):
+        wrapped = TUI.wrap_text(self.message, self.width - 10)
+        inner = [""] + [f"    {Style.normal()}{line}{Style.RESET}" for line in wrapped]
+        
+        # Password field
+        pwd_display = "*" * len(self.password)
+        # Style the field box with a fixed width for the input area
+        field_width = self.width - 12
+        field = f" {Style.highlight()}{pwd_display}{Style.RESET}" + " " * (field_width - len(pwd_display) - 1)
+        inner.extend(["", f"    {Style.muted()}╭{'─' * field_width}╮{Style.RESET}"])
+        inner.append(f"    {Style.muted()}│{Style.RESET}{field}{Style.muted()}│{Style.RESET}")
+        inner.append(f"    {Style.muted()}╰{'─' * field_width}╯{Style.RESET}")
+        
+        hint = "ENTER: Confirm   ESC: Cancel"
+        inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
+        return self._get_layout(inner)
+
+    def handle_input(self, key):
+        if key == Keys.ENTER:
+            return ("SUBMIT", self.password)
+        elif key == Keys.ESC:
+            return "CANCEL"
+        elif key == Keys.BACKSPACE:
+            self.password = self.password[:-1]
+        elif 32 <= key <= 126: # Standard printable characters
+            if len(self.password) < 32: # Safety limit
+                self.password += chr(key)
+        return None
