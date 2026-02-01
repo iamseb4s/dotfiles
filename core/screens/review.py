@@ -15,7 +15,7 @@ class ReviewModal(BaseModal):
         
         self.active_modules = [m for m in modules if m.id in selected_ids]
         self.overrides = overrides
-        self.results = results # { 'mod_id': {'pkg': True, 'dots': True} }
+        self.results = results # { 'module_id': {'package': True, 'dotfiles': True} }
         
         # Build the flat list of content lines once
         self.content_lines = self._build_content()
@@ -28,59 +28,59 @@ class ReviewModal(BaseModal):
         """Constructs the tree-like representation of the installation plan or results."""
         lines = []
         for mod in self.active_modules:
-            ovr = self.overrides.get(mod.id)
-            is_custom = ovr is not None
-            res = self.results.get(mod.id, {}) if self.results else {}
+            override = self.overrides.get(mod.id)
+            is_custom = override is not None
+            mod_results = self.results.get(mod.id, {}) if self.results else {}
             
             label = mod.label + ("*" if is_custom else "")
             color = Style.yellow() if is_custom else Style.green()
             lines.append(f"{Style.muted()}- {Style.RESET}{color}{label}{Style.RESET}")
             
-            pkg_name = ovr['pkg_name'] if is_custom else mod.get_package_name()
-            manager = ovr['manager'] if is_custom else mod.get_manager()
-            do_pkg = ovr['install_pkg'] if is_custom else True
-            do_dots = ovr['install_dots'] if is_custom else True
+            package_name = override['package_name'] if is_custom else mod.get_package_name()
+            manager = override['manager'] if is_custom else mod.get_manager()
+            do_package = override['install_package'] if is_custom else True
+            do_dotfiles = override['install_dotfiles'] if is_custom else True
             has_config = mod.has_usable_dotfiles()
             
             if self.is_results_mode:
                 def get_res_icon(success, active):
                     if not active or success is None: return "○", Style.muted()
                     return ("✔" if success else "✘"), (Style.green() if success else Style.red())
-                p_icon, p_color = get_res_icon(res.get('pkg'), do_pkg)
-                d_icon, d_color = get_res_icon(res.get('dots'), do_dots and has_config)
+                package_icon, package_color = get_res_icon(mod_results.get('package'), do_package)
+                dotfiles_icon, dotfiles_color = get_res_icon(mod_results.get('dotfiles'), do_dotfiles and has_config)
             else:
-                p_icon, d_icon = ("■" if do_pkg else " "), ("■" if do_dots else " ")
-                p_color = d_color = Style.normal()
+                package_icon, dotfiles_icon = ("■" if do_package else " "), ("■" if do_dotfiles else " ")
+                package_color = dotfiles_color = Style.normal()
 
             # Check for root requirement (Package installation via 'system' driver)
-            requires_root = (manager == "system" and do_pkg)
+            requires_root = (manager == "system" and do_package)
             root_mark = f"{Style.normal()}*{Style.RESET}" if requires_root else ""
             
             conn = f"{Style.muted()} ├{Style.RESET}" if has_config else f"{Style.muted()} └{Style.RESET}"
-            lines.append(f"{conn}{p_color}[{p_icon}]{Style.RESET} {root_mark}{Style.muted()}Package:{Style.RESET} {Style.normal()}'{pkg_name}'{Style.RESET}{Style.muted()}, Manager:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}")
+            lines.append(f"{conn}{package_color}[{package_icon}]{Style.RESET} {root_mark}{Style.muted()}Package:{Style.RESET} {Style.normal()}'{package_name}'{Style.RESET}{Style.muted()}, Manager:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}")
             
             if has_config:
                 lbl_d = "Configuration files" if mod.id == "refind" else "Dotfiles (Stow)"
-                lines.append(f"{Style.muted()} └{Style.RESET}{d_color}[{d_icon}]{Style.RESET} {Style.normal()}{lbl_d}{Style.RESET}")
-                if not self.is_results_mode and do_dots:
+                lines.append(f"{Style.muted()} └{Style.RESET}{dotfiles_color}[{dotfiles_icon}]{Style.RESET} {Style.normal()}{lbl_d}{Style.RESET}")
+                if not self.is_results_mode and do_dotfiles:
                     lines.append(f"     {Style.muted()}Target: {Style.normal()}{mod.stow_target or '~/'}{Style.RESET}")
         return lines
 
     def _get_summary_stats(self):
         """Calculates totals for installed, cancelled and failed modules."""
-        s = {'installed': 0, 'cancelled': 0, 'failed': 0}
-        if not self.results: return s
+        stats = {'installed': 0, 'cancelled': 0, 'failed': 0}
+        if not self.results: return stats
         for mod in self.active_modules:
-            ovr = self.overrides.get(mod.id, {})
-            res = self.results.get(mod.id, {})
+            override = self.overrides.get(mod.id, {})
+            mod_results = self.results.get(mod.id, {})
             tasks = []
-            if ovr.get('install_pkg', True): tasks.append(res.get('pkg'))
-            if mod.stow_pkg and ovr.get('install_dots', True): tasks.append(res.get('dots'))
+            if override.get('install_package', True): tasks.append(mod_results.get('package'))
+            if mod.has_usable_dotfiles() and override.get('install_dotfiles', True): tasks.append(mod_results.get('dotfiles'))
             if not tasks: continue
-            if any(r is False for r in tasks): s['failed'] += 1
-            elif all(r is True for r in tasks): s['installed'] += 1
-            else: s['cancelled'] += 1
-        return s
+            if any(r is False for r in tasks): stats['failed'] += 1
+            elif all(r is True for r in tasks): stats['installed'] += 1
+            else: stats['cancelled'] += 1
+        return stats
 
     def render(self):
         """Draws the modal with tree content and dynamic height."""

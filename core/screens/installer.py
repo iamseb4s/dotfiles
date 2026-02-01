@@ -20,23 +20,23 @@ class InstallerScreen(Screen):
         self.overrides = overrides or {}
         self.total = len(self.queue)
         
-        # Calculate total work units (pkg + dots for each module)
+        # Calculate total work units (package + dotfiles for each module)
         self.total_units = 0
         for mod in self.queue:
-            ovr = self.overrides.get(mod.id, {})
-            if ovr.get('install_pkg', True): self.total_units += 1
-            if mod.has_usable_dotfiles() and ovr.get('install_dots', True): self.total_units += 1
+            override = self.overrides.get(mod.id, {})
+            if override.get('install_package', True): self.total_units += 1
+            if mod.has_usable_dotfiles() and override.get('install_dotfiles', True): self.total_units += 1
         
         # Execution State
         self.current_idx = -1
         self.completed_units = 0
         self.current_unit_progress = 0.0
-        self.results = {} # {mod_id: {'pkg': bool, 'dots': bool}}
-        self.status = {}  # {mod_id: {'pkg': 'pending', 'dots': 'pending'}}
+        self.results = {} # {mod_id: {'package': bool, 'dotfiles': bool}}
+        self.status = {}  # {mod_id: {'package': 'pending', 'dotfiles': 'pending'}}
         for m in self.queue:
-            self.status[m.id] = {'pkg': 'pending', 'dots': 'pending'}
+            self.status[m.id] = {'package': 'pending', 'dotfiles': 'pending'}
             # Initialize results as None (not attempted)
-            self.results[m.id] = {'pkg': None, 'dots': None}
+            self.results[m.id] = {'package': None, 'dotfiles': None}
             
         self.logs = []
         self.is_finished = False
@@ -119,25 +119,25 @@ class InstallerScreen(Screen):
     def _draw_task_tree(self, w, h):
         lines = [""]
         for mod in self.queue:
-            st = self.status[mod.id]
+            mod_status = self.status[mod.id]
             is_curr = (self.current_idx >= 0 and self.queue[self.current_idx].id == mod.id)
-            err = any(v == 'error' for v in st.values())
-            done = all(v in ['success', 'skipped'] for v in st.values())
+            err = any(v == 'error' for v in mod_status.values())
+            done = all(v in ['success', 'skipped'] for v in mod_status.values())
             
             icon = self.SYM_RUNNING if (is_curr and not self.is_finished) else (self.SYM_ERROR if err else (self.SYM_SUCCESS if done else self.SYM_PENDING))
             c = Style.highlight() if is_curr else (Style.green() if icon == self.SYM_SUCCESS else (Style.red() if icon == self.SYM_ERROR else Style.muted()))
             lines.append(f"  {c}{icon} {Style.BOLD if is_curr else ''}{mod.label}{Style.RESET}")
             
-            ovr = self.overrides.get(mod.id, {})
-            has_dots = mod.has_usable_dotfiles()
+            override = self.overrides.get(mod.id, {})
+            has_dotfiles = mod.has_usable_dotfiles()
             def get_sub_icon(s):
                 if s == 'running': return f"{Style.highlight()}{self.spinner_chars[self.spinner_idx]}{Style.RESET}"
                 return f"{Style.green() if s == 'success' else (Style.red() if s == 'error' else Style.muted())}{self.SYM_SUCCESS if s == 'success' else (self.SYM_ERROR if s == 'error' else self.SYM_PENDING)}{Style.RESET}"
 
-            if ovr.get('install_pkg', True):
-                lines.append(f"  {Style.muted()}{'├' if (has_dots and ovr.get('install_dots', True)) else '└'} {get_sub_icon(st['pkg'])} {Style.normal()}Package{Style.RESET}")
-            if has_dots and ovr.get('install_dots', True):
-                lines.append(f"  {Style.muted()}└ {get_sub_icon(st['dots'])} {Style.normal()}Dotfiles{Style.RESET}")
+            if override.get('install_package', True):
+                lines.append(f"  {Style.muted()}{'├' if (has_dotfiles and override.get('install_dotfiles', True)) else '└'} {get_sub_icon(mod_status['package'])} {Style.normal()}Package{Style.RESET}")
+            if has_dotfiles and override.get('install_dotfiles', True):
+                lines.append(f"  {Style.muted()}└ {get_sub_icon(mod_status['dotfiles'])} {Style.normal()}Dotfiles{Style.RESET}")
         
         return TUI.create_container(lines, w, h, title="TASKS", color="", is_focused=(not self.is_finished and not self.modal))
 
@@ -164,8 +164,8 @@ class InstallerScreen(Screen):
         # 1. Check if sudo is needed and prompt
         needs_sudo = False
         for mod in self.queue:
-            ovr = self.overrides.get(mod.id, {})
-            if ovr.get('install_pkg', True):
+            override = self.overrides.get(mod.id, {})
+            if override.get('install_package', True):
                 needs_sudo = True
                 break
         
@@ -189,31 +189,31 @@ class InstallerScreen(Screen):
             if self.is_cancelled: break
             
             self.current_idx = idx
-            ovr = self.overrides.get(mod.id, {})
-            do_pkg = ovr.get('install_pkg', True)
-            do_dots = ovr.get('install_dots', True) if mod.has_usable_dotfiles() else False
+            override = self.overrides.get(mod.id, {})
+            do_package = override.get('install_package', True)
+            do_dotfiles = override.get('install_dotfiles', True) if mod.has_usable_dotfiles() else False
             
             # Sub-tasks execution
             tasks = []
-            if do_pkg: tasks.append(('pkg', mod.install))
-            else: self.status[mod.id]['pkg'] = 'skipped'
+            if do_package: tasks.append(('package', mod.install))
+            else: self.status[mod.id]['package'] = 'skipped'
             
-            if do_dots: tasks.append(('dots', mod.configure))
-            else: self.status[mod.id]['dots'] = 'skipped'
+            if do_dotfiles: tasks.append(('dotfiles', mod.configure))
+            else: self.status[mod.id]['dotfiles'] = 'skipped'
 
-            for t_type, func in tasks:
+            for task_type, func in tasks:
                 if self.is_cancelled: break
-                self.status[mod.id][t_type], self.current_unit_progress = 'running', 0.0
+                self.status[mod.id][task_type], self.current_unit_progress = 'running', 0.0
                 
-                def live_cb(l):
-                    self.add_log(l); self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
+                def live_callback(log_line):
+                    self.add_log(log_line); self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_chars)
                     self.current_unit_progress = min(0.95, self.current_unit_progress + 0.005)
                     self._input_step()
                 
-                success = func(ovr, callback=live_cb, input_callback=self._input_step, password=self.password)
-                self.status[mod.id][t_type], self.results[mod.id][t_type] = ('success' if success else 'error'), success
+                success = func(override, callback=live_callback, input_callback=self._input_step, password=self.password)
+                self.status[mod.id][task_type], self.results[mod.id][task_type] = ('success' if success else 'error'), success
                 self.completed_units += 1; self.current_unit_progress = 0.0
-                if not success and t_type == 'pkg': self.status[mod.id]['dots'] = 'skipped'; break
+                if not success and task_type == 'package': self.status[mod.id]['dotfiles'] = 'skipped'; break
 
         self.is_finished = True
         # Always force ReviewModal on completion, overwriting any pending ConfirmModal

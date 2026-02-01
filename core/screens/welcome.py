@@ -18,8 +18,8 @@ class WelcomeScreen(Screen):
     """
     Landing screen displaying system information and primary actions.
     """
-    def __init__(self, sys_mgr=None):
-        self.sys_mgr = sys_mgr
+    def __init__(self, system_manager=None):
+        self.system_manager = system_manager
 
     def render(self):
         """Displays the splash screen with centered logo and system metrics."""
@@ -37,7 +37,7 @@ class WelcomeScreen(Screen):
         ]
         
         # Resolve OS name for display
-        os_name = self.sys_mgr.get_os_pretty_name() if self.sys_mgr else f"{platform.system()} {platform.release()}"
+        os_name = self.system_manager.get_os_pretty_name() if self.system_manager else f"{platform.system()} {platform.release()}"
         
         sys_info = [
             f"OS: {os_name}",

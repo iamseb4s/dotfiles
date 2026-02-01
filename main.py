@@ -43,8 +43,8 @@ def main():
         TUI.set_raw_mode(True)
         TUI.hide_cursor()
         TUI.clear_screen()
-        sys_mgr = System()
-        modules = load_modules(sys_mgr)
+        system_manager = System()
+        modules = load_modules(system_manager)
         
         # Global state machine
         state = "WELCOME"
@@ -55,7 +55,7 @@ def main():
                 TUI.clear_screen()
 
             if state == "WELCOME":
-                scr = WelcomeScreen(sys_mgr)
+                scr = WelcomeScreen(system_manager)
                 # Wait for input
                 while True:
                     scr.render()
@@ -91,7 +91,7 @@ def main():
                         break
                     elif action == "RELOAD_AND_WELCOME":
                         # Reload all modules to include the new one
-                        modules = load_modules(sys_mgr)
+                        modules = load_modules(system_manager)
                         selector_screen = SelectorScreen(modules) # Refresh selector too
                         state = "WELCOME"
                         TUI.clear_screen()
