@@ -1,0 +1,44 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-gemini-auth@latest"],
+  "default_agent" : "plan",
+  "permission" : {
+    "*": "ask",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "find": "allow",
+    "bash": {
+      "*": "ask",
+      "ls *": "allow",
+      "grep *": "allow",
+      "git status": "allow"
+      "git log*": "allow"
+    },
+    "read": {
+      "*": "allow",
+      "*.env": "ask",
+      "*.env.*": "ask",
+      "*.env.example": "allow"
+    }
+  },
+  "provider": {
+    "google": {
+      "options": {
+        "projectId": "arboreal-logic-470723-d8"
+      }
+    }
+  },
+  "keybinds": {
+    "input_newline": "shift+return,ctrl+return,ctrl+j",
+    "input_line_home": "ctrl+home",
+    "input_line_end": "ctrl+end",
+    "terminal_suspend": "none",
+    "input_undo": "ctrl+z",
+    "input_redo": "ctrl+shift+z",
+    "input_clear": "none"
+  },
+  "tui": {
+    "scroll_speed": 5
+  }
+}

@@ -1,0 +1,15 @@
+# ~/.config/bat/config
+
+#----- APPEARANCE -----
+--theme="Catppuccin Mocha"
+--style="numbers,changes,header,rule"
+--decorations="always"
+--color=always
+
+#----- LAYOUT & PAGING -----
+--paging="auto"
+--tabs=4
+--line-range=:500
+
+#----- SYNTAX MAPPING -----
+--map-syntax ".ignore:Git Ignore"
