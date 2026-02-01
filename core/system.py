@@ -96,11 +96,14 @@ class System:
                                     # Direct binary read
                                     chunk = os.read(process.stdout.fileno(), 4096)
                                     if chunk:
-                                        lines = (output_buffer + chunk).split(b'\n')
+                                        # Process both \n and \r to prevent terminal cursor jumps
+                                        raw_content = output_buffer + chunk
+                                        lines = raw_content.replace(b'\r', b'\n').split(b'\n')
                                         output_buffer = lines.pop()
                                         for line in lines:
-                                            # Decode here, ignoring errors for weird terminal sequences
-                                            callback(line.decode('utf-8', errors='ignore').rstrip())
+                                            content = line.decode('utf-8', errors='ignore').rstrip()
+                                            if content:
+                                                callback(content)
                                 except (OSError, EOFError):
                                     pass
                             elif source == sys.stdin:
