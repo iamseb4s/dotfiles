@@ -130,10 +130,10 @@ class Module:
         if not self.stow_pkg:
             return []
             
-        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
-        if not os.path.exists(pkg_path):
+        if not self.has_usable_dotfiles():
             return [f"No source files found in dots/{self.stow_pkg}"]
             
+        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
         tree = []
         target = self.stow_target or "~/"
         tree.append(f"Target: {target}")
