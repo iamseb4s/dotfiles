@@ -102,12 +102,29 @@ class Module:
         return self.run_stow(self.stow_pkg, self.stow_target, callback=callback, input_callback=input_callback, password=password)
 
     def run_stow(self, package_name, target=None, callback=None, input_callback=None, password=None):
-        """Standard GNU Stow wrapper."""
+        """Standard GNU Stow wrapper with cleanup of existing files."""
         dotfiles_dir = os.path.join(os.getcwd(), "dots")
+        pkg_source_dir = os.path.join(dotfiles_dir, package_name)
         target_dir = os.path.expanduser(target or "~")
         
-        if target and not os.path.exists(target_dir):
+        if not os.path.exists(pkg_source_dir):
+            return True
+
+        if not os.path.exists(target_dir):
             os.makedirs(target_dir, exist_ok=True)
+
+        # Cleanup: Remove existing files/dirs or broken symlinks that would cause Stow conflicts
+        try:
+            for entry in os.listdir(pkg_source_dir):
+                target_path = os.path.join(target_dir, entry)
+                if os.path.lexists(target_path) and (not os.path.islink(target_path) or not os.path.exists(target_path)):
+                    if callback: callback(f"Cleaning up existing {entry} in target...")
+                    if os.path.isdir(target_path) and not os.path.islink(target_path):
+                        shutil.rmtree(target_path)
+                    else:
+                        os.remove(target_path)
+        except Exception as e:
+            if callback: callback(f"Cleanup warning: {e}")
 
         msg = f"Stowing {package_name} to {target_dir}..."
         if callback: callback(msg)
