@@ -23,8 +23,8 @@ class Module:
     # Stow configuration
     stow_target = "~"   
 
-    def __init__(self, sys_manager: System):
-        self.sys = sys_manager
+    def __init__(self, system_manager: System):
+        self.system_manager = system_manager
         # Auto-resolve stow_pkg to match id
         self.stow_pkg = self.id
 
@@ -47,46 +47,46 @@ class Module:
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
         if isinstance(self.package_name, dict):
-            if self.sys.is_arch: return self.package_name.get("arch")
-            if self.sys.is_debian: return self.package_name.get("debian")
+            if self.system_manager.is_arch: return self.package_name.get("arch")
+            if self.system_manager.is_debian: return self.package_name.get("debian")
         return self.package_name or self.id
 
     def get_manager(self):
         """Resolves the package manager based on OS or direct value."""
         if isinstance(self.manager, dict):
-            if self.sys.is_arch: return self.manager.get("arch", "system")
-            if self.sys.is_debian: return self.manager.get("debian", "system")
+            if self.system_manager.is_arch: return self.manager.get("arch", "system")
+            if self.system_manager.is_debian: return self.manager.get("debian", "system")
             return self.manager.get("default", "system")
         return self.manager or "system"
 
     def is_installed(self):
         """Detection logic based on the package manager type."""
-        pkg = self.get_package_name()
+        package = self.get_package_name()
         if self.manager == "system":
-            return shutil.which(pkg or "") is not None
+            return shutil.which(package or "") is not None
         elif self.manager == "cargo":
             return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif self.manager == "brew":
-            return shutil.which("brew") and self.sys.run(f"brew list {pkg}", shell=True)
+            return shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
         return False
 
     def install(self, override=None, callback=None, input_callback=None, password=None):
         """Generic installation logic supporting user overrides and real-time feedback."""
-        pkg = override['pkg_name'] if override else self.get_package_name()
+        package = override['package_name'] if override else self.get_package_name()
         manager = override['manager'] if override else self.get_manager()
         
-        if not pkg and manager == "system": return True
+        if not package and manager == "system": return True
 
         if manager == "system":
-            return self.sys.install_package(pkg if self.sys.is_arch else None,
-            pkg if self.sys.is_debian else None,
+            return self.system_manager.install_package(package if self.system_manager.is_arch else None,
+            package if self.system_manager.is_debian else None,
             callback=callback,
             input_callback=input_callback,
             password=password)
         elif manager == "cargo":
-            return self.sys.run(f"cargo install {pkg}", shell=True, callback=callback, input_callback=input_callback)
+            return self.system_manager.run(f"cargo install {package}", shell=True, callback=callback, input_callback=input_callback)
         elif manager == "bob":
-            return self.sys.run(f"bob use stable", shell=True, callback=callback, input_callback=input_callback)
+            return self.system_manager.run(f"bob use stable", shell=True, callback=callback, input_callback=input_callback)
         return True
 
     def configure(self, override=None, callback=None, input_callback=None, password=None):
@@ -115,7 +115,7 @@ class Module:
 
         try:
             cmd = ["stow", "--dir", dotfiles_dir, "--target", target_dir, "-R", package_name]
-            return self.sys.run(cmd, callback=callback, input_callback=input_callback, password=password)
+            return self.system_manager.run(cmd, callback=callback, input_callback=input_callback, password=password)
         except Exception as e:
             err = f"Error: {e}"
             if callback: callback(err)

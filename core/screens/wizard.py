@@ -44,7 +44,7 @@ class WizardScreen(Screen):
             {'id': 'label', 'label': 'Label', 'type': 'text', 'default': '', 'help': 'Display name in the selection menu.',
              'validate': lambda v: "Label required." if not v else None},
             {'id': 'manager', 'label': 'Package Manager', 'type': 'radio', 'options': self.managers, 'default': 'system', 'help': 'Select the package manager driver.'},
-            {'id': 'pkg_name', 'label': 'Package Name', 'type': 'text', 'default': '', 'help': 'Exact package name for the manager. Defaults to ID.'},
+            {'id': 'package_name', 'label': 'Package Name', 'type': 'text', 'default': '', 'help': 'Exact package name for the manager. Defaults to ID.'},
             {'id': 'category', 'label': 'Category', 'type': 'radio', 'options': self.categories, 'default': self.categories[0] if self.categories else 'General', 'help': 'Group name for the package list.',
              'validate': lambda v: "Category name required." if (v == self.CUSTOM_TAG and not self.form[self.CUSTOM_FIELD]) else None},
             {'id': 'stow_target', 'label': 'Target Path', 'type': 'text', 'default': '~', 'help': 'Deployment destination (defaults to ~).'},
@@ -232,14 +232,14 @@ class WizardScreen(Screen):
 
     def save_package(self):
         """Generates the .py module and creates the dots/ folder."""
-        fid = self.form['id']
-        module_path, dots_path = os.path.join("modules", f"{fid}.py"), os.path.join("dots", fid)
+        module_id = self.form['id']
+        module_path, dots_path = os.path.join("modules", f"{module_id}.py"), os.path.join("dots", module_id)
         try:
             # 1. Generate Python Code
             code = "from modules.base import Module\n\n" + self._generate_python()
 
             # If Manual Mode is enabled, add the install method template
-            if self.form['is_incomplete']: code += "\n\n    def install(self):\n        # TODO: Implement custom logic\n        super().install()"
+            if self.form['is_incomplete']: code += "\n\n    def install(self, override=None, callback=None, input_callback=None, password=None):\n        # TODO: Implement custom logic\n        return super().install(override, callback, input_callback, password)"
             
             # 2. Write Module File
             with open(module_path, "w") as f: f.write(code + "\n")
@@ -249,17 +249,17 @@ class WizardScreen(Screen):
             
             # 4. Clean up draft if exists
             if self.active_draft_path and os.path.exists(self.active_draft_path): os.remove(self.active_draft_path)
-            elif os.path.exists(os.path.join(self.DRAFTS_DIR, f"{fid}.json")): os.remove(os.path.join(self.DRAFTS_DIR, f"{fid}.json"))
+            elif os.path.exists(os.path.join(self.DRAFTS_DIR, f"{module_id}.json")): os.remove(os.path.join(self.DRAFTS_DIR, f"{module_id}.json"))
             return True
         except Exception as e: TUI.push_notification(f"Save failed: {str(e)}", type="ERROR"); return False
 
     def _generate_python(self):
         """Generates the Python class code based on form data."""
-        fid, lbl = self.form['id'] or "my_package", self.form['label'] or "My Package"
-        cls_n = "".join([p.capitalize() for p in fid.replace("-", "_").split("_")]) + "Module"
-        cat = self.form[self.CUSTOM_FIELD] if self.form['category'] == self.CUSTOM_TAG else self.form['category']
-        code = f"class {cls_n}(Module):\n    id = \"{fid}\"\n    label = \"{lbl}\"\n    category = \"{cat}\"\n    manager = \"{self.form['manager']}\""
-        if self.form['pkg_name'] and self.form['pkg_name'] != fid: code += f"\n    package_name = \"{self.form['pkg_name']}\""
+        module_id, label = self.form['id'] or "my_package", self.form['label'] or "My Package"
+        class_name = "".join([p.capitalize() for p in module_id.replace("-", "_").split("_")]) + "Module"
+        category = self.form[self.CUSTOM_FIELD] if self.form['category'] == self.CUSTOM_TAG else self.form['category']
+        code = f"class {class_name}(Module):\n    id = \"{module_id}\"\n    label = \"{label}\"\n    category = \"{category}\"\n    manager = \"{self.form['manager']}\""
+        if self.form['package_name'] and self.form['package_name'] != module_id: code += f"\n    package_name = \"{self.form['package_name']}\""
         if self.form['stow_target'] != "~": code += f"\n    stow_target = \"{self.form['stow_target']}\""
         if self.form['dependencies']: code += f"\n    dependencies = {self.form['dependencies']}"
         return code
@@ -344,7 +344,7 @@ class WizardScreen(Screen):
     def _draft_del_req(self):
         if self.active_draft_path: self._set_modal(ConfirmModal("DELETE DRAFT?", f"Delete '{self.form['id'] or 'unnamed'}'?"), "DELETE_DRAFT")
     def _back_req(self):
-        if any(self.form[k] for k in ['id', 'label', 'pkg_name', 'custom_category']) or self.form['stow_target'] != "~":
+        if any(self.form[k] for k in ['id', 'label', 'package_name', 'custom_category']) or self.form['stow_target'] != "~":
             self._set_modal(ConfirmModal("DISCARD?", "Discard all changes?"), "DISCARD")
         else: return "WELCOME"
     def _trigger_enter(self):
