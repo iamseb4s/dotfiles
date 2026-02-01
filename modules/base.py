@@ -28,6 +28,22 @@ class Module:
         # Auto-resolve stow_pkg to match id
         self.stow_pkg = self.id
 
+    def has_usable_dotfiles(self):
+        """
+        Recursively checks if the dotfiles directory exists and contains at least one file.
+        """
+        if not self.stow_pkg:
+            return False
+            
+        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
+        if not os.path.exists(pkg_path) or not os.path.isdir(pkg_path):
+            return False
+            
+        for root, dirs, files in os.walk(pkg_path):
+            if files:
+                return True
+        return False
+
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
         if isinstance(self.package_name, dict):
