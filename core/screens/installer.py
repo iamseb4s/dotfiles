@@ -25,7 +25,7 @@ class InstallerScreen(Screen):
         for mod in self.queue:
             ovr = self.overrides.get(mod.id, {})
             if ovr.get('install_pkg', True): self.total_units += 1
-            if mod.stow_pkg and ovr.get('install_dots', True): self.total_units += 1
+            if mod.has_usable_dotfiles() and ovr.get('install_dots', True): self.total_units += 1
         
         # Execution State
         self.current_idx = -1
@@ -128,13 +128,14 @@ class InstallerScreen(Screen):
             c = Style.highlight() if is_curr else (Style.green() if icon == self.SYM_SUCCESS else (Style.red() if icon == self.SYM_ERROR else Style.muted()))
             lines.append(f"  {c}{icon} {Style.BOLD if is_curr else ''}{mod.label}{Style.RESET}")
             
-            ovr, has_dots = self.overrides.get(mod.id, {}), mod.stow_pkg is not None
+            ovr = self.overrides.get(mod.id, {})
+            has_dots = mod.has_usable_dotfiles()
             def get_sub_icon(s):
                 if s == 'running': return f"{Style.highlight()}{self.spinner_chars[self.spinner_idx]}{Style.RESET}"
                 return f"{Style.green() if s == 'success' else (Style.red() if s == 'error' else Style.muted())}{self.SYM_SUCCESS if s == 'success' else (self.SYM_ERROR if s == 'error' else self.SYM_PENDING)}{Style.RESET}"
 
             if ovr.get('install_pkg', True):
-                lines.append(f"  {Style.muted()}{'├' if has_dots else '└'} {get_sub_icon(st['pkg'])} {Style.normal()}Package{Style.RESET}")
+                lines.append(f"  {Style.muted()}{'├' if (has_dots and ovr.get('install_dots', True)) else '└'} {get_sub_icon(st['pkg'])} {Style.normal()}Package{Style.RESET}")
             if has_dots and ovr.get('install_dots', True):
                 lines.append(f"  {Style.muted()}└ {get_sub_icon(st['dots'])} {Style.normal()}Dotfiles{Style.RESET}")
         
@@ -190,7 +191,7 @@ class InstallerScreen(Screen):
             self.current_idx = idx
             ovr = self.overrides.get(mod.id, {})
             do_pkg = ovr.get('install_pkg', True)
-            do_dots = ovr.get('install_dots', True) if mod.stow_pkg else False
+            do_dots = ovr.get('install_dots', True) if mod.has_usable_dotfiles() else False
             
             # Sub-tasks execution
             tasks = []

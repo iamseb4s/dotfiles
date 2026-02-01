@@ -172,14 +172,14 @@ class PasswordModal(BaseModal):
 
     def render(self):
         wrapped = TUI.wrap_text(self.message, self.width - 10)
-        inner = [""] + [f"    {Style.normal()}{line}{Style.RESET}" for line in wrapped]
+        inner = [""] + [f"{Style.normal()}{line.center(self.width-2)}{Style.RESET}" for line in wrapped]
         
         # Password field
         pwd_display = "*" * len(self.password)
         # Style the field box with a fixed width for the input area
         field_width = self.width - 12
         field = f" {Style.highlight()}{pwd_display}{Style.RESET}" + " " * (field_width - len(pwd_display) - 1)
-        inner.extend(["", f"    {Style.muted()}╭{'─' * field_width}╮{Style.RESET}"])
+        inner.append(f"    {Style.muted()}╭{'─' * field_width}╮{Style.RESET}")
         inner.append(f"    {Style.muted()}│{Style.RESET}{field}{Style.muted()}│{Style.RESET}")
         inner.append(f"    {Style.muted()}╰{'─' * field_width}╯{Style.RESET}")
         

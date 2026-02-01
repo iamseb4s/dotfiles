@@ -13,13 +13,13 @@ class OptionsModal(BaseModal):
     def __init__(self, module, current_overrides=None):
         super().__init__(f" PACKAGE OPTIONS: {module.label.upper()} ", width=68)
         self.mod = module
-        # Determine if module has dotfiles configuration
-        self.has_dots = module.stow_pkg is not None
+        # Determine if module has usable dotfiles configuration
+        self.has_dots = module.has_usable_dotfiles()
         
         # Internal state
         self.pkg_name = current_overrides.get('pkg_name', module.get_package_name()) if current_overrides else module.get_package_name()
         self.install_pkg = current_overrides.get('install_pkg', True) if current_overrides else True
-        self.install_dots = current_overrides.get('install_dots', True) if current_overrides else True
+        self.install_dots = (current_overrides.get('install_dots', True) if current_overrides else True) and self.has_dots
         self.stow_target = current_overrides.get('stow_target', module.stow_target) if current_overrides else module.stow_target
         
         # Resolve available managers

@@ -40,7 +40,7 @@ class ReviewModal(BaseModal):
             manager = ovr['manager'] if is_custom else mod.get_manager()
             do_pkg = ovr['install_pkg'] if is_custom else True
             do_dots = ovr['install_dots'] if is_custom else True
-            has_config = mod.stow_pkg is not None
+            has_config = mod.has_usable_dotfiles()
             
             if self.is_results_mode:
                 def get_res_icon(success, active):
@@ -52,8 +52,12 @@ class ReviewModal(BaseModal):
                 p_icon, d_icon = ("■" if do_pkg else " "), ("■" if do_dots else " ")
                 p_color = d_color = Style.normal()
 
+            # Check for root requirement (Package installation via 'system' driver)
+            requires_root = (manager == "system" and do_pkg)
+            root_mark = f"{Style.normal()}*{Style.RESET}" if requires_root else ""
+            
             conn = f"{Style.muted()} ├{Style.RESET}" if has_config else f"{Style.muted()} └{Style.RESET}"
-            lines.append(f"{conn}{p_color}[{p_icon}]{Style.RESET} {Style.muted()}Pkg:{Style.RESET} {Style.normal()}'{pkg_name}'{Style.RESET}{Style.muted()}, Mgr:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}")
+            lines.append(f"{conn}{p_color}[{p_icon}]{Style.RESET} {root_mark}{Style.muted()}Package:{Style.RESET} {Style.normal()}'{pkg_name}'{Style.RESET}{Style.muted()}, Manager:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}")
             
             if has_config:
                 lbl_d = "Configuration files" if mod.id == "refind" else "Dotfiles (Stow)"
@@ -94,6 +98,12 @@ class ReviewModal(BaseModal):
             txt = f"{Style.green()}{st['installed']} installed{Style.RESET}, {Style.blue()}{st['cancelled']} cancelled{Style.RESET}, {Style.red()}{st['failed']} failed{Style.RESET}"
             inner.append(f"{' ' * ((self.width - 2 - TUI.visible_len(txt)) // 2)}{txt}")
         else:
+            # Check if any task requires root by searching for the normal asterisk in the content
+            any_root = any(f"{Style.normal()}*{Style.RESET}" in line for line in self.content_lines)
+            if any_root:
+                root_msg = f"{Style.red()}*root required{Style.RESET}"
+                inner.append(f"{' ' * ((self.width - 2 - TUI.visible_len(root_msg)) // 2)}{root_msg}")
+            
             txt = "Confirm and start installation?"
             inner.append(f"{Style.muted()}{txt.center(self.width-2)}{Style.RESET}")
         

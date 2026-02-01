@@ -382,7 +382,10 @@ class TUI:
 
     @staticmethod
     def truncate_ansi(text, max_len):
-        """Truncates a string containing ANSI codes without breaking them."""
+        """Truncates a string containing ANSI codes without breaking them, while stripping layout-breaking control chars."""
+        # Pre-clean the text from carriage returns
+        text = text.replace('\r', '')
+        
         if TUI.visible_len(text) <= max_len:
             return text
             
@@ -618,9 +621,14 @@ class TUI:
 
     @staticmethod
     def visible_len(text):
-        """Calculates character count excluding ANSI control codes."""
+        """Calculates character count excluding ANSI control codes and non-printable characters."""
+        if not text: return 0
+        # Remove ANSI escape sequences
         ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-        return len(ansi_escape.sub('', text))
+        clean_text = ansi_escape.sub('', text)
+        # Remove or replace other control characters that might break layout
+        clean_text = clean_text.replace('\r', '').replace('\t', '    ')
+        return len(clean_text)
 
     @staticmethod
     def visible_ljust(text, width):
