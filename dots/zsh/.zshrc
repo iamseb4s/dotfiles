@@ -9,18 +9,37 @@ fi
 # ======================
 # Oh-My-Zsh Configuration
 # ======================
-zstyle ':omz:update' mode auto      # run 'omz update' to update manually
-zstyle ':omz:update' frequency 7
 export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-# Standard plugins can be found in $ZSH/plugins/
-# Custom plugins may be added to $ZSH_CUSTOM/plugins/
-source ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting/themes/catppuccin_mocha-zsh-syntax-highlighting.zsh
-plugins=(gitfast gh zsh-autosuggestions zsh-syntax-highlighting history ssh sudo)
-source $ZSH/oh-my-zsh.sh
-source ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+if [[ -d "$ZSH" ]]; then
+    zstyle ':omz:update' mode auto
+    zstyle ':omz:update' frequency 7
+    
+    # 1. Base Plugins
+    plugins=(gitfast gh history ssh sudo)
+    
+    # 2. Dynamic Plugin Detection
+    [[ -d "$ZSH/custom/plugins/zsh-autosuggestions" ]] && plugins+=(zsh-autosuggestions)
+    [[ -d "$ZSH/custom/plugins/zsh-syntax-highlighting" ]] && plugins+=(zsh-syntax-highlighting)
+    
+    # 3. Theme Configuration
+    if [[ -d "$ZSH/custom/themes/powerlevel10k" ]]; then
+        ZSH_THEME="powerlevel10k/powerlevel10k"
+        [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+    else
+        ZSH_THEME="robbyrussell"
+    fi
+
+    # 4. Load Oh-My-Zsh
+    source $ZSH/oh-my-zsh.sh
+
+    # 5. Load Syntax Highlighting Theme (Catppuccin)
+    SYNTAX_THEME="$ZSH/custom/plugins/zsh-syntax-highlighting/themes/catppuccin_mocha-zsh-syntax-highlighting.zsh"
+    [[ -f "$SYNTAX_THEME" ]] && source "$SYNTAX_THEME"
+else
+    # Fallback prompt if OMZ is missing
+    PROMPT="%n@%m:%~%# "
+fi
 
 
 # ======================
@@ -29,12 +48,13 @@ source ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
 alias zshconfig="nvim ~/.zshrc"
 alias ohmyzsh="nvim ~/.oh-my-zsh"
 
-# ubuntu
+# Ubuntu
 alias aptu="sudo apt update && sudo apt upgrade && sudo apt autoremove"
 alias apti="sudo apt install"
 alias aptc="sudo apt clean && sudo apt autoclean && sudo apt autoremove"
 alias aptr="sudo apt purge"
 
+# Modern CLI
 # eza
 alias ls='eza --icons --group-directories-first --git'
 alias tree='eza --tree --icons --group-directories-first --git'
@@ -69,7 +89,7 @@ alias z='zellij'
 
 
 # ======================
-# Environment Variables
+# Environment & Tools
 # ======================
 # Conda
 export PATH=$HOME/anaconda3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/bin:$PATH
@@ -84,9 +104,6 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # fzf
 export FZF_DEFAULT_OPTS_FILE="$HOME/.config/fzf/fzf.conf"
 export FZF_DEFAULT_OPTS="--bind='focus:'"
-
-# Gemini CLI
-# export GOOGLE_CLOUD_PROJECT="erudite-nation-470903-t5"
 
 # Opencode
 export PATH=$HOME/.opencode/bin:$PATH
@@ -104,17 +121,13 @@ fi
 # ======================
 # fzf
 [[ ! "$PATH" == *"$HOME/.fzf/bin"* ]] && export PATH="${PATH:+${PATH}:}$HOME/.fzf/bin"
-source <(fzf --zsh)
+command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
 
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # atuin
-eval "$(atuin init zsh)"
-
-# starship
-# export PATH="$HOME/.cargo/bin:$PATH"
-# eval "$(starship init zsh)"
+command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh)"
 
 
 # >>> conda initialize >>>
