@@ -25,6 +25,7 @@ class SelectorScreen(Screen):
         
         # State tracking
         self.selected, self.auto_locked, self.overrides = set(), set(), {}
+        self.sub_selections = {} # {module_id: {sub_id: bool}}
         
         # UI State
         self.cursor_idx, self.list_offset, self.info_offset, self.modal = 0, 0, 0, None
@@ -45,14 +46,39 @@ class SelectorScreen(Screen):
     def _build_flat_list(self):
         """
         Flattens the hierarchical category structure into a linear list
-        for rendering based on the expansion state of each category.
+        for rendering including sub-components.
         """
         items = []
         for cat in self.category_names:
             items.append({'type': 'header', 'obj': cat})
-            if self.expanded[cat]:
-                for m in self.categories[cat]: items.append({'type': 'module', 'obj': m})
+            if self.expanded.get(cat, True):
+                for m in self.categories[cat]:
+                    items.append({'type': 'module', 'obj': m, 'depth': 0})
+                    # Only show sub-components if module is expanded
+                    if self.expanded.get(m.id, False):
+                        has_manual_components = hasattr(m, 'sub_components') and m.sub_components
+                        
+                        if has_manual_components:
+                            self._flatten_sub_components(m.sub_components, items, 1, m.id)
+                        else:
+                            # Inject Package component if no sub_components defined
+                            bin_comp = {"id": "binary", "label": f"{m.label} Package", "default": True}
+                            items.append({'type': 'sub', 'obj': bin_comp, 'depth': 1, 'module_id': m.id})
+                        
+                        # Inject Dotfiles component if usable and not explicitly in sub_components
+                        if m.has_usable_dotfiles():
+                            has_manual_dot = any(c.get('id') == 'dotfiles' for c in getattr(m, 'sub_components', []))
+                            if not has_manual_dot:
+                                dot_comp = {"id": "dotfiles", "label": "Deploy Configuration Files", "default": True}
+                                items.append({'type': 'sub', 'obj': dot_comp, 'depth': 1, 'module_id': m.id})
         return items
+
+    def _flatten_sub_components(self, components, items, depth, module_id):
+        for comp in components:
+            items.append({'type': 'sub', 'obj': comp, 'depth': depth, 'module_id': module_id})
+            # Sub-components are expanded by default if they have children
+            if self.expanded.get(f"{module_id}:{comp['id']}", True) and comp.get('children'):
+                self._flatten_sub_components(comp['children'], items, depth + 1, module_id)
 
     def is_active(self, mid):
         """Returns True if module is either selected or locked by dependency."""
@@ -123,7 +149,7 @@ class SelectorScreen(Screen):
                 label = f" {item['obj'].upper()} "; gap = content_width - len(label); left_pad = gap // 2
                 color = Style.highlight() if is_cursor else Style.normal()
                 lines.append(f"  {color}{Style.BOLD if is_cursor else ''}{'─' * left_pad}{label}{'─' * (gap - left_pad)}{Style.RESET}")
-            else:
+            elif item['type'] == 'module':
                 module = item['obj']; is_installed = module.is_installed()
                 if module.id in self.auto_locked: mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.red()
                 elif module.id in self.selected:
@@ -135,6 +161,19 @@ class SelectorScreen(Screen):
                 label_color = Style.normal() if not (is_cursor or self.is_active(module.id) or is_installed) else style
                 label_text = f" {style}{mark}  {label_color}{Style.BOLD if (self.is_active(module.id) and not is_cursor) else ''}{module.label}{Style.RESET}"
                 lines.append(f"  {TUI.split_line(label_text, f'{style}{status_text}{Style.RESET}' if status_text else '', content_width)}")
+
+            elif item['type'] == 'sub':
+                comp = item['obj']
+                module_id = item['module_id']
+                # Check if it's selected in sub_selections, fallback to its own default
+                is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True))
+                mark = self.SYM_SEL if is_sel else self.SYM_EMPTY
+                
+                style = Style.highlight() + Style.BOLD if is_cursor else (Style.green() if is_sel else Style.muted())
+                # Use spaces for indentation as requested
+                indent = "    " * item['depth']
+                label_text = f"  {indent}{style}{mark}  {comp['label']}{Style.RESET}"
+                lines.append(f"  {TUI.visible_ljust(label_text, content_width)}")
 
         visible_lines = lines[self.list_offset : self.list_offset + window_height]
         while len(visible_lines) < window_height: visible_lines.append("")
@@ -173,6 +212,15 @@ class SelectorScreen(Screen):
                 lines.extend(["", f"  {Style.BOLD}{Style.subtext0()}CONFIG TREE{Style.RESET}", f"  {Style.surface1()}{'─' * 11}{Style.RESET}"])
                 for line in tree:
                     for wrapped_line in TUI.wrap_text(line, content_width - 2): lines.append(f"    {Style.muted()}{wrapped_line}{Style.RESET}")
+        elif item['type'] == 'sub':
+            comp = item['obj']; module_id = item['module_id']
+            module = self.mod_map[module_id]
+            is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True))
+            color = Style.green() if is_sel else Style.muted()
+            lines.extend([f"  {Style.BOLD}{color}{comp['label'].upper()}{Style.RESET}", f"  {Style.surface1()}{'─' * content_width}{Style.RESET}"])
+            lines.append(f"  {Style.muted()}Component of {Style.BOLD}{module.label}{Style.RESET}")
+            lines.append("")
+            lines.append(f"  {Style.subtext1()}Status:    {Style.RESET}{color}{'Selected' if is_sel else 'Skipped'}{Style.RESET}")
         else:
             category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.surface1()}{'─' * content_width}{Style.RESET}", f"  {Style.muted()}Packages in this group:{Style.RESET}", ""])
             for module in self.categories[category]:
@@ -222,19 +270,93 @@ class SelectorScreen(Screen):
         """Handles item selection and group toggling."""
         item = self.flat_items[self.cursor_idx]
         if item['type'] == 'module':
-            module_id = item['obj'].id
-            if module_id in self.auto_locked: return
-            if module_id in self.selected: self.selected.remove(module_id); self.overrides.pop(module_id, None)
-            else: self.selected.add(module_id)
+            module = item['obj']
+            if module.id in self.auto_locked: return
+            if module.id in self.selected:
+                self.selected.remove(module.id)
+                self.overrides.pop(module.id, None)
+                self.sub_selections.pop(module.id, None)
+                self.expanded[module.id] = False # Auto-collapse on deselect
+            else:
+                self.selected.add(module.id)
+                self.expanded[module.id] = True  # Auto-expand on select
+                if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
+                
+                # Auto-select binary package by default
+                self.sub_selections[module.id]['binary'] = True
+                
+                # Auto-select all sub-components by default
+                if hasattr(module, 'sub_components') and module.sub_components:
+                    self._set_sub_selection_recursive(module.id, module.sub_components, True)
+                
+                # Auto-select dotfiles by default if they exist
+                if module.has_usable_dotfiles():
+                    self.sub_selections[module.id]['dotfiles'] = True
+        
+        elif item['type'] == 'sub':
+            module_id = item['module_id']
+            comp = item['obj']
+            if module_id not in self.selected:
+                self.selected.add(module_id)
+                self.expanded[module_id] = True # Ensure expanded if a child is picked
+                self.sub_selections[module_id] = {}
+            
+            # Get current state or default
+            current_state = self.sub_selections[module_id].get(comp['id'], comp.get('default', True))
+            new_state = not current_state
+            
+            # Update this component and its children
+            self.sub_selections[module_id][comp['id']] = new_state
+            if 'children' in comp:
+                self._set_sub_selection_recursive(module_id, comp['children'], new_state)
+            
+            # If we enable a child, we must ensure parents are enabled
+            if new_state:
+                self._ensure_parent_path_enabled(module_id, comp['id'])
+
         elif item['type'] == 'header':
             category = item['obj']; modules = self.categories[category]
             if all(self.is_active(m.id) for m in modules):
                 for module in modules:
-                    if module.id in self.selected: self.selected.remove(module.id); self.overrides.pop(module.id, None)
+                    if module.id in self.selected:
+                        self.selected.remove(module.id)
+                        self.overrides.pop(module.id, None)
+                        self.sub_selections.pop(module.id, None)
+                        self.expanded[module.id] = False # Sync collapse
             else:
                 for module in modules:
-                    if module.id not in self.auto_locked: self.selected.add(module.id)
+                    if module.id not in self.auto_locked:
+                        self.selected.add(module.id)
+                        self.expanded[module.id] = True # Sync expansion
+                        if hasattr(module, 'sub_components') and module.sub_components:
+                            if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
+                            self._set_sub_selection_recursive(module.id, module.sub_components, True)
         return None
+
+    def _set_sub_selection_recursive(self, module_id, components, state):
+        for comp in components:
+            if module_id not in self.sub_selections: self.sub_selections[module_id] = {}
+            self.sub_selections[module_id][comp['id']] = state
+            if 'children' in comp:
+                self._set_sub_selection_recursive(module_id, comp['children'], state)
+
+    def _ensure_parent_path_enabled(self, module_id, target_comp_id):
+        """Ensures that all parents of a sub-component are enabled."""
+        module = self.mod_map.get(module_id)
+        if not module or not hasattr(module, 'sub_components'): return
+
+        def find_and_enable_parents(components, path):
+            for comp in components:
+                if comp['id'] == target_comp_id:
+                    for p_id in path:
+                        self.sub_selections[module_id][p_id] = True
+                    return True
+                if 'children' in comp:
+                    if find_and_enable_parents(comp['children'], path + [comp['id']]):
+                        return True
+            return False
+
+        find_and_enable_parents(module.sub_components, [])
 
     def _handle_tab(self):
         """Handles TAB key for expanding headers or opening options."""
@@ -244,20 +366,40 @@ class SelectorScreen(Screen):
         return None
 
     def _collapse(self):
-        """Collapses the current header."""
+        """Collapses the current header, module or sub-component."""
         item = self.flat_items[self.cursor_idx]
         if item['type'] == 'header': self.expanded[item['obj']] = False
+        elif item['type'] == 'module': self.expanded[item['obj'].id] = False
+        elif item['type'] == 'sub':
+            self.expanded[f"{item['module_id']}:{item['obj']['id']}"] = False
         return None
 
     def _expand(self):
-        """Expands the current header."""
+        """Expands the current header, module or sub-component."""
         item = self.flat_items[self.cursor_idx]
         if item['type'] == 'header': self.expanded[item['obj']] = True
+        elif item['type'] == 'module': self.expanded[item['obj'].id] = True
+        elif item['type'] == 'sub':
+            self.expanded[f"{item['module_id']}:{item['obj']['id']}"] = True
         return None
 
     def _trigger_install(self):
         """Shows the installation review modal."""
         all_s = self.selected.union(self.auto_locked)
+        
+        # Inject sub-selections into overrides before passing to Review/Installer
+        for mid in self.selected:
+            if mid not in self.overrides:
+                mod = self.mod_map[mid]
+                self.overrides[mid] = {
+                    'package_name': mod.get_package_name(),
+                    'manager': mod.get_manager(),
+                    'install_package': True,
+                    'install_dotfiles': mod.has_usable_dotfiles(),
+                    'stow_target': mod.stow_target
+                }
+            self.overrides[mid]['sub_selections'] = self.sub_selections.get(mid, {})
+
         if all_s: self.modal = ReviewModal(self.modules, all_s, self.overrides)
         else: TUI.push_notification("Select at least one package to install", type="ERROR")
         return None

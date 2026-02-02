@@ -22,6 +22,9 @@ class Module:
     
     # Stow configuration
     stow_target = "~"   
+    
+    # Hierarchical sub-components
+    sub_components = []
 
     def __init__(self, system_manager: System):
         self.system_manager = system_manager
@@ -71,7 +74,13 @@ class Module:
         return False
 
     def install(self, override=None, callback=None, input_callback=None, password=None):
-        """Generic installation logic supporting user overrides and real-time feedback."""
+        """Generic installation logic supporting modular user selections."""
+        # Check sub-selections for binary installation (id: 'binary')
+        subs = override.get('sub_selections', {}) if override else {}
+        if not subs.get('binary', True):
+            if callback: callback(f"Skipping {self.label} package installation as requested...")
+            return True
+
         package = override['package_name'] if override else self.get_package_name()
         manager = override['manager'] if override else self.get_manager()
         
@@ -90,8 +99,14 @@ class Module:
         return True
 
     def configure(self, override=None, callback=None, input_callback=None, password=None):
-        """Auto-stow if dotfiles directory exists, supporting user overrides."""
+        """Auto-stow if dotfiles directory exists, supporting modular user selections."""
         if not self.stow_pkg:
+            return True
+
+        # Check sub-selections for dotfiles deployment (id: 'dotfiles')
+        subs = override.get('sub_selections', {}) if override else {}
+        if not subs.get('dotfiles', True):
+            if callback: callback("Skipping configuration deployment...")
             return True
             
         # Check if source directory exists before stowing to avoid errors
