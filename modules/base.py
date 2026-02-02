@@ -154,7 +154,7 @@ class Module:
             else: print(f"[{self.id}] {err}")
             return False
 
-    def get_config_tree(self):
+    def get_config_tree(self, target=None):
         """
         Recursively scans the dotfiles source directory to generate 
         a visual file tree.
@@ -167,8 +167,11 @@ class Module:
             
         pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
         tree = []
-        target = self.stow_target or "~/"
-        tree.append(f"Target: {target}")
+        # Add extra spacing before tree info
+        tree.append("")
+        
+        display_target = target or self.stow_target or "~/"
+        tree.append(f"Target:  {display_target}")
         tree.append("")
         
         def scan(path, prefix="", depth=0):
