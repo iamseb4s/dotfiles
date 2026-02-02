@@ -204,10 +204,12 @@ class SelectorScreen(Screen):
             lines.append("")
             def row(label, value, color_style=""): return f"  {Style.subtext1()}{label:<10}{Style.RESET} {color_style}{value}{Style.RESET}"
             lines.append(row("Status", 'Installed' if is_installed else 'Not Installed', Style.blue() if is_installed else Style.muted()))
-            for key, label in [('manager', 'Manager'), ('package_name', 'Package'), ('stow_target', 'Target')]:
+            for key, label in [('manager', 'Manager'), ('package_name', 'Package')]:
                 current_value = getattr(module, key) if key != 'package_name' else module.get_package_name()
                 value = override.get(key, current_value); lines.append(row(label, f"{value}{'*' if value != current_value else ''}"))
-            tree = module.get_config_tree()
+            
+            current_target = override.get('stow_target', module.stow_target)
+            tree = module.get_config_tree(target=current_target)
             if tree:
                 lines.extend(["", f"  {Style.BOLD}{Style.subtext0()}CONFIG TREE{Style.RESET}", f"  {Style.surface1()}{'─' * 11}{Style.RESET}"])
                 for line in tree:
