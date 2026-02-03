@@ -91,7 +91,21 @@ class Style:
     @classmethod
     def normal(cls, bg=False): return cls.text(bg)
     @classmethod
+    def secondary(cls, bg=False): return cls.subtext0(bg)
+    @classmethod
     def muted(cls, bg=False): return cls.surface2(bg)
+    @classmethod
+    def success(cls, bg=False): return cls.green(bg)
+    @classmethod
+    def error(cls, bg=False): return cls.red(bg)
+    @classmethod
+    def warning(cls, bg=False): return cls.yellow(bg)
+    @classmethod
+    def info(cls, bg=False): return cls.blue(bg)
+    @classmethod
+    def header(cls): return cls.blue(bg=True) + cls.crust()
+    @classmethod
+    def button_focused(cls): return cls.highlight(bg=True) + cls.crust() + cls.BOLD
 
     # --- Theme Helpers ---
     @classmethod
@@ -341,7 +355,7 @@ class TUI:
         current_y = 1
         
         for n in TUI._notifications:
-            border_color = Style.blue() if n['type'] == "INFO" else Style.red()
+            border_color = Style.info() if n['type'] == "INFO" else Style.error()
             title = " [i] INFO " if n['type'] == "INFO" else " [!] ERROR "
                 
             # Wrap message
