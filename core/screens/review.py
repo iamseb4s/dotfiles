@@ -33,7 +33,7 @@ class ReviewModal(BaseModal):
             mod_results = self.results.get(mod.id, {}) if self.results else {}
             
             label = mod.label + ("*" if is_custom else "")
-            color = Style.yellow() if is_custom else Style.green()
+            color = Style.warning() if is_custom else Style.success()
             lines.append(f"{Style.muted()}- {Style.RESET}{color}{label}{Style.RESET}")
             
             package_name = override['package_name'] if is_custom else mod.get_package_name()
@@ -45,7 +45,7 @@ class ReviewModal(BaseModal):
             if self.is_results_mode:
                 def get_res_icon(success, active):
                     if not active or success is None: return "○", Style.muted()
-                    return ("✔" if success else "✘"), (Style.green() if success else Style.red())
+                    return ("✔" if success else "✘"), (Style.success() if success else Style.error())
                 package_icon, package_color = get_res_icon(mod_results.get('package'), do_package)
                 dotfiles_icon, dotfiles_color = get_res_icon(mod_results.get('dotfiles'), do_dotfiles and has_config)
             else:
@@ -95,13 +95,13 @@ class ReviewModal(BaseModal):
         
         if self.is_results_mode:
             st = self._get_summary_stats()
-            txt = f"{Style.green()}{st['installed']} installed{Style.RESET}, {Style.blue()}{st['cancelled']} cancelled{Style.RESET}, {Style.red()}{st['failed']} failed{Style.RESET}"
+            txt = f"{Style.success()}{st['installed']} installed{Style.RESET}, {Style.info()}{st['cancelled']} cancelled{Style.RESET}, {Style.error()}{st['failed']} failed{Style.RESET}"
             inner.append(f"{' ' * ((self.width - 2 - TUI.visible_len(txt)) // 2)}{txt}")
         else:
             # Check if any task requires root by searching for the normal asterisk in the content
             any_root = any(f"{Style.normal()}*{Style.RESET}" in line for line in self.content_lines)
             if any_root:
-                root_msg = f"{Style.red()}*root required{Style.RESET}"
+                root_msg = f"{Style.error()}*root required{Style.RESET}"
                 inner.append(f"{' ' * ((self.width - 2 - TUI.visible_len(root_msg)) // 2)}{root_msg}")
             
             txt = "Confirm and start installation?"

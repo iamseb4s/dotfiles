@@ -96,7 +96,7 @@ class SelectorScreen(Screen):
         self.cursor_idx = min(self.cursor_idx, len(self.flat_items) - 1)
         tw, th = shutil.get_terminal_size()
         
-        header = f"{Style.blue(bg=True)}{Style.crust()}{' PACKAGES SELECTOR '.center(tw)}{Style.RESET}"
+        header = f"{Style.header()}{' PACKAGES SELECTOR '.center(tw)}{Style.RESET}"
         pills = self._get_footer_pills()
         footer = TUI.wrap_pills(pills, tw - 4)
         av_h = max(10, th - 4 - len(footer))
@@ -155,12 +155,12 @@ class SelectorScreen(Screen):
                 if not is_supported:
                     mark, status_text, color = self.SYM_EMPTY, "[ NOT SUPPORTED ]", Style.muted()
                 elif module.id in self.auto_locked:
-                    mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.red()
+                    mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.error()
                 elif module.id in self.selected:
                     override = self.overrides.get(module.id); part = override and (not override.get('install_package', True) or (module.stow_pkg and not override.get('install_dotfiles', True)))
-                    mark, status_text, color = (self.SYM_PART if part else self.SYM_SEL), self.STAT_SEL, (Style.green() if module.id not in self.overrides else Style.yellow())
+                    mark, status_text, color = (self.SYM_PART if part else self.SYM_SEL), self.STAT_SEL, (Style.success() if module.id not in self.overrides else Style.warning())
                 else:
-                    mark, status_text, color = self.SYM_EMPTY, (self.STAT_INST if is_installed else ""), (Style.blue() if is_installed else Style.normal())
+                    mark, status_text, color = self.SYM_EMPTY, (self.STAT_INST if is_installed else ""), (Style.info() if is_installed else Style.normal())
                 
                 style = Style.highlight() + Style.BOLD if is_cursor else color
                 label_color = style if (is_cursor or self.is_active(module.id) or is_installed) else color
@@ -178,7 +178,7 @@ class SelectorScreen(Screen):
                 is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True)) if is_supported else False
                 mark = self.SYM_SEL if is_sel else self.SYM_EMPTY
                 
-                style = Style.highlight() + Style.BOLD if is_cursor else (Style.green() if is_sel else Style.muted())
+                style = Style.highlight() + Style.BOLD if is_cursor else (Style.success() if is_sel else Style.muted())
                 label_style = style if is_supported else Style.muted()
                 
                 # Use spaces for indentation as requested
@@ -208,44 +208,48 @@ class SelectorScreen(Screen):
         item = self.flat_items[self.cursor_idx]; content_width = width - 6
         if item['type'] == 'module':
             module = item['obj']; override = self.overrides.get(module.id, {}); is_installed = module.is_installed(); is_supported = module.is_supported()
-            color = Style.muted() if not is_supported else (Style.red() if module.id in self.auto_locked else (Style.yellow() if module.id in self.overrides else (Style.green() if module.id in self.selected else (Style.blue() if is_installed else Style.highlight()))))
-            lines.extend([f"  {Style.BOLD}{color}{module.label.upper()}{Style.RESET}", f"  {Style.surface1()}{'─' * content_width}{Style.RESET}"])
+            color = Style.muted() if not is_supported else (Style.error() if module.id in self.auto_locked else (Style.warning() if module.id in self.overrides else (Style.success() if module.id in self.selected else (Style.info() if is_installed else Style.highlight()))))
+            lines.extend([f"  {Style.BOLD}{color}{module.label.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
+
             if module.description:
-                for line in TUI.wrap_text(module.description, content_width): lines.append(f"  {Style.muted()}{line}{Style.RESET}")
+                for line in TUI.wrap_text(module.description, content_width): lines.append(f"  {Style.secondary()}{line}{Style.RESET}")
             lines.append("")
             def row(label, value, color_style=""): return f"  {Style.subtext1()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}"
             
             status_text = 'Not Supported' if not is_supported else ('Installed' if is_installed else 'Not Installed')
-            status_style = Style.muted() if not is_supported else (Style.blue() if is_installed else Style.muted())
+            status_style = Style.muted() if not is_supported else (Style.info() if is_installed else Style.secondary())
             lines.append(row("Status", status_text, status_style))
             
             supported_os = module.get_supported_distros()
-            lines.append(row("Supported OS", supported_os, Style.normal() if is_supported else Style.muted()))
+            lines.append(row("Supported OS", supported_os, Style.secondary() if is_supported else Style.muted()))
 
             for key, label in [('manager', 'Manager'), ('package_name', 'Package')]:
                 current_value = getattr(module, key) if key != 'package_name' else module.get_package_name()
                 value = override.get(key, current_value)
-                lines.append(row(label, f"{value}{'*' if value != current_value else ''}", Style.muted() if not is_supported else ""))
+                color_val = Style.secondary() if is_supported else Style.muted()
+                lines.append(row(label, f"{value}{'*' if value != current_value else ''}", color_val))
             
             current_target = override.get('stow_target', module.stow_target)
             tree = module.get_config_tree(target=current_target)
             if tree:
-                lines.extend(["", f"  {Style.BOLD}{Style.subtext0()}CONFIG TREE{Style.RESET}", f"  {Style.surface1()}{'─' * 11}{Style.RESET}"])
+                tree_title_style = Style.normal() if is_supported else Style.muted()
+                lines.extend(["", f"  {Style.BOLD}{tree_title_style}CONFIG TREE{Style.RESET}", f"  {Style.muted()}{'─' * 11}{Style.RESET}"])
                 for line in tree:
-                    for wrapped_line in TUI.wrap_text(line, content_width - 2): lines.append(f"    {Style.muted()}{wrapped_line}{Style.RESET}")
+                    for wrapped_line in TUI.wrap_text(line, content_width - 2): lines.append(f"    {wrapped_line}")
+
         elif item['type'] == 'sub':
             comp = item['obj']; module_id = item['module_id']
             module = self.mod_map[module_id]
             is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True))
-            color = Style.green() if is_sel else Style.muted()
-            lines.extend([f"  {Style.BOLD}{color}{comp['label'].upper()}{Style.RESET}", f"  {Style.surface1()}{'─' * content_width}{Style.RESET}"])
+            color = Style.success() if is_sel else Style.muted()
+            lines.extend([f"  {Style.BOLD}{color}{comp['label'].upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
             lines.append(f"  {Style.muted()}Component of {Style.BOLD}{module.label}{Style.RESET}")
             lines.append("")
             lines.append(f"  {Style.subtext1()}Status:    {Style.RESET}{color}{'Selected' if is_sel else 'Skipped'}{Style.RESET}")
         else:
-            category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.surface1()}{'─' * content_width}{Style.RESET}", f"  {Style.muted()}Packages in this group:{Style.RESET}", ""])
+            category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}", f"  {Style.muted()}Packages in this group:{Style.RESET}", ""])
             for module in self.categories[category]:
-                module_status = "■" if self.is_active(module.id) else " "; color = Style.green() if self.is_active(module.id) else Style.muted()
+                module_status = "■" if self.is_active(module.id) else " "; color = Style.success() if self.is_active(module.id) else Style.muted()
                 lines.append(f"    {color}[{module_status}] {module.label}{Style.RESET}")
         return lines
 
