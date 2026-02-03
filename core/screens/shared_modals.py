@@ -22,7 +22,7 @@ class BaseModal:
         styled = []
         for i, btn in enumerate(buttons):
             if i == focus_idx:
-                styled.append(f"{Style.highlight(bg=True)}{Style.crust()}{Style.BOLD}{btn}{Style.RESET}")
+                styled.append(f"{Style.button_focused()}{btn}{Style.RESET}")
             else:
                 styled.append(f"{Style.muted()}[ {btn.strip()} ]{Style.RESET}")
         row = "     ".join(styled)
@@ -52,7 +52,7 @@ class DependencyModal(BaseModal):
             if idx < len(self.modules):
                 m = self.modules[idx]; is_f = (self.focus_idx == idx); is_s = (m.id in self.selected)
                 mark, label = ("[■]" if is_s else "[ ]"), f"{m.label} ({m.id})"
-                style = Style.highlight() + Style.BOLD if is_f else (Style.green() if is_s else Style.muted())
+                style = Style.highlight() + Style.BOLD if is_f else (Style.success() if is_s else Style.muted())
                 inner.append(f"    {style}{TUI.split_line(f'{mark}  {label}', '', self.width - 10)}{Style.RESET}")
         
         hint = "SPACE: Toggle   ENTER: Confirm   ESC: Cancel"
@@ -128,7 +128,7 @@ class DraftSelectionModal(BaseModal):
                     d_id = data.get('id', 'unnamed')
                     d_time = datetime.fromtimestamp(mtime).strftime("%d %b %H:%M")
                     lbl = f"{d_id} ({d_time})"
-                inner.append(f"    {Style.mauve() + Style.BOLD if is_f else Style.text()}{lbl}{Style.RESET}")
+                inner.append(f"    {Style.highlight() + Style.BOLD if is_f else Style.normal()}{lbl}{Style.RESET}")
         hint = "ENTER: Select   X: Delete   ESC: Start Fresh"
         inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
         return self._get_layout(inner)

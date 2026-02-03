@@ -94,7 +94,7 @@ class OptionsModal(BaseModal):
             is_selected = (self.selected_manager == manager); mark = self.SYM_RADIO if is_selected else self.SYM_RADIO_OFF
             if is_manager_focused: item = f"{Style.highlight() + Style.BOLD if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
             elif is_package_name_dim: item = f"{Style.muted()}{mark} {manager}{Style.RESET}"
-            else: item = f"{Style.green() if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
+            else: item = f"{Style.success() if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
             manager_items.append(item)
         
         managers_raw = "    ".join(manager_items); manager_padding = (content_width - TUI.visible_len(managers_raw)) // 2

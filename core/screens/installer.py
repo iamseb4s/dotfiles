@@ -80,7 +80,7 @@ class InstallerScreen(Screen):
         tw, th = shutil.get_terminal_size()
         
         # 1. Header & Footer
-        header = f"{Style.blue(bg=True)}{Style.crust()}{' DEPLOYMENT PROGRESS '.center(tw)}{Style.RESET}"
+        header = f"{Style.header()}{' DEPLOYMENT PROGRESS '.center(tw)}{Style.RESET}"
         pills = self._get_footer_pills()
         footer_lines = TUI.wrap_pills(pills, tw - 4)
         avail_h = max(10, th - 6 - len(footer_lines))
@@ -125,14 +125,14 @@ class InstallerScreen(Screen):
             done = all(v in ['success', 'skipped'] for v in mod_status.values())
             
             icon = self.SYM_RUNNING if (is_curr and not self.is_finished) else (self.SYM_ERROR if err else (self.SYM_SUCCESS if done else self.SYM_PENDING))
-            c = Style.highlight() if is_curr else (Style.green() if icon == self.SYM_SUCCESS else (Style.red() if icon == self.SYM_ERROR else Style.muted()))
+            c = Style.highlight() if is_curr else (Style.success() if icon == self.SYM_SUCCESS else (Style.error() if icon == self.SYM_ERROR else Style.muted()))
             lines.append(f"  {c}{icon} {Style.BOLD if is_curr else ''}{mod.label}{Style.RESET}")
             
             override = self.overrides.get(mod.id, {})
             has_dotfiles = mod.has_usable_dotfiles()
             def get_sub_icon(s):
                 if s == 'running': return f"{Style.highlight()}{self.spinner_chars[self.spinner_idx]}{Style.RESET}"
-                return f"{Style.green() if s == 'success' else (Style.red() if s == 'error' else Style.muted())}{self.SYM_SUCCESS if s == 'success' else (self.SYM_ERROR if s == 'error' else self.SYM_PENDING)}{Style.RESET}"
+                return f"{Style.success() if s == 'success' else (Style.error() if s == 'error' else Style.muted())}{self.SYM_SUCCESS if s == 'success' else (self.SYM_ERROR if s == 'error' else self.SYM_PENDING)}{Style.RESET}"
 
             if override.get('install_package', True):
                 lines.append(f"  {Style.muted()}{'├' if (has_dotfiles and override.get('install_dotfiles', True)) else '└'} {get_sub_icon(mod_status['package'])} {Style.normal()}Package{Style.RESET}")
@@ -152,7 +152,7 @@ class InstallerScreen(Screen):
         prog = (self.completed_units + self.current_unit_progress) / self.total_units if self.total_units > 0 else 0
         if self.is_finished: prog = 1
         bw = int(tw * 0.5); filled = int(bw * prog)
-        c = Style.highlight() if not self.is_cancelled else Style.red()
+        c = Style.highlight() if not self.is_cancelled else Style.error()
         bar = f"{c}{'█' * filled}{Style.muted()}{'░' * (bw - filled)}{Style.RESET}"
         perc = f"{Style.normal()}{Style.BOLD} {int(prog * 100)}% {Style.RESET}"
         bar_ovr = TUI.overlay(bar, perc, (bw - TUI.visible_len(perc)) // 2)

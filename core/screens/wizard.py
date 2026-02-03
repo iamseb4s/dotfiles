@@ -120,7 +120,7 @@ class WizardScreen(Screen):
         tw, th = shutil.get_terminal_size()
         
         # 1. Header & Footer
-        header = f"{Style.mauve(bg=True)}{Style.crust()}{' PACKAGE WIZARD '.center(tw)}{Style.RESET}"
+        header = f"{Style.header()}{' PACKAGE WIZARD '.center(tw)}{Style.RESET}"
         pills = self._get_footer_pills(); footer_lines = TUI.wrap_pills(pills, tw - 4)
         avail_h = max(10, th - 4 - len(footer_lines))
         lw, rw = int(tw * 0.40), tw - int(tw * 0.40) - 1
@@ -173,7 +173,7 @@ class WizardScreen(Screen):
             is_f = (self.focus_idx == i and not self.modal)
             errs = self._get_field_errors(field['id'])
             has_e = errs and (self.show_validation_errors or (field['id'] == 'id' and self.form['id']))
-            style = Style.highlight() if is_f else (Style.red() if has_e else Style.normal())
+            style = Style.highlight() if is_f else (Style.error() if has_e else Style.normal())
             bold = Style.BOLD if is_f else ""
             if field['type'] == 'radio': lines.extend(self._render_radio_field(field, is_f, style, bold, width))
             else: lines.extend(self._render_standard_field(field, is_f, style, bold, width))
@@ -207,7 +207,7 @@ class WizardScreen(Screen):
                     label = f"Custom: '{p}{Style.INVERT}{c}{Style.RESET}{style}{bold}{st}' {self.SYM_EDIT}"
                 else: label = f"Custom: '{cv}' {self.SYM_EDIT}" if cv else self.CUSTOM_TAG
             is_err = (opt == self.CUSTOM_TAG and sel and not self.form[self.CUSTOM_FIELD])
-            c = Style.red() if is_err else (Style.highlight() if sel and is_f else (Style.green() if sel else Style.muted()))
+            c = Style.error() if is_err else (Style.highlight() if sel and is_f else (Style.success() if sel else Style.muted()))
             its.append(f"{c}{bold if sel and is_f else ''}{mark} {label}{Style.RESET}")
         row = "   ".join(its)
         if TUI.visible_len(row) > width - 6:
@@ -221,7 +221,7 @@ class WizardScreen(Screen):
         help_l = [f"  {Style.normal()}{l}{Style.RESET}" for l in TUI.wrap_text(field['help'], width - 6)]
         is_c_empty = (field['id'] == 'category' and self.form['category'] == self.CUSTOM_TAG and not self.form[self.CUSTOM_FIELD])
         if self._get_field_errors(field['id']) and (self.show_validation_errors or self.is_editing or (field['id'] == 'id' and self.form['id']) or is_c_empty):
-            for e in self._get_field_errors(field['id']): help_l.append(f"  {Style.red()}! {e}{Style.RESET}")
+            for e in self._get_field_errors(field['id']): help_l.append(f"  {Style.error()}! {e}{Style.RESET}")
         hh = min(len(help_l) + 2, height // 3); ph = height - hh
         prev_l = [""]
         for line in self._generate_python().split("\n"):

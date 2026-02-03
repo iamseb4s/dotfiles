@@ -1,4 +1,5 @@
 from core.system import System
+from core.tui import Style
 import shutil
 import os
 
@@ -202,8 +203,12 @@ class Module:
         # Add extra spacing before tree info
         tree.append("")
         
+        is_sup = self.is_supported()
+        label_style = Style.normal() if is_sup else Style.muted()
+        val_style = Style.secondary() if is_sup else Style.muted()
+        
         display_target = target or self.stow_target or "~/"
-        tree.append(f"Target:  {display_target}")
+        tree.append(f"{label_style}Target:  {val_style}{display_target}{Style.RESET}")
         tree.append("")
         
         def scan(path, prefix="", depth=0):
@@ -223,7 +228,7 @@ class Module:
                 full_path = os.path.join(path, entry)
                 
                 connector = "└── " if is_last else "├── "
-                tree.append(f"{prefix}{connector}{entry}")
+                tree.append(f"{val_style}{prefix}{connector}{entry}{Style.RESET}")
                 
                 if os.path.isdir(full_path):
                     new_prefix = prefix + ("    " if is_last else "│   ")
