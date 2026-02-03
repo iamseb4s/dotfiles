@@ -215,7 +215,7 @@ class SelectorScreen(Screen):
             if module.description:
                 for line in TUI.wrap_text(module.description, content_width): lines.append(f"  {Style.secondary()}{line}{Style.RESET}")
             lines.append("")
-            def row(label, value, color_style=""): return f"  {Style.subtext1()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}"
+            def row(label, value, color_style=""): return f"  {Style.normal()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}" 
             
             status_text = 'Not Supported' if not is_supported else ('Installed' if is_installed else 'Not Installed')
             status_style = Style.muted() if not is_supported else (Style.success() if is_installed else Style.secondary())
@@ -245,13 +245,14 @@ class SelectorScreen(Screen):
             is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True))
             color = Style.info() if is_sel else (Style.normal() if is_supported else Style.muted())
             lines.extend([f"  {Style.BOLD}{color}{comp['label'].upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
-            lines.append(f"  {Style.muted()}Component of {Style.BOLD}{module.label}{Style.RESET}")
+            lines.append(f"  {Style.secondary()}Component of {Style.BOLD}{module.label}{Style.RESET}")
             lines.append("")
-            lines.append(f"  {Style.subtext1()}Status:    {Style.RESET}{color}{'Selected' if is_sel else 'Skipped'}{Style.RESET}")
+            def row(label, value, color_style=""): return f"  {Style.normal()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}"
+            lines.append(row("Status", 'Selected' if is_sel else 'Skipped', color))
         else:
-            category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}", f"  {Style.muted()}Packages in this group:{Style.RESET}", ""])
+            category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}", f"  {Style.secondary()}Packages in this group:{Style.RESET}", ""])
             for module in self.categories[category]:
-                module_status = "■" if self.is_active(module.id) else " "; color = Style.info() if self.is_active(module.id) else Style.muted()
+                module_status = "■" if self.is_active(module.id) else " "; color = Style.info() if self.is_active(module.id) else Style.secondary()
                 lines.append(f"    {color}[{module_status}] {module.label}{Style.RESET}")
         return lines
 
