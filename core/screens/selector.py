@@ -158,9 +158,9 @@ class SelectorScreen(Screen):
                     mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.error()
                 elif module.id in self.selected:
                     override = self.overrides.get(module.id); part = override and (not override.get('install_package', True) or (module.stow_pkg and not override.get('install_dotfiles', True)))
-                    mark, status_text, color = (self.SYM_PART if part else self.SYM_SEL), self.STAT_SEL, (Style.success() if module.id not in self.overrides else Style.warning())
+                    mark, status_text, color = (self.SYM_PART if part else self.SYM_SEL), self.STAT_SEL, (Style.info() if module.id not in self.overrides else Style.warning())
                 else:
-                    mark, status_text, color = self.SYM_EMPTY, (self.STAT_INST if is_installed else ""), (Style.info() if is_installed else Style.normal())
+                    mark, status_text, color = self.SYM_EMPTY, (self.STAT_INST if is_installed else ""), (Style.success() if is_installed else Style.normal())
                 
                 style = Style.highlight() + Style.BOLD if is_cursor else color
                 label_color = style if (is_cursor or self.is_active(module.id) or is_installed) else color
@@ -178,8 +178,9 @@ class SelectorScreen(Screen):
                 is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True)) if is_supported else False
                 mark = self.SYM_SEL if is_sel else self.SYM_EMPTY
                 
-                style = Style.highlight() + Style.BOLD if is_cursor else (Style.success() if is_sel else Style.muted())
-                label_style = style if is_supported else Style.muted()
+                color = Style.info() if is_sel else (Style.normal() if is_supported else Style.muted())
+                style = Style.highlight() + Style.BOLD if is_cursor else color
+                label_style = style
                 
                 # Use spaces for indentation as requested
                 indent = "    " * item['depth']
@@ -208,7 +209,7 @@ class SelectorScreen(Screen):
         item = self.flat_items[self.cursor_idx]; content_width = width - 6
         if item['type'] == 'module':
             module = item['obj']; override = self.overrides.get(module.id, {}); is_installed = module.is_installed(); is_supported = module.is_supported()
-            color = Style.muted() if not is_supported else (Style.error() if module.id in self.auto_locked else (Style.warning() if module.id in self.overrides else (Style.success() if module.id in self.selected else (Style.info() if is_installed else Style.highlight()))))
+            color = Style.muted() if not is_supported else (Style.error() if module.id in self.auto_locked else (Style.warning() if module.id in self.overrides else (Style.info() if module.id in self.selected else (Style.success() if is_installed else Style.highlight()))))
             lines.extend([f"  {Style.BOLD}{color}{module.label.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
 
             if module.description:
@@ -217,7 +218,7 @@ class SelectorScreen(Screen):
             def row(label, value, color_style=""): return f"  {Style.subtext1()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}"
             
             status_text = 'Not Supported' if not is_supported else ('Installed' if is_installed else 'Not Installed')
-            status_style = Style.muted() if not is_supported else (Style.info() if is_installed else Style.secondary())
+            status_style = Style.muted() if not is_supported else (Style.success() if is_installed else Style.secondary())
             lines.append(row("Status", status_text, status_style))
             
             supported_os = module.get_supported_distros()
@@ -240,8 +241,9 @@ class SelectorScreen(Screen):
         elif item['type'] == 'sub':
             comp = item['obj']; module_id = item['module_id']
             module = self.mod_map[module_id]
+            is_supported = module.is_supported() if module else True
             is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True))
-            color = Style.success() if is_sel else Style.muted()
+            color = Style.info() if is_sel else (Style.normal() if is_supported else Style.muted())
             lines.extend([f"  {Style.BOLD}{color}{comp['label'].upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
             lines.append(f"  {Style.muted()}Component of {Style.BOLD}{module.label}{Style.RESET}")
             lines.append("")
@@ -249,7 +251,7 @@ class SelectorScreen(Screen):
         else:
             category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}", f"  {Style.muted()}Packages in this group:{Style.RESET}", ""])
             for module in self.categories[category]:
-                module_status = "■" if self.is_active(module.id) else " "; color = Style.success() if self.is_active(module.id) else Style.muted()
+                module_status = "■" if self.is_active(module.id) else " "; color = Style.info() if self.is_active(module.id) else Style.muted()
                 lines.append(f"    {color}[{module_status}] {module.label}{Style.RESET}")
         return lines
 
