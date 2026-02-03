@@ -29,21 +29,21 @@ class Module:
 
     def __init__(self, system_manager: System):
         self.system_manager = system_manager
-        # Auto-resolve stow_pkg to match id
-        self.stow_pkg = self.id
+        # Auto-resolve stow_package to match module id
+        self.stow_package = self.id
 
     def has_usable_dotfiles(self):
         """
         Recursively checks if the dotfiles directory exists and contains at least one file.
         """
-        if not self.stow_pkg:
+        if not self.stow_package:
             return False
             
-        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
-        if not os.path.exists(pkg_path) or not os.path.isdir(pkg_path):
+        package_path = os.path.join(os.getcwd(), "dots", self.stow_package)
+        if not os.path.exists(package_path) or not os.path.isdir(package_path):
             return False
             
-        for root, dirs, files in os.walk(pkg_path):
+        for root, dirs, files in os.walk(package_path):
             if files:
                 return True
         return False
@@ -109,8 +109,8 @@ class Module:
     def install(self, override=None, callback=None, input_callback=None, password=None):
         """Generic installation logic supporting modular user selections."""
         # Check sub-selections for binary installation (id: 'binary')
-        subs = override.get('sub_selections', {}) if override else {}
-        if not subs.get('binary', True):
+        sub_selections = override.get('sub_selections', {}) if override else {}
+        if not sub_selections.get('binary', True):
             if callback: callback(f"Skipping {self.label} package installation as requested...")
             return True
 
@@ -133,58 +133,58 @@ class Module:
 
     def configure(self, override=None, callback=None, input_callback=None, password=None):
         """Auto-stow if dotfiles directory exists, supporting modular user selections."""
-        if not self.stow_pkg:
+        if not self.stow_package:
             return True
 
         # Check sub-selections for dotfiles deployment (id: 'dotfiles')
-        subs = override.get('sub_selections', {}) if override else {}
-        if not subs.get('dotfiles', True):
+        sub_selections = override.get('sub_selections', {}) if override else {}
+        if not sub_selections.get('dotfiles', True):
             if callback: callback("Skipping configuration deployment...")
             return True
             
         # Check if source directory exists before stowing to avoid errors
-        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
-        if not os.path.exists(pkg_path):
+        package_path = os.path.join(os.getcwd(), "dots", self.stow_package)
+        if not os.path.exists(package_path):
             return True # Nothing to stow, not an error
             
-        return self.run_stow(self.stow_pkg, self.stow_target, callback=callback, input_callback=input_callback, password=password)
+        return self.run_stow(self.stow_package, self.stow_target, callback=callback, input_callback=input_callback, password=password)
 
     def run_stow(self, package_name, target=None, callback=None, input_callback=None, password=None):
         """Standard GNU Stow wrapper with cleanup of existing files."""
-        dotfiles_dir = os.path.join(os.getcwd(), "dots")
-        pkg_source_dir = os.path.join(dotfiles_dir, package_name)
-        target_dir = os.path.expanduser(target or "~")
+        dotfiles_directory = os.path.join(os.getcwd(), "dots")
+        package_source_directory = os.path.join(dotfiles_directory, package_name)
+        target_directory = os.path.expanduser(target or "~")
         
-        if not os.path.exists(pkg_source_dir):
+        if not os.path.exists(package_source_directory):
             return True
 
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir, exist_ok=True)
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory, exist_ok=True)
 
         # Cleanup: Remove existing files/dirs or broken symlinks that would cause Stow conflicts
         try:
-            for entry in os.listdir(pkg_source_dir):
-                target_path = os.path.join(target_dir, entry)
+            for entry in os.listdir(package_source_directory):
+                target_path = os.path.join(target_directory, entry)
                 if os.path.lexists(target_path) and (not os.path.islink(target_path) or not os.path.exists(target_path)):
                     if callback: callback(f"Cleaning up existing {entry} in target...")
                     if os.path.isdir(target_path) and not os.path.islink(target_path):
                         shutil.rmtree(target_path)
                     else:
                         os.remove(target_path)
-        except Exception as e:
-            if callback: callback(f"Cleanup warning: {e}")
+        except Exception as error:
+            if callback: callback(f"Cleanup warning: {error}")
 
-        msg = f"Stowing {package_name} to {target_dir}..."
-        if callback: callback(msg)
-        else: print(f"[{self.id}] {msg}")
+        message = f"Stowing {package_name} to {target_directory}..."
+        if callback: callback(message)
+        else: print(f"[{self.id}] {message}")
 
         try:
-            cmd = ["stow", "--dir", dotfiles_dir, "--target", target_dir, "-R", package_name]
-            return self.system_manager.run(cmd, callback=callback, input_callback=input_callback, password=password)
-        except Exception as e:
-            err = f"Error: {e}"
-            if callback: callback(err)
-            else: print(f"[{self.id}] {err}")
+            command = ["stow", "--dir", dotfiles_directory, "--target", target_directory, "-R", package_name]
+            return self.system_manager.run(command, callback=callback, input_callback=input_callback, password=password)
+        except Exception as error:
+            error_message = f"Error: {error}"
+            if callback: callback(error_message)
+            else: print(f"[{self.id}] {error_message}")
             return False
 
     def get_config_tree(self, target=None):
@@ -192,23 +192,23 @@ class Module:
         Recursively scans the dotfiles source directory to generate 
         a visual file tree.
         """
-        if not self.stow_pkg:
+        if not self.stow_package:
             return []
             
         if not self.has_usable_dotfiles():
-            return [f"No source files found in dots/{self.stow_pkg}"]
+            return [f"No source files found in dots/{self.stow_package}"]
             
-        pkg_path = os.path.join(os.getcwd(), "dots", self.stow_pkg)
+        package_path = os.path.join(os.getcwd(), "dots", self.stow_package)
         tree = []
         # Add extra spacing before tree info
         tree.append("")
         
-        is_sup = self.is_supported()
-        label_style = Style.normal() if is_sup else Style.muted()
-        val_style = Style.secondary() if is_sup else Style.muted()
+        is_supported = self.is_supported()
+        label_style = Style.normal() if is_supported else Style.muted()
+        value_style = Style.secondary() if is_supported else Style.muted()
         
         display_target = target or self.stow_target or "~/"
-        tree.append(f"{label_style}Target:  {val_style}{display_target}{Style.RESET}")
+        tree.append(f"{label_style}Target:  {value_style}{display_target}{Style.RESET}")
         tree.append("")
         
         def scan(path, prefix="", depth=0):
@@ -228,11 +228,11 @@ class Module:
                 full_path = os.path.join(path, entry)
                 
                 connector = "└── " if is_last else "├── "
-                tree.append(f"{val_style}{prefix}{connector}{entry}{Style.RESET}")
+                tree.append(f"{value_style}{prefix}{connector}{entry}{Style.RESET}")
                 
                 if os.path.isdir(full_path):
                     new_prefix = prefix + ("    " if is_last else "│   ")
                     scan(full_path, new_prefix, depth + 1)
                     
-        scan(pkg_path)
+        scan(package_path)
         return tree

@@ -13,7 +13,7 @@ from core.screens.selector import SelectorScreen
 from core.screens.installer import InstallerScreen
 from core.screens.wizard import WizardScreen
 
-def load_modules(sys_manager):
+def load_modules(system_manager):
     """Scan and initialize all available installation modules."""
     modules = []
     modules_dir = os.path.join(os.getcwd(), "modules")
@@ -22,15 +22,15 @@ def load_modules(sys_manager):
             module_name = filename[:-3]
             try:
                 # Import module
-                mod = importlib.import_module(f"modules.{module_name}")
-                for attr_name in dir(mod):
-                    attr = getattr(mod, attr_name)
-                    if isinstance(attr, type) and attr.__name__.endswith("Module") and attr.__name__ != "Module":
-                        instance = attr(sys_manager)
+                module_package = importlib.import_module(f"modules.{module_name}")
+                for attribute_name in dir(module_package):
+                    attribute = getattr(module_package, attribute_name)
+                    if isinstance(attribute, type) and attribute.__name__.endswith("Module") and attribute.__name__ != "Module":
+                        instance = attribute(system_manager)
                         modules.append(instance)
                         break
-            except Exception as e:
-                print(f"Failed to load module {filename}: {e}")
+            except Exception as error:
+                print(f"Failed to load module {filename}: {error}")
                 
     return modules
 
@@ -55,17 +55,17 @@ def main():
                 TUI.clear_screen()
 
             if state == "WELCOME":
-                scr = WelcomeScreen(system_manager)
+                welcome_screen = WelcomeScreen(system_manager)
                 # Wait for input
                 while True:
-                    scr.render()
+                    welcome_screen.render()
                     key = TUI.get_key(blocking=True)
                     if key == Keys.RESIZE:
                         TUI.clear_screen()
                         continue
                     if key is not None: break
                 
-                action = scr.handle_input(key)
+                action = welcome_screen.handle_input(key)
                 if action == "SELECTOR": 
                     TUI.clear_screen()
                     state = "SELECTOR"

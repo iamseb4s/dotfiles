@@ -33,7 +33,7 @@ class ZshModule(Module):
 
     def install(self, override=None, callback=None, input_callback=None, password=None):
         """Modular installation of Zsh ecosystem."""
-        subs = override.get('sub_selections', {}) if override else {}
+        sub_selections = override.get('sub_selections', {}) if override else {}
         
         # 1. System Package
         if not super().install(override, callback, input_callback, password):
@@ -41,7 +41,7 @@ class ZshModule(Module):
 
         # 2. Oh-My-Zsh & Components
         omz_dir = os.path.expanduser("~/.oh-my-zsh")
-        if subs.get("omz", True):
+        if sub_selections.get("omz", True):
             if not os.path.exists(omz_dir):
                 if callback: callback("Installing Oh-My-Zsh...")
                 cmd = 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
@@ -55,22 +55,22 @@ class ZshModule(Module):
                 "syntax_highlighting": ("https://github.com/zsh-users/zsh-syntax-highlighting.git", "plugins/zsh-syntax-highlighting")
             }
             
-            for cid, (url, rel_path) in repos.items():
-                dest = os.path.join(custom, rel_path)
-                if subs.get(cid, True) and not os.path.exists(dest):
-                    if callback: callback(f"Cloning {cid}...")
-                    self.system_manager.run(f"git clone --depth=1 {url} {dest}", shell=True, callback=callback, input_callback=input_callback)
+            for component_id, (repository_url, relative_path) in repos.items():
+                destination = os.path.join(custom, relative_path)
+                if sub_selections.get(component_id, True) and not os.path.exists(destination):
+                    if callback: callback(f"Cloning {component_id}...")
+                    self.system_manager.run(f"git clone --depth=1 {repository_url} {destination}", shell=True, callback=callback, input_callback=input_callback)
 
             # 4. Catppuccin Theme for Syntax Highlighting
             theme_file = os.path.join(custom, "plugins/zsh-syntax-highlighting/themes/catppuccin_mocha-zsh-syntax-highlighting.zsh")
-            if subs.get("syntax_highlighting", True) and not os.path.exists(theme_file):
+            if sub_selections.get("syntax_highlighting", True) and not os.path.exists(theme_file):
                 if callback: callback("Downloading Catppuccin Mocha syntax highlighting theme...")
                 os.makedirs(os.path.dirname(theme_file), exist_ok=True)
                 url = "https://raw.githubusercontent.com/catppuccin/zsh-syntax-highlighting/main/themes/catppuccin_mocha-zsh-syntax-highlighting.zsh"
                 self.system_manager.run(f"curl -fsSL {url} -o {theme_file}", shell=True, callback=callback, input_callback=input_callback)
 
         # 5. Default Shell
-        if subs.get("chsh", True):
+        if sub_selections.get("chsh", True):
             zsh_path = shutil.which("zsh")
             if zsh_path:
                 if callback: callback(f"Changing default shell to {zsh_path}...")

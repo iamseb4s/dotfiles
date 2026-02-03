@@ -12,7 +12,7 @@ class OptionsModal(BaseModal):
 
     def __init__(self, module, current_overrides=None):
         super().__init__(f" PACKAGE OPTIONS: {module.label.upper()} ", width=68)
-        self.mod = module
+        self.module = module
         # Determine if module has usable dotfiles configuration
         self.has_dotfiles = module.has_usable_dotfiles()
         
@@ -54,9 +54,9 @@ class OptionsModal(BaseModal):
         content_width = self.width - 10 
         inner_lines = [""] # Top spacer
         
-        def draw_row(idx, label, value, is_dim=False, is_main=False):
-            is_focused = (self.focus_idx == idx)
-            style = Style.highlight() if is_focused else (Style.muted() if is_dim else Style.normal())
+        def draw_row(index, label, value, is_dimmed=False, is_main=False):
+            is_focused = (self.focus_idx == index)
+            style = Style.highlight() if is_focused else (Style.muted() if is_dimmed else Style.normal())
             bold = Style.BOLD if is_focused or is_main else ""
             
             # Hierarchical styling
@@ -65,8 +65,9 @@ class OptionsModal(BaseModal):
             
             hint = ""
             if is_focused:
-                h = {0: "SPACE to toggle", 1: "E to edit", 3: "SPACE to toggle", 4: "E to edit"}.get(idx, "")
-                if h: hint = f" {Style.muted()}{h}{Style.RESET}{style}{bold}"
+                hint_text = {0: "SPACE to toggle", 1: "E to edit", 3: "SPACE to toggle", 4: "E to edit"}.get(index, "")
+                if hint_text: 
+                    hint = f" {Style.muted()}{hint_text}{Style.RESET}{style}{bold}"
             
             label_styled = f"{style}{bold}{display_label}{Style.RESET}{hint}"
             value_styled = f"{style}{bold}{value}{Style.RESET}"
@@ -77,24 +78,31 @@ class OptionsModal(BaseModal):
         inner_lines.append(draw_row(0, "Install Package", package_toggle, is_main=True))
         
         # 1. Package Name
-        is_package_name_dim = not self.install_package; name_val = self.package_name
+        is_package_name_dimmed = not self.install_package
+        package_name_value = self.package_name
         if self.editing_field == 'package_name':
-            pre, char, post = name_val[:self.text_cursor_pos], name_val[self.text_cursor_pos:self.text_cursor_pos+1] or " ", name_val[self.text_cursor_pos+1:]
-            name_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
-        inner_lines.append(draw_row(1, "Package Name", f"{self.SYM_EDIT} [ {name_val} ]", is_dim=is_package_name_dim))
+            prefix_text = package_name_value[:self.text_cursor_pos]
+            character = package_name_value[self.text_cursor_pos:self.text_cursor_pos+1] or " "
+            suffix_text = package_name_value[self.text_cursor_pos+1:]
+            package_name_value = f"{prefix_text}{Style.INVERT}{character}{Style.RESET}{Style.highlight()}{Style.BOLD}{suffix_text}"
+        inner_lines.append(draw_row(1, "Package Name", f"{self.SYM_EDIT} [ {package_name_value} ]", is_dimmed=is_package_name_dimmed))
         
         # 2. Manager (Grid Layout)
         is_manager_focused = (self.focus_idx == 2)
-        manager_label_style = Style.highlight() if is_manager_focused else (Style.muted() if is_package_name_dim else Style.normal())
+        manager_label_style = Style.highlight() if is_manager_focused else (Style.muted() if is_package_name_dimmed else Style.normal())
         manager_hint = f" {Style.muted()}h/l to select{Style.RESET}" if is_manager_focused else ""
         inner_lines.append(f"    {manager_label_style}╰─ Package Manager:{Style.RESET}{manager_hint}")
         
         manager_items = []
         for manager in self.managers:
-            is_selected = (self.selected_manager == manager); mark = self.SYM_RADIO if is_selected else self.SYM_RADIO_OFF
-            if is_manager_focused: item = f"{Style.highlight() + Style.BOLD if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
-            elif is_package_name_dim: item = f"{Style.muted()}{mark} {manager}{Style.RESET}"
-            else: item = f"{Style.success() if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
+            is_selected = (self.selected_manager == manager)
+            mark = self.SYM_RADIO if is_selected else self.SYM_RADIO_OFF
+            if is_manager_focused: 
+                item = f"{Style.highlight() + Style.BOLD if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
+            elif is_package_name_dimmed: 
+                item = f"{Style.muted()}{mark} {manager}{Style.RESET}"
+            else: 
+                item = f"{Style.success() if is_selected else Style.muted()}{mark} {manager}{Style.RESET}"
             manager_items.append(item)
         
         managers_raw = "    ".join(manager_items); manager_padding = (content_width - TUI.visible_len(managers_raw)) // 2
@@ -103,17 +111,18 @@ class OptionsModal(BaseModal):
         
         # 3. Deploy Config
         dotfiles_toggle = f"YES {self.SYM_CHECK}" if self.install_dotfiles else "NO [ ]"
-        dot_label = "Copy Configuration Files" if self.mod.id == "refind" else "Deploy Config (Stow)"
-        inner_lines.append(draw_row(3, dot_label, dotfiles_toggle, is_dim=not self.has_dotfiles, is_main=True))
+        dotfiles_label = "Copy Configuration Files" if self.module.id == "refind" else "Deploy Config (Stow)"
+        inner_lines.append(draw_row(3, dotfiles_label, dotfiles_toggle, is_dimmed=not self.has_dotfiles, is_main=True))
         
         # 4. Target Path
-        is_target_path_dim = not (self.has_dotfiles and self.install_dotfiles); path_val = self.stow_target
+        is_target_path_dimmed = not (self.has_dotfiles and self.install_dotfiles)
+        path_value = self.stow_target
         if self.editing_field == 'stow_target':
-            pre = path_val[:self.text_cursor_pos]
-            char = path_val[self.text_cursor_pos:self.text_cursor_pos+1] or " "
-            post = path_val[self.text_cursor_pos+1:]
-            path_val = f"{pre}{Style.INVERT}{char}{Style.RESET}{Style.highlight()}{Style.BOLD}{post}"
-        inner_lines.append(draw_row(4, "Target Path", f"{self.SYM_EDIT} [ {path_val} ]", is_dim=is_target_path_dim))
+            prefix_text = path_value[:self.text_cursor_pos]
+            character = path_value[self.text_cursor_pos:self.text_cursor_pos+1] or " "
+            suffix_text = path_value[self.text_cursor_pos+1:]
+            path_value = f"{prefix_text}{Style.INVERT}{character}{Style.RESET}{Style.highlight()}{Style.BOLD}{suffix_text}"
+        inner_lines.append(draw_row(4, "Target Path", f"{self.SYM_EDIT} [ {path_value} ]", is_dimmed=is_target_path_dimmed))
 
         inner_lines.extend(["", ""])
         hint = "ENTER: Accept   Q: Cancel"
@@ -128,15 +137,17 @@ class OptionsModal(BaseModal):
         if key == Keys.ENTER: return "ACCEPT"
 
         # Determine reachable fields
-        r = [0]
-        if self.install_package: r.extend([1, 2])
+        reachable_indices = [0]
+        if self.install_package: 
+            reachable_indices.extend([1, 2])
         if self.has_dotfiles:
-            r.append(3)
-            if self.install_dotfiles: r.append(4)
+            reachable_indices.append(3)
+            if self.install_dotfiles: 
+                reachable_indices.append(4)
 
         if key in [Keys.UP, Keys.K, Keys.DOWN, Keys.J]:
-            curr = r.index(self.focus_idx) if self.focus_idx in r else 0
-            self.focus_idx = r[(curr + (1 if key in [Keys.DOWN, Keys.J] else -1)) % len(r)]
+            current_relative_index = reachable_indices.index(self.focus_idx) if self.focus_idx in reachable_indices else 0
+            self.focus_idx = reachable_indices[(current_relative_index + (1 if key in [Keys.DOWN, Keys.J] else -1)) % len(reachable_indices)]
         elif key == Keys.SPACE:
             if self.focus_idx == 0: self.install_package = not self.install_package
             elif self.focus_idx == 3 and self.has_dotfiles: self.install_dotfiles = not self.install_dotfiles
@@ -145,10 +156,11 @@ class OptionsModal(BaseModal):
             elif self.focus_idx == 4 and self.has_dotfiles and self.install_dotfiles: self._start_edit('stow_target')
         elif key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L] and self.focus_idx == 2 and self.install_package:
             try:
-                idx = self.managers.index(self.selected_manager)
+                manager_index = self.managers.index(self.selected_manager)
                 step = 1 if key in [Keys.RIGHT, Keys.L] else -1
-                self.selected_manager = self.managers[(idx + step) % len(self.managers)]
-            except: self.selected_manager = self.managers[0] if self.managers else self.selected_manager
+                self.selected_manager = self.managers[(manager_index + step) % len(self.managers)]
+            except Exception: 
+                self.selected_manager = self.managers[0] if self.managers else self.selected_manager
         return None
 
     def _start_edit(self, field):

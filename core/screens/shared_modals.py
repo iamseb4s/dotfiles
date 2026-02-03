@@ -11,22 +11,22 @@ class BaseModal:
 
     def _get_layout(self, inner_lines, scroll_pos=None, scroll_size=None):
         """Standardizes centering and container creation."""
-        tw, th = shutil.get_terminal_size()
-        h = len(inner_lines) + 2
-        lines = TUI.create_container(inner_lines, self.width, h, title=self.title, color="", is_focused=True, 
+        terminal_width, terminal_height = shutil.get_terminal_size()
+        height = len(inner_lines) + 2
+        lines = TUI.create_container(inner_lines, self.width, height, title=self.title, color="", is_focused=True, 
                                     scroll_pos=scroll_pos, scroll_size=scroll_size)
-        return lines, (th - h) // 2, (tw - self.width) // 2
+        return lines, (terminal_height - height) // 2, (terminal_width - self.width) // 2
 
     def _render_button_row(self, buttons, focus_idx):
         """Unifies the visual style of button rows."""
-        styled = []
-        for i, btn in enumerate(buttons):
-            if i == focus_idx:
-                styled.append(f"{Style.button_focused()}{btn}{Style.RESET}")
+        styled_buttons = []
+        for index, button in enumerate(buttons):
+            if index == focus_idx:
+                styled_buttons.append(f"{Style.button_focused()}{button}{Style.RESET}")
             else:
-                styled.append(f"{Style.muted()}[ {btn.strip()} ]{Style.RESET}")
-        row = "     ".join(styled)
-        return f"{' ' * ((self.width - 2 - TUI.visible_len(row)) // 2)}{row}"
+                styled_buttons.append(f"{Style.muted()}[ {button.strip()} ]{Style.RESET}")
+        button_row = "     ".join(styled_buttons)
+        return f"{' ' * ((self.width - 2 - TUI.visible_len(button_row)) // 2)}{button_row}"
 
     def _get_scroll_params(self, total, visible, offset):
         """Generic scrollbar thumb position and size calculation."""
@@ -44,38 +44,45 @@ class DependencyModal(BaseModal):
         self.scroll_offset = 0
 
     def render(self):
-        th = shutil.get_terminal_size().lines
-        win_h = max(3, min(len(self.modules), th - 12))
+        terminal_height = shutil.get_terminal_size().lines
+        window_height = max(3, min(len(self.modules), terminal_height - 12))
         inner = [""]
-        for i in range(win_h):
-            idx = self.scroll_offset + i
-            if idx < len(self.modules):
-                m = self.modules[idx]; is_f = (self.focus_idx == idx); is_s = (m.id in self.selected)
-                mark, label = ("[■]" if is_s else "[ ]"), f"{m.label} ({m.id})"
-                style = Style.highlight() + Style.BOLD if is_f else (Style.success() if is_s else Style.muted())
+        for i in range(window_height):
+            module_index = self.scroll_offset + i
+            if module_index < len(self.modules):
+                module = self.modules[module_index]
+                is_focused = (self.focus_idx == module_index)
+                is_selected = (module.id in self.selected)
+                
+                mark = "[■]" if is_selected else "[ ]"
+                label = f"{module.label} ({module.id})"
+                style = Style.highlight() + Style.BOLD if is_focused else (Style.success() if is_selected else Style.muted())
                 inner.append(f"    {style}{TUI.split_line(f'{mark}  {label}', '', self.width - 10)}{Style.RESET}")
         
         hint = "SPACE: Toggle   ENTER: Confirm   ESC: Cancel"
         inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
-        sp, ss = self._get_scroll_params(len(self.modules), win_h, self.scroll_offset)
-        return self._get_layout(inner, scroll_pos=sp, scroll_size=ss)
+        scroll_position, scroll_size = self._get_scroll_params(len(self.modules), window_height, self.scroll_offset)
+        return self._get_layout(inner, scroll_pos=scroll_position, scroll_size=scroll_size)
 
     def handle_input(self, key):
         if key in [Keys.UP, Keys.K]:
             self.focus_idx = (self.focus_idx - 1) % len(self.modules)
             if self.focus_idx < self.scroll_offset: self.scroll_offset = self.focus_idx
             elif self.focus_idx == len(self.modules)-1: 
-                win_h = max(3, min(len(self.modules), shutil.get_terminal_size().lines - 12))
-                self.scroll_offset = max(0, len(self.modules) - win_h)
+                window_height = max(3, min(len(self.modules), shutil.get_terminal_size().lines - 12))
+                self.scroll_offset = max(0, len(self.modules) - window_height)
         elif key in [Keys.DOWN, Keys.J]:
             self.focus_idx = (self.focus_idx + 1) % len(self.modules)
-            win_h = max(3, min(len(self.modules), shutil.get_terminal_size().lines - 12))
-            if self.focus_idx >= self.scroll_offset + win_h: self.scroll_offset = self.focus_idx - win_h + 1
+            window_height = max(3, min(len(self.modules), shutil.get_terminal_size().lines - 12))
+            if self.focus_idx >= self.scroll_offset + window_height: 
+                self.scroll_offset = self.focus_idx - window_height + 1
             elif self.focus_idx == 0: self.scroll_offset = 0
         elif key == Keys.SPACE:
-            mid = self.modules[self.focus_idx].id
-            if mid in self.selected: self.selected.remove(mid)
-            else: self.selected.add(mid)
+            module_id = self.modules[self.focus_idx].id
+            if module_id in self.selected: 
+                self.selected.remove(module_id)
+            else: 
+                self.selected.add(module_id)
         elif key == Keys.ENTER: return "CONFIRM"
         elif key in [Keys.ESC, Keys.Q, Keys.Q_UPPER]: return "CANCEL"
         return None
@@ -115,28 +122,30 @@ class DraftSelectionModal(BaseModal):
         self.drafts = drafts; self.focus_idx, self.scroll_offset = 0, 0
 
     def render(self):
-        opts = self.drafts + [("fresh", None, None)]
-        th = shutil.get_terminal_size().lines
-        win_h = max(3, min(len(opts), th - 12))
+        options = self.drafts + [("fresh", None, None)]
+        terminal_height = shutil.get_terminal_size().lines
+        window_height = max(3, min(len(options), terminal_height - 12))
         inner = [""]
-        for i in range(win_h):
-            idx = self.scroll_offset + i
-            if idx < len(opts):
-                fname, data, mtime = opts[idx]; is_f = (self.focus_idx == idx)
-                if fname == "fresh": lbl = "[ Start Fresh / New ]"
+        for i in range(window_height):
+            index = self.scroll_offset + i
+            if index < len(options):
+                file_name, data, modification_time = options[index]
+                is_focused = (self.focus_idx == index)
+                if file_name == "fresh": 
+                    label = "[ Start Fresh / New ]"
                 else:
-                    d_id = data.get('id', 'unnamed')
-                    d_time = datetime.fromtimestamp(mtime).strftime("%d %b %H:%M")
-                    lbl = f"{d_id} ({d_time})"
-                inner.append(f"    {Style.highlight() + Style.BOLD if is_f else Style.normal()}{lbl}{Style.RESET}")
+                    draft_id = data.get('id', 'unnamed')
+                    draft_time = datetime.fromtimestamp(modification_time).strftime("%d %b %H:%M")
+                    label = f"{draft_id} ({draft_time})"
+                inner.append(f"    {Style.highlight() + Style.BOLD if is_focused else Style.normal()}{label}{Style.RESET}")
         hint = "ENTER: Select   X: Delete   ESC: Start Fresh"
         inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
         return self._get_layout(inner)
 
     def handle_input(self, key):
-        opt_len = len(self.drafts) + 1
-        if key in [Keys.UP, Keys.K]: self.focus_idx = (self.focus_idx - 1) % opt_len
-        elif key in [Keys.DOWN, Keys.J]: self.focus_idx = (self.focus_idx + 1) % opt_len
+        options_length = len(self.drafts) + 1
+        if key in [Keys.UP, Keys.K]: self.focus_idx = (self.focus_idx - 1) % options_length
+        elif key in [Keys.DOWN, Keys.J]: self.focus_idx = (self.focus_idx + 1) % options_length
         elif key == Keys.ENTER: return ("LOAD", self.drafts[self.focus_idx]) if self.focus_idx < len(self.drafts) else "FRESH"
         elif key in [ord('x'), ord('X'), Keys.DEL] and self.focus_idx < len(self.drafts): return ("DELETE_REQ", self.drafts[self.focus_idx])
         elif key in [Keys.ESC, Keys.Q, Keys.Q_UPPER]: return "FRESH"
