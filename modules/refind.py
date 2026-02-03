@@ -17,11 +17,11 @@ class RefindModule(Module):
         """Checks for rEFInd configuration in the EFI partition."""
         return os.path.exists("/boot/EFI/refind/refind.conf")
 
-    def configure(self, override=None, callback=None, input_callback=None):
+    def configure(self, override=None, callback=None, input_callback=None, password=None):
         """Performs custom rEFInd deployment, including theme installation and PARTUUID resolution."""
-        msg = "Executing custom configuration sequence..."
-        if callback: callback(msg)
-        else: print(f"[refind] {msg}")
+        message = "Executing custom configuration sequence..."
+        if callback: callback(message)
+        else: print(f"[refind] {message}")
         
         repo_root = os.getcwd()
         theme_source = os.path.join(repo_root, "dots", "refind", "themes")
@@ -32,27 +32,28 @@ class RefindModule(Module):
 
         # Core installation via system tools
         if not os.path.exists(efi_base):
-            self.sys.run("refind-install", needs_root=True, callback=callback, input_callback=input_callback)
-
+            self.system_manager.run("refind-install", needs_root=True, callback=callback, input_callback=input_callback, password=password)
+ 
         # Config generation and deployment
         try:
-            root_dev = subprocess.check_output("findmnt -n -o SOURCE /", shell=True, text=True).strip()
-            root_partuuid = subprocess.check_output(f"lsblk -no PARTUUID {root_dev}", shell=True, text=True).strip()
+            root_device = subprocess.check_output("findmnt -n -o SOURCE /", shell=True, text=True).strip()
+            root_partuuid = subprocess.check_output(f"lsblk -no PARTUUID {root_device}", shell=True, text=True).strip()
             
-            with open(conf_template, 'r') as f:
-                config_content = f.read().replace("__ROOT_PARTUUID__", root_partuuid)
+            with open(conf_template, 'r') as config_file:
+                config_content = config_file.read().replace("__ROOT_PARTUUID__", root_partuuid)
             
             tmp_conf = "/tmp/refind.conf.generated"
-            with open(tmp_conf, 'w') as f: f.write(config_content)
+            with open(tmp_conf, 'w') as temporary_config: 
+                temporary_config.write(config_content)
             
-            self.sys.run(f"mv {tmp_conf} {conf_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback)
-        except Exception as e:
-            err = f"Error config: {e}"
-            if callback: callback(err)
-            else: print(f"[refind] {err}")
-
+            self.system_manager.run(f"mv {tmp_conf} {conf_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback, password=password)
+        except Exception as error:
+            error_message = f"Error config: {error}"
+            if callback: callback(error_message)
+            else: print(f"[refind] {error_message}")
+ 
         # 3. Copy Themes
         if os.path.exists(theme_source):
-            self.sys.run(f"rm -rf {theme_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback)
-            return self.sys.run(f"cp -r {theme_source} {theme_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback)
+            self.system_manager.run(f"rm -rf {theme_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback, password=password)
+            return self.system_manager.run(f"cp -r {theme_source} {theme_dest}", needs_root=True, shell=True, callback=callback, input_callback=input_callback, password=password)
         return True

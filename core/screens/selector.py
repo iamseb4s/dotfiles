@@ -80,11 +80,11 @@ class SelectorScreen(Screen):
         return items
 
     def _flatten_sub_components(self, components, items, depth, module_id):
-        for comp in components:
-            items.append({'type': 'sub', 'obj': comp, 'depth': depth, 'module_id': module_id})
+        for component in components:
+            items.append({'type': 'sub', 'obj': component, 'depth': depth, 'module_id': module_id})
             # Sub-components are expanded by default if they have children
-            if self.expanded.get(f"{module_id}:{comp['id']}", True) and comp.get('children'):
-                self._flatten_sub_components(comp['children'], items, depth + 1, module_id)
+            if self.expanded.get(f"{module_id}:{component['id']}", True) and component.get('children'):
+                self._flatten_sub_components(component['children'], items, depth + 1, module_id)
 
     def is_active(self, module_id):
         """Returns True if module is either selected or locked by dependency."""
@@ -98,33 +98,37 @@ class SelectorScreen(Screen):
 
     def render(self):
         """Draws the boxed menu interface to the terminal."""
-        self._resolve_dependencies(); self.flat_items = self._build_flat_list()
+        self._resolve_dependencies()
+        self.flat_items = self._build_flat_list()
         self.cursor_idx = min(self.cursor_idx, len(self.flat_items) - 1)
-        tw, th = shutil.get_terminal_size()
+        terminal_width, terminal_height = shutil.get_terminal_size()
         
-        header = f"{Style.header()}{' PACKAGES SELECTOR '.center(tw)}{Style.RESET}"
-        pills = self._get_footer_pills()
-        footer = TUI.wrap_pills(pills, tw - 4)
-        av_h = max(10, th - 4 - len(footer))
-        lw, rw = tw // 2, tw - (tw // 2) - 1
+        header = f"{Style.header()}{' PACKAGES SELECTOR '.center(terminal_width)}{Style.RESET}"
+        footer_pills = self._get_footer_pills()
+        footer_lines = TUI.wrap_pills(footer_pills, terminal_width - 4)
+        available_height = max(10, terminal_height - 4 - len(footer_lines))
+        left_panel_width, right_panel_width = terminal_width // 2, terminal_width - (terminal_width // 2) - 1
         
         # Build panels and assemble
-        left = self._draw_left(lw, av_h)
-        right = self._draw_right(rw, av_h)
-        buffer = [header, ""] + TUI.stitch_containers(left, right, gap=1) + [""]
+        left_panel = self._draw_left(left_panel_width, available_height)
+        right_panel = self._draw_right(right_panel_width, available_height)
+        main_buffer = [header, ""] + TUI.stitch_containers(left_panel, right_panel, gap=1) + [""]
         
-        for fl in footer:
-            fv = TUI.visible_len(fl); lp = (tw - fv) // 2
-            rp = tw - fv - lp
-            buffer.append(f"{' ' * lp}{fl}{' ' * rp}")
+        for footer_line in footer_lines:
+            visible_len = TUI.visible_len(footer_line)
+            left_padding = (terminal_width - visible_len) // 2
+            right_padding = terminal_width - visible_len - left_padding
+            main_buffer.append(f"{' ' * left_padding}{footer_line}{' ' * right_padding}")
 
         if self.modal:
-            ml, my, mx = self.modal.render()
-            for i, l in enumerate(ml):
-                if 0 <= my+i < len(buffer): buffer[my+i] = TUI.overlay(buffer[my+i], l, mx)
+            modal_lines, modal_y, modal_x = self.modal.render()
+            for index, line in enumerate(modal_lines):
+                if 0 <= modal_y + index < len(main_buffer): 
+                    main_buffer[modal_y + index] = TUI.overlay(main_buffer[modal_y + index], line, modal_x)
         
-        buffer = TUI.draw_notifications(buffer)
-        sys.stdout.write("\033[H" + "\n".join([TUI.visible_ljust(l, tw) for l in buffer[:th]]) + "\033[J")
+        main_buffer = TUI.draw_notifications(main_buffer)
+        final_output = "\n".join([TUI.visible_ljust(line, terminal_width) for line in main_buffer[:terminal_height]])
+        sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
     def _get_footer_pills(self):
@@ -144,17 +148,22 @@ class SelectorScreen(Screen):
     def _draw_left(self, width, height):
         """Internal logic for building the package list box."""
         content_width, window_height = width - 6, height - 3
-        if self.cursor_idx + 1 < self.list_offset + 1: self.list_offset = max(0, self.cursor_idx)
-        elif self.cursor_idx + 1 >= self.list_offset + window_height: self.list_offset = self.cursor_idx - window_height + 1
+        if self.cursor_idx + 1 < self.list_offset + 1: 
+            self.list_offset = max(0, self.cursor_idx)
+        elif self.cursor_idx + 1 >= self.list_offset + window_height: 
+            self.list_offset = self.cursor_idx - window_height + 1
 
         lines = [""]
-        for idx, item in enumerate(self.flat_items):
-            is_cursor = (idx == self.cursor_idx)
+        for index, item in enumerate(self.flat_items):
+            is_cursor = (index == self.cursor_idx)
             if item['type'] == 'header':
-                if idx > 0: lines.append("")
-                label = f" {item['obj'].upper()} "; gap = content_width - len(label); left_pad = gap // 2
+                if index > 0: 
+                    lines.append("")
+                label = f" {item['obj'].upper()} "
+                gap = content_width - len(label)
+                left_padding = gap // 2
                 color = Style.highlight() if is_cursor else Style.normal()
-                lines.append(f"  {color}{Style.BOLD if is_cursor else ''}{'─' * left_pad}{label}{'─' * (gap - left_pad)}{Style.RESET}")
+                lines.append(f"  {color}{Style.BOLD if is_cursor else ''}{'─' * left_padding}{label}{'─' * (gap - left_padding)}{Style.RESET}")
             elif item['type'] == 'module':
                 module = item['obj']; is_installed = module.is_installed(); is_supported = module.is_supported()
                 
@@ -265,22 +274,33 @@ class SelectorScreen(Screen):
 
     def handle_input(self, key):
         """Processes input by dispatching to specialized handlers based on state."""
-        if self.modal: return self._handle_modal_input(key)
+        if self.modal: 
+            return self._handle_modal_input(key)
         
-        cw = shutil.get_terminal_size().columns // 2; win = max(10, shutil.get_terminal_size().lines - 5) - 2
-        max_info = max(0, len(self._get_info_lines(cw)) - win)
+        columns_width = shutil.get_terminal_size().columns // 2
+        window_height = max(10, shutil.get_terminal_size().lines - 5) - 2
+        max_info_offset = max(0, len(self._get_info_lines(columns_width)) - window_height)
         
-        nav = {
-            Keys.UP: lambda: self._move_cursor(-1), Keys.K: lambda: self._move_cursor(-1),
-            Keys.DOWN: lambda: self._move_cursor(1), Keys.J: lambda: self._move_cursor(1),
-            Keys.CTRL_K: lambda: self._move_cursor(-5), Keys.CTRL_J: lambda: self._move_cursor(5),
-            Keys.PGUP: lambda: self._scroll_info(-5, max_info), Keys.PGDN: lambda: self._scroll_info(5, max_info),
-            Keys.SPACE: self._toggle_sel, Keys.TAB: self._handle_tab,
-            Keys.LEFT: self._collapse, Keys.H: self._collapse,
-            Keys.RIGHT: self._expand, Keys.L: self._expand,
-            Keys.ENTER: self._trigger_install, Keys.Q: self._back, Keys.Q_UPPER: self._back
+        navigation_map = {
+            Keys.UP: lambda: self._move_cursor(-1), 
+            Keys.K: lambda: self._move_cursor(-1),
+            Keys.DOWN: lambda: self._move_cursor(1), 
+            Keys.J: lambda: self._move_cursor(1),
+            Keys.CTRL_K: lambda: self._move_cursor(-5), 
+            Keys.CTRL_J: lambda: self._move_cursor(5),
+            Keys.PGUP: lambda: self._scroll_info(-5, max_info_offset), 
+            Keys.PGDN: lambda: self._scroll_info(5, max_info_offset),
+            Keys.SPACE: self._toggle_sel, 
+            Keys.TAB: self._handle_tab,
+            Keys.LEFT: self._collapse, 
+            Keys.H: self._collapse,
+            Keys.RIGHT: self._expand, 
+            Keys.L: self._expand,
+            Keys.ENTER: self._trigger_install, 
+            Keys.Q: self._back, 
+            Keys.Q_UPPER: self._back
         }
-        return nav[key]() if key in nav else None
+        return navigation_map[key]() if key in navigation_map else None
 
     def _handle_modal_input(self, key):
         """Processes results from active modals."""
@@ -381,11 +401,12 @@ class SelectorScreen(Screen):
         return None
 
     def _set_sub_selection_recursive(self, module_id, components, state):
-        for comp in components:
-            if module_id not in self.sub_selections: self.sub_selections[module_id] = {}
-            self.sub_selections[module_id][comp['id']] = state
-            if 'children' in comp:
-                self._set_sub_selection_recursive(module_id, comp['children'], state)
+        for component in components:
+            if module_id not in self.sub_selections: 
+                self.sub_selections[module_id] = {}
+            self.sub_selections[module_id][component['id']] = state
+            if 'children' in component:
+                self._set_sub_selection_recursive(module_id, component['children'], state)
 
     def _ensure_parent_path_enabled(self, module_id, target_component_id):
         """Ensures that all parents of a sub-component are enabled."""

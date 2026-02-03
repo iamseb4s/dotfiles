@@ -117,8 +117,8 @@ class System:
                             
                             # CRITICAL: Check if there's pending input one last time 
                             # before returning, to avoid leaking keys to the next screen.
-                            r, _, _ = select.select([sys.stdin], [], [], 0.01)
-                            if r and input_callback:
+                            ready_to_read, _, _ = select.select([sys.stdin], [], [], 0.01)
+                            if ready_to_read and input_callback:
                                 input_callback()
                             break
                 finally:

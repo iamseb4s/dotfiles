@@ -40,7 +40,7 @@ class WizardScreen(Screen):
         # Data-driven field definitions
         self.fields = [
             {'id': 'id', 'label': 'ID', 'type': 'text', 'default': '', 'help': 'Unique identifier. Used for filename and dots/ folder.',
-             'validate': lambda v: "ID required." if not v else ("Invalid format." if not re.match(r'^[a-zA-Z0-9_-]+$', v) else ("ID exists." if any(m.id == v for m in self.modules) else None))},
+             'validate': lambda value: "ID required." if not value else ("Invalid format." if not re.match(r'^[a-zA-Z0-9_-]+$', value) else ("ID exists." if any(module.id == value for module in self.modules) else None))},
             {'id': 'label', 'label': 'Label', 'type': 'text', 'default': '', 'help': 'Display name in the selection menu.',
              'validate': lambda v: "Label required." if not v else None},
             {'id': 'manager', 'label': 'Package Manager', 'type': 'radio', 'options': self.managers, 'default': 'system', 'help': 'Select the package manager driver.'},
@@ -66,11 +66,12 @@ class WizardScreen(Screen):
         """Scans .drafts/ folder and opens selection modal if any exist."""
         if not os.path.exists(self.DRAFTS_DIR): return
         drafts = []
-        for f in os.listdir(self.DRAFTS_DIR):
-            if f.endswith(".json"):
-                path = os.path.join(self.DRAFTS_DIR, f)
+        for filename in os.listdir(self.DRAFTS_DIR):
+            if filename.endswith(".json"):
+                path = os.path.join(self.DRAFTS_DIR, filename)
                 try:
-                    with open(path, 'r') as j: drafts.append((f, json.load(j), os.path.getmtime(path)))
+                    with open(path, 'r') as draft_file: 
+                        drafts.append((filename, json.load(draft_file), os.path.getmtime(path)))
                 except: continue
         if drafts:
             self.modal = DraftSelectionModal(sorted(drafts, key=lambda x: x[2], reverse=True))
@@ -90,77 +91,97 @@ class WizardScreen(Screen):
 
     def _get_categories(self):
         """Extracts existing categories from loaded modules."""
-        cats = sorted(list(set(m.category for m in self.modules if m.category and m.category != self.CUSTOM_TAG)))
-        return cats + [self.CUSTOM_TAG]
+        categories = sorted(list(set(module.category for module in self.modules if module.category and module.category != self.CUSTOM_TAG)))
+        return categories + [self.CUSTOM_TAG]
 
     def _get_field_errors(self, field_id):
         """Returns error list for a field using data-driven validation."""
-        f = next((f for f in self.fields if f['id'] == field_id), None)
-        v_fn = f.get('validate') if f else None
-        err = v_fn(self.form.get(field_id)) if v_fn else None
-        return [err] if err else []
+        field = next((field for field in self.fields if field['id'] == field_id), None)
+        validation_function = field.get('validate') if field else None
+        error = validation_function(self.form.get(field_id)) if validation_function else None
+        return [error] if error else []
 
     def _ensure_focus_visible(self):
         """Adjusts form_offset to keep the focused field in view."""
-        lmap, curr, tw = {}, 1, shutil.get_terminal_size().columns
-        lw = int(tw * 0.40)
-        for i, f in enumerate(self.fields):
-            lmap[i] = curr
-            if f['type'] == 'radio':
-                its = [f"● {o if o != self.CUSTOM_TAG or self.form[f['id']] != self.CUSTOM_TAG else f'Custom: {self.form[self.CUSTOM_FIELD]}'}" for o in f['options']]
-                curr += 4 if TUI.visible_len("   ".join(its)) > lw - 6 else 3
-            else: curr += 2
-        ft, fb = lmap[self.focus_idx], (lmap[self.focus_idx + 1] - 1 if self.focus_idx + 1 < len(self.fields) else curr - 1)
-        avail = shutil.get_terminal_size().lines - 7
-        if ft < self.form_offset + 1: self.form_offset = max(0, ft - 1)
-        elif fb >= self.form_offset + avail: self.form_offset = fb - avail + 1
+        line_map, current_line, terminal_width = {}, 1, shutil.get_terminal_size().columns
+        left_panel_width = int(terminal_width * 0.40)
+        for index, field in enumerate(self.fields):
+            line_map[index] = current_line
+            if field['type'] == 'radio':
+                radio_items = [f"● {option if option != self.CUSTOM_TAG or self.form[field['id']] != self.CUSTOM_TAG else f'Custom: {self.form[self.CUSTOM_FIELD]}'}" for option in field['options']]
+                current_line += 4 if TUI.visible_len("   ".join(radio_items)) > left_panel_width - 6 else 3
+            else: 
+                current_line += 2
+        
+        focus_top = line_map[self.focus_idx]
+        focus_bottom = (line_map[self.focus_idx + 1] - 1 if self.focus_idx + 1 < len(self.fields) else current_line - 1)
+        available_lines = shutil.get_terminal_size().lines - 7
+        
+        if focus_top < self.form_offset + 1: 
+            self.form_offset = max(0, focus_top - 1)
+        elif focus_bottom >= self.form_offset + available_lines: 
+            self.form_offset = focus_bottom - available_lines + 1
 
     def render(self):
         """Draws the triple-box layout (45/55 vertical split on right)."""
-        tw, th = shutil.get_terminal_size()
+        terminal_width, terminal_height = shutil.get_terminal_size()
         
         # 1. Header & Footer
-        header = f"{Style.header()}{' PACKAGE WIZARD '.center(tw)}{Style.RESET}"
-        pills = self._get_footer_pills(); footer_lines = TUI.wrap_pills(pills, tw - 4)
-        avail_h = max(10, th - 4 - len(footer_lines))
-        lw, rw = int(tw * 0.40), tw - int(tw * 0.40) - 1
-        
+        header = f"{Style.header()}{' PACKAGE WIZARD '.center(terminal_width)}{Style.RESET}"
+        pills = self._get_footer_pills()
+        footer_lines = TUI.wrap_pills(pills, terminal_width - 4)
+        available_height = max(10, terminal_height - 4 - len(footer_lines))
+        left_width, right_width = int(terminal_width * 0.40), terminal_width - int(terminal_width * 0.40) - 1
         
         # 2. Content Sections
-        form_lines = self._build_form_lines(lw); content_h = avail_h - 2
-        
-        scroll = self._get_scrollbar(len(form_lines), content_h, self.form_offset)
+        form_lines = self._build_form_lines(left_width)
+        content_height = available_height - 2
+        scroll_params = self._get_scrollbar(len(form_lines), content_height, self.form_offset)
         
         # 3. Box Assembly
-        left_box = TUI.create_container(form_lines[self.form_offset : self.form_offset + content_h], lw, avail_h, title="FORM", color="", is_focused=(not self.modal), **scroll)
-        help_box, preview_box = self._build_right_panels(rw, avail_h)
+        left_box = TUI.create_container(form_lines[self.form_offset : self.form_offset + content_height], left_width, available_height, title="FORM", color="", is_focused=(not self.modal), **scroll_params)
+        help_box, preview_box = self._build_right_panels(right_width, available_height)
         main_content = TUI.stitch_containers(left_box, help_box + preview_box, gap=1)
         
         # 4. Buffer Assembly
         buffer = [header, ""] + main_content + [""]
-        for f_line in footer_lines:
-            fv = TUI.visible_len(f_line); lp = (tw - fv) // 2; rp = tw - fv - lp
-            buffer.append(f"{' ' * lp}{f_line}{' ' * rp}")
+        for footer_line in footer_lines:
+            footer_visible_len = TUI.visible_len(footer_line)
+            left_padding = (terminal_width - footer_visible_len) // 2
+            right_padding = terminal_width - footer_visible_len - left_padding
+            buffer.append(f"{' ' * left_padding}{footer_line}{' ' * right_padding}")
 
         if self.modal:
-            ml, my, mx = self.modal.render()
-            for i, line in enumerate(ml):
-                if 0 <= my + i < len(buffer): buffer[my + i] = TUI.overlay(buffer[my + i], line, mx)
+            modal_lines, modal_y, modal_x = self.modal.render()
+            for index, line in enumerate(modal_lines):
+                if 0 <= modal_y + index < len(buffer): 
+                    buffer[modal_y + index] = TUI.overlay(buffer[modal_y + index], line, modal_x)
         
         buffer = TUI.draw_notifications(buffer)
-        sys.stdout.write("\033[H" + "\n".join([TUI.visible_ljust(l, tw) for l in buffer[:th]]) + "\033[J")
+        final_output = "\n".join([TUI.visible_ljust(line, terminal_width) for line in buffer[:terminal_height]])
+        sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
     def _get_footer_pills(self):
-        if self.is_editing: return [TUI.pill('ENTER', 'Finish', Theme.GREEN), TUI.pill('ESC', 'Cancel', Theme.RED)]
-        f = self.fields[self.focus_idx]
-        res = [TUI.pill('h/j/k/l', 'Navigate', Theme.SKY), TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE)]
-        if f['type'] == 'text': res.append(TUI.pill('E', 'Edit', Theme.BLUE))
-        res.extend([TUI.pill('D', 'Draft', Theme.PEACH)])
-        if self.active_draft_path: res.append(TUI.pill('X', 'Delete Draft', Theme.RED))
-        res.append(TUI.pill('ENTER', "Select" if f['type'] == 'multi' else "Review & Save", Theme.GREEN))
-        res.append(TUI.pill('Q', 'Back', Theme.RED))
-        return res
+        if self.is_editing: 
+            return [TUI.pill('ENTER', 'Finish', Theme.GREEN), TUI.pill('ESC', 'Cancel', Theme.RED)]
+        
+        current_field = self.fields[self.focus_idx]
+        pills = [TUI.pill('h/j/k/l', 'Navigate', Theme.SKY), TUI.pill('PgUp/Dn', 'Scroll Script', Theme.BLUE)]
+        
+        if current_field['type'] == 'text': 
+            pills.append(TUI.pill('E', 'Edit', Theme.BLUE))
+        
+        pills.extend([TUI.pill('D', 'Draft', Theme.PEACH)])
+        
+        if self.active_draft_path: 
+            pills.append(TUI.pill('X', 'Delete Draft', Theme.RED))
+        
+        enter_label = "Select" if current_field['type'] == 'multi' else "Review & Save"
+        pills.append(TUI.pill('ENTER', enter_label, Theme.GREEN))
+        pills.append(TUI.pill('Q', 'Back', Theme.RED))
+        
+        return pills
 
     def _get_scrollbar(self, total, visible, offset):
         if total <= visible: return {'scroll_pos': None, 'scroll_size': None}
@@ -169,66 +190,95 @@ class WizardScreen(Screen):
 
     def _build_form_lines(self, width):
         lines = [""]
-        for i, field in enumerate(self.fields):
-            is_f = (self.focus_idx == i and not self.modal)
-            errs = self._get_field_errors(field['id'])
-            has_e = errs and (self.show_validation_errors or (field['id'] == 'id' and self.form['id']))
-            style = Style.highlight() if is_f else (Style.error() if has_e else Style.normal())
-            bold = Style.BOLD if is_f else ""
-            if field['type'] == 'radio': lines.extend(self._render_radio_field(field, is_f, style, bold, width))
-            else: lines.extend(self._render_standard_field(field, is_f, style, bold, width))
+        for index, field in enumerate(self.fields):
+            is_focused = (self.focus_idx == index and not self.modal)
+            errors = self._get_field_errors(field['id'])
+            has_errors = errors and (self.show_validation_errors or (field['id'] == 'id' and self.form['id']))
+            style = Style.highlight() if is_focused else (Style.error() if has_errors else Style.normal())
+            bold = Style.BOLD if is_focused else ""
+            
+            if field['type'] == 'radio': 
+                lines.extend(self._render_radio_field(field, is_focused, style, bold, width))
+            else: 
+                lines.extend(self._render_standard_field(field, is_focused, style, bold, width))
         return lines
 
-    def _render_standard_field(self, field, is_f, style, bold, width):
-        h = {'text': 'e to edit', 'check': 'SPACE to toggle', 'multi': 'ENTER to select'}.get(field['type'], '')
-        hint = f" {Style.muted()}{h}{Style.RESET}" if is_f and h else ""
-        label = f"{style}{bold}{field['label']}{Style.RESET}{hint}"
-        val = self.form.get(field['id'], "")
+    def _render_standard_field(self, field, is_focused, style, bold, width):
+        hint_key = {'text': 'e to edit', 'check': 'SPACE to toggle', 'multi': 'ENTER to select'}.get(field['type'], '')
+        hint = f" {Style.muted()}{hint_key}{Style.RESET}" if is_focused and hint_key else ""
+        label_text = f"{style}{bold}{field['label']}{Style.RESET}{hint}"
+        field_value = self.form.get(field['id'], "")
+        
         if field['type'] == 'text':
-            if is_f and self.is_editing:
-                p, c, st = val[:self.text_cursor_pos], val[self.text_cursor_pos:self.text_cursor_pos+1] or " ", val[self.text_cursor_pos+1:]
-                vd = f"{p}{Style.INVERT}{c}{Style.RESET}{style}{bold}{st}"
-            else: vd = val
-            value = f"{style}{bold}{self.SYM_EDIT} [ {vd}{Style.RESET}{style}{bold} ]{Style.RESET}"
-        elif field['type'] == 'check': value = f"{style}{bold}{'YES ' + self.SYM_CHECK if val else 'NO [ ]'}{Style.RESET}"
-        elif field['type'] == 'multi': value = f"{style}{bold}{self.SYM_MULTI} [ {len(val)} items ]{Style.RESET}"
-        else: value = f"{Style.muted()}[ N/A ]{Style.RESET}"
-        return [f"  {TUI.split_line(label, value, width - 6)}", ""]
+            if is_focused and self.is_editing:
+                prefix, char, suffix = field_value[:self.text_cursor_pos], field_value[self.text_cursor_pos:self.text_cursor_pos+1] or " ", field_value[self.text_cursor_pos+1:]
+                value_display = f"{prefix}{Style.INVERT}{char}{Style.RESET}{style}{bold}{suffix}"
+            else: 
+                value_display = field_value
+            value_text = f"{style}{bold}{self.SYM_EDIT} [ {value_display}{Style.RESET}{style}{bold} ]{Style.RESET}"
+        elif field['type'] == 'check': 
+            value_text = f"{style}{bold}{'YES ' + self.SYM_CHECK if field_value else 'NO [ ]'}{Style.RESET}"
+        elif field['type'] == 'multi': 
+            value_text = f"{style}{bold}{self.SYM_MULTI} [ {len(field_value)} items ]{Style.RESET}"
+        else: 
+            value_text = f"{Style.muted()}[ N/A ]{Style.RESET}"
+            
+        return [f"  {TUI.split_line(label_text, value_text, width - 6)}", ""]
 
-    def _render_radio_field(self, field, is_f, style, bold, width):
-        h_txt = "h/l to select" + (", e to edit" if field['id'] == 'category' and self.form['category'] == self.CUSTOM_TAG else "")
-        lines, its = [f"  {style}{bold}{field['label']}{Style.RESET}{f' {Style.muted()}{h_txt}{Style.RESET}' if is_f else ''}"], []
-        for opt in field['options']:
-            sel = (self.form[field['id']] == opt); mark = self.SYM_RADIO if sel else self.SYM_RADIO_OFF; label = opt
-            if opt == self.CUSTOM_TAG and sel:
-                cv = self.form[self.CUSTOM_FIELD]
-                if is_f and self.is_editing:
-                    p, c, st = cv[:self.text_cursor_pos], cv[self.text_cursor_pos:self.text_cursor_pos+1] or " ", cv[self.text_cursor_pos+1:]
-                    label = f"Custom: '{p}{Style.INVERT}{c}{Style.RESET}{style}{bold}{st}' {self.SYM_EDIT}"
-                else: label = f"Custom: '{cv}' {self.SYM_EDIT}" if cv else self.CUSTOM_TAG
-            is_err = (opt == self.CUSTOM_TAG and sel and not self.form[self.CUSTOM_FIELD])
-            c = Style.error() if is_err else (Style.highlight() if sel and is_f else (Style.success() if sel else Style.muted()))
-            its.append(f"{c}{bold if sel and is_f else ''}{mark} {label}{Style.RESET}")
-        row = "   ".join(its)
-        if TUI.visible_len(row) > width - 6:
-            mid = len(its) // 2
-            for l in ["   ".join(its[:mid]), "   ".join(its[mid:])]: lines.append(f"{' ' * ((width - 6 - TUI.visible_len(l)) // 2 + 2)}{l}")
-        else: lines.append(f"{' ' * ((width - 6 - TUI.visible_len(row)) // 2 + 2)}{row}")
+    def _render_radio_field(self, field, is_focused, style, bold, width):
+        hint_text = "h/l to select" + (", e to edit" if field['id'] == 'category' and self.form['category'] == self.CUSTOM_TAG else "")
+        lines, items = [f"  {style}{bold}{field['label']}{Style.RESET}{f' {Style.muted()}{hint_text}{Style.RESET}' if is_focused else ''}"], []
+        for option in field['options']:
+            is_selected = (self.form[field['id']] == option)
+            mark = self.SYM_RADIO if is_selected else self.SYM_RADIO_OFF
+            label = option
+            
+            if option == self.CUSTOM_TAG and is_selected:
+                custom_value = self.form[self.CUSTOM_FIELD]
+                if is_focused and self.is_editing:
+                    prefix, char, suffix = custom_value[:self.text_cursor_pos], custom_value[self.text_cursor_pos:self.text_cursor_pos+1] or " ", custom_value[self.text_cursor_pos+1:]
+                    label = f"Custom: '{prefix}{Style.INVERT}{char}{Style.RESET}{style}{bold}{suffix}' {self.SYM_EDIT}"
+                else: 
+                    label = f"Custom: '{custom_value}' {self.SYM_EDIT}" if custom_value else self.CUSTOM_TAG
+            
+            is_error = (option == self.CUSTOM_TAG and is_selected and not self.form[self.CUSTOM_FIELD])
+            status_color = Style.error() if is_error else (Style.highlight() if is_selected and is_focused else (Style.success() if is_selected else Style.muted()))
+            items.append(f"{status_color}{bold if is_selected and is_focused else ''}{mark} {label}{Style.RESET}")
+            
+        row_text = "   ".join(items)
+        if TUI.visible_len(row_text) > width - 6:
+            middle_index = len(items) // 2
+            for part_line in ["   ".join(items[:middle_index]), "   ".join(items[middle_index:])]: 
+                lines.append(f"{' ' * ((width - 6 - TUI.visible_len(part_line)) // 2 + 2)}{part_line}")
+        else: 
+            lines.append(f"{' ' * ((width - 6 - TUI.visible_len(row_text)) // 2 + 2)}{row_text}")
+            
         return lines + [""]
 
     def _build_right_panels(self, width, height):
         field = self.fields[self.focus_idx]
-        help_l = [f"  {Style.normal()}{l}{Style.RESET}" for l in TUI.wrap_text(field['help'], width - 6)]
-        is_c_empty = (field['id'] == 'category' and self.form['category'] == self.CUSTOM_TAG and not self.form[self.CUSTOM_FIELD])
-        if self._get_field_errors(field['id']) and (self.show_validation_errors or self.is_editing or (field['id'] == 'id' and self.form['id']) or is_c_empty):
-            for e in self._get_field_errors(field['id']): help_l.append(f"  {Style.error()}! {e}{Style.RESET}")
-        hh = min(len(help_l) + 2, height // 3); ph = height - hh
-        prev_l = [""]
+        help_lines = [f"  {Style.normal()}{line}{Style.RESET}" for line in TUI.wrap_text(field['help'], width - 6)]
+        is_category_empty = (field['id'] == 'category' and self.form['category'] == self.CUSTOM_TAG and not self.form[self.CUSTOM_FIELD])
+        
+        if self._get_field_errors(field['id']) and (self.show_validation_errors or self.is_editing or (field['id'] == 'id' and self.form['id']) or is_category_empty):
+            for error in self._get_field_errors(field['id']): 
+                help_lines.append(f"  {Style.error()}! {error}{Style.RESET}")
+        
+        help_height = min(len(help_lines) + 2, height // 3)
+        preview_height = height - help_height
+        
+        preview_lines = [""]
         for line in self._generate_python().split("\n"):
-            for wl in TUI.wrap_text(line, width - 6): prev_l.append(f"  {Style.normal()}{wl}{Style.RESET}")
-        max_off = max(0, len(prev_l) - (ph - 2)); self.preview_offset = min(self.preview_offset, max_off)
-        return TUI.create_container(help_l, width, hh, title="HELP"), \
-               TUI.create_container(prev_l[self.preview_offset : self.preview_offset + ph - 2], width, ph, title="PYTHON PREVIEW", color="", is_focused=False, **self._get_scrollbar(len(prev_l), ph - 2, self.preview_offset))
+            for wrapped_line in TUI.wrap_text(line, width - 6): 
+                preview_lines.append(f"  {Style.normal()}{wrapped_line}{Style.RESET}")
+        
+        max_preview_offset = max(0, len(preview_lines) - (preview_height - 2))
+        self.preview_offset = min(self.preview_offset, max_preview_offset)
+        
+        help_box = TUI.create_container(help_lines, width, help_height, title="HELP")
+        preview_box = TUI.create_container(preview_lines[self.preview_offset : self.preview_offset + preview_height - 2], width, preview_height, title="PYTHON PREVIEW", color="", is_focused=False, **self._get_scrollbar(len(preview_lines), preview_height - 2, self.preview_offset))
+        
+        return help_box, preview_box
 
     def save_package(self):
         """Generates the .py module and creates the dots/ folder."""
@@ -271,35 +321,57 @@ class WizardScreen(Screen):
         return self._handle_nav_input(key)
 
     def _handle_modal_input(self, key):
-        m = self.modal
-        if not m: return None
-        res = m.handle_input(key)
-        if res == "YES":
-            if self.modal_type == "DISCARD": return "WELCOME"
-            elif self.modal_type == "DRAFT": self.save_draft(); self.modal = None; return "WELCOME"
+        modal = self.modal
+        if not modal: 
+            return None
+        result = modal.handle_input(key)
+        
+        if result == "YES":
+            if self.modal_type == "DISCARD": 
+                return "WELCOME"
+            elif self.modal_type == "DRAFT": 
+                self.save_draft()
+                self.modal = None
+                return "WELCOME"
             elif self.modal_type == "DELETE_DRAFT":
                 if self.active_draft_path and os.path.exists(self.active_draft_path):
-                    os.remove(self.active_draft_path); self._reset_form(); TUI.push_notification("Draft deleted", type="INFO")
+                    os.remove(self.active_draft_path)
+                    self._reset_form()
+                    TUI.push_notification("Draft deleted", type="INFO")
                 self.modal = None
             elif self.modal_type == "DELETE_MODAL_DRAFT":
                 path = os.path.join(self.DRAFTS_DIR, self.pending_delete[0])
-                if os.path.exists(path): os.remove(path); TUI.push_notification("Draft deleted", type="INFO")
-                self.modal = None; self._check_for_drafts(); return None
-        elif res == "CONFIRM":
-            if isinstance(m, DependencyModal): self.form['dependencies'] = m.get_selected()
+                if os.path.exists(path): 
+                    os.remove(path)
+                    TUI.push_notification("Draft deleted", type="INFO")
+                self.modal = None
+                self._check_for_drafts()
+                return None
+        elif result == "CONFIRM":
+            if isinstance(modal, DependencyModal): 
+                self.form['dependencies'] = modal.get_selected()
             self.modal = None
-        elif isinstance(res, tuple):
-            if res[0] == "LOAD": self.form.update(res[1][1]); self.active_draft_path = os.path.join(self.DRAFTS_DIR, res[1][0]); self.modal = None
-            elif res[0] == "DELETE_REQ":
-                self.pending_delete = res[1] # (filename, data, mtime)
-                self.modal = ConfirmModal("DELETE DRAFT?", f"Are you sure you want to permanently delete '{res[1][1].get('id', 'unnamed')}' draft?")
+        elif isinstance(result, tuple):
+            if result[0] == "LOAD": 
+                self.form.update(result[1][1])
+                self.active_draft_path = os.path.join(self.DRAFTS_DIR, result[1][0])
+                self.modal = None
+            elif result[0] == "DELETE_REQ":
+                self.pending_delete = result[1] # (filename, data, mtime)
+                draft_id = result[1][1].get('id', 'unnamed')
+                self.modal = ConfirmModal("DELETE DRAFT?", f"Are you sure you want to permanently delete '{draft_id}' draft?")
                 self.modal_type = "DELETE_MODAL_DRAFT"
-        elif res == "SAVE":
-            if self.save_package(): TUI.push_notification(f"Module '{self.form['id']}' created", type="INFO"); return "RELOAD_AND_WELCOME"
-            else: self.modal = None
-        elif res in ["FRESH", "NO", "CLOSE", "CANCEL"]:
-            if self.modal_type == "DELETE_MODAL_DRAFT": self._check_for_drafts()
-            else: self.modal = None
+        elif result == "SAVE":
+            if self.save_package(): 
+                TUI.push_notification(f"Module '{self.form['id']}' created", type="INFO")
+                return "RELOAD_AND_WELCOME"
+            else: 
+                self.modal = None
+        elif result in ["FRESH", "NO", "CLOSE", "CANCEL"]:
+            if self.modal_type == "DELETE_MODAL_DRAFT": 
+                self._check_for_drafts()
+            else: 
+                self.modal = None
         return None
 
     def _handle_edit_input(self, key):
@@ -315,23 +387,38 @@ class WizardScreen(Screen):
         return None
 
     def _handle_nav_input(self, key):
-        nav = {
-            Keys.UP: lambda: self._move_focus(-1), Keys.K: lambda: self._move_focus(-1),
-            Keys.DOWN: lambda: self._move_focus(1), Keys.J: lambda: self._move_focus(1),
-            Keys.LEFT: lambda: self._cycle_opt(-1), Keys.H: lambda: self._cycle_opt(-1),
-            Keys.RIGHT: lambda: self._cycle_opt(1), Keys.L: lambda: self._cycle_opt(1),
-            Keys.SPACE: self._toggle_check, ord('e'): self._start_editing, ord('E'): self._start_editing,
+        navigation_map = {
+            Keys.UP: lambda: self._move_focus(-1), 
+            Keys.K: lambda: self._move_focus(-1),
+            Keys.DOWN: lambda: self._move_focus(1), 
+            Keys.J: lambda: self._move_focus(1),
+            Keys.LEFT: lambda: self._cycle_option(-1), 
+            Keys.H: lambda: self._cycle_option(-1),
+            Keys.RIGHT: lambda: self._cycle_option(1), 
+            Keys.L: lambda: self._cycle_option(1),
+            Keys.SPACE: self._toggle_check, 
+            ord('e'): self._start_editing, 
+            ord('E'): self._start_editing,
             ord('d'): lambda: self._set_modal(ConfirmModal("SAVE DRAFT", "Save progress?"), "DRAFT"),
-            ord('x'): self._draft_del_req, Keys.ENTER: self._trigger_enter, Keys.Q: self._back_req,
-            Keys.PGUP: lambda: self._scroll_prev(-5), Keys.PGDN: lambda: self._scroll_prev(5)
+            ord('x'): self._draft_del_req, 
+            Keys.ENTER: self._trigger_enter, 
+            Keys.Q: self._back_req,
+            Keys.PGUP: lambda: self._scroll_preview(-5), 
+            Keys.PGDN: lambda: self._scroll_preview(5)
         }
-        action = nav.get(key)
+        action = navigation_map.get(key)
         return action() if action else None
 
-    def _move_focus(self, d): self.focus_idx = (self.focus_idx + d) % len(self.fields); self._ensure_focus_visible()
-    def _cycle_opt(self, d):
-        f = self.fields[self.focus_idx]
-        if f['type'] == 'radio': opts = f['options']; curr = opts.index(self.form[f['id']]); self.form[f['id']] = opts[(curr + d) % len(opts)]
+    def _move_focus(self, direction): 
+        self.focus_idx = (self.focus_idx + direction) % len(self.fields)
+        self._ensure_focus_visible()
+
+    def _cycle_option(self, direction):
+        field = self.fields[self.focus_idx]
+        if field['type'] == 'radio': 
+            options = field['options']
+            current_index = options.index(self.form[field['id']])
+            self.form[field['id']] = options[(current_index + direction) % len(options)]
     def _toggle_check(self):
         f = self.fields[self.focus_idx]
         if f['type'] == 'check': self.form[f['id']] = not self.form[f['id']]
@@ -348,10 +435,18 @@ class WizardScreen(Screen):
             self._set_modal(ConfirmModal("DISCARD?", "Discard all changes?"), "DISCARD")
         else: return "WELCOME"
     def _trigger_enter(self):
-        f = self.fields[self.focus_idx]
-        if f['type'] == 'multi': self.modal = DependencyModal(self.modules, self.form['dependencies'])
+        field = self.fields[self.focus_idx]
+        if field['type'] == 'multi': 
+            self.modal = DependencyModal(self.modules, self.form['dependencies'])
         else:
-            errs = [e for fid in [f['id'] for f in self.fields] for e in self._get_field_errors(fid)]
-            if errs: self.show_validation_errors = True; TUI.push_notification("Fix form errors", type="ERROR")
-            else: self.modal = WizardSummaryModal(self.form, custom_tag=self.CUSTOM_TAG, custom_field=self.CUSTOM_FIELD)
-    def _scroll_prev(self, d): self.preview_offset = max(0, self.preview_offset + d)
+            all_field_ids = [field_item['id'] for field_item in self.fields]
+            form_errors = [error for field_id in all_field_ids for error in self._get_field_errors(field_id)]
+            
+            if form_errors: 
+                self.show_validation_errors = True
+                TUI.push_notification("Fix form errors", type="ERROR")
+            else: 
+                self.modal = WizardSummaryModal(self.form, custom_tag=self.CUSTOM_TAG, custom_field=self.CUSTOM_FIELD)
+
+    def _scroll_preview(self, direction): 
+        self.preview_offset = max(0, self.preview_offset + direction)

@@ -77,11 +77,11 @@ class Style:
         if len(hex_color) == 3:
             hex_color = ''.join([c*2 for c in hex_color])
         try:
-            r = int(hex_color[0:2], 16)
-            g = int(hex_color[2:4], 16)
-            b = int(hex_color[4:6], 16)
+            red_value = int(hex_color[0:2], 16)
+            green_value = int(hex_color[2:4], 16)
+            blue_value = int(hex_color[4:6], 16)
             layer = 48 if bg else 38
-            return f"\033[{layer};2;{r};{g};{b}m"
+            return f"\033[{layer};2;{red_value};{green_value};{blue_value}m"
         except ValueError:
             return ""
 
@@ -237,8 +237,8 @@ class TUI:
             
         import select
         try:
-            r, _, _ = select.select([fd], [], [], actual_timeout)
-            if not r:
+            ready_to_read, _, _ = select.select([fd], [], [], actual_timeout)
+            if not ready_to_read:
                 return None
         except (select.error, InterruptedError):
             # This happens on SIGWINCH or other signals
@@ -268,54 +268,54 @@ class TUI:
     def _read_key_internal(fd):
         """Internal key reading logic."""
         try:
-            ch_bytes = os.read(fd, 1)
-            if not ch_bytes: return None
-            ch = ch_bytes.decode('utf-8', errors='ignore')
+            char_bytes = os.read(fd, 1)
+            if not char_bytes: return None
+            char = char_bytes.decode('utf-8', errors='ignore')
             
-            if ch == '\x1b':  # ESC sequence
+            if char == '\x1b':  # ESC sequence
                 import select
                 # Wait for the next byte (like '[')
-                r, _, _ = select.select([fd], [], [], 0.1)
-                if not r: return Keys.ESC # standalone ESC
+                ready_to_read, _, _ = select.select([fd], [], [], 0.1)
+                if not ready_to_read: return Keys.ESC # standalone ESC
                 
-                ch2_bytes = os.read(fd, 1)
-                ch2 = ch2_bytes.decode('utf-8', errors='ignore')
+                char2_bytes = os.read(fd, 1)
+                char2 = char2_bytes.decode('utf-8', errors='ignore')
                 
-                if ch2 == '[' or ch2 == 'O':
+                if char2 == '[' or char2 == 'O':
                     # Wait for the sequence specifier (like 'A', 'B', etc.)
-                    r, _, _ = select.select([fd], [], [], 0.1)
-                    if not r: return ord(ch2)
+                    ready_to_read, _, _ = select.select([fd], [], [], 0.1)
+                    if not ready_to_read: return ord(char2)
                     
-                    ch3_bytes = os.read(fd, 1)
-                    ch3 = ch3_bytes.decode('utf-8', errors='ignore')
+                    char3_bytes = os.read(fd, 1)
+                    char3 = char3_bytes.decode('utf-8', errors='ignore')
                     
                     # Arrow keys: \x1b[A, B, C, D
-                    if ch3 == 'A': return Keys.UP
-                    if ch3 == 'B': return Keys.DOWN
-                    if ch3 == 'C': return Keys.RIGHT
-                    if ch3 == 'D': return Keys.LEFT
+                    if char3 == 'A': return Keys.UP
+                    if char3 == 'B': return Keys.DOWN
+                    if char3 == 'C': return Keys.RIGHT
+                    if char3 == 'D': return Keys.LEFT
 
                     # DEL key sequence: \x1b[3~
-                    if ch3 == '3':
-                        r, _, _ = select.select([fd], [], [], 0.05)
-                        if r: os.read(fd, 1) # consume ~
+                    if char3 == '3':
+                        ready_to_read, _, _ = select.select([fd], [], [], 0.05)
+                        if ready_to_read: os.read(fd, 1) # consume ~
                         return Keys.DEL
-
+ 
                     # Capture extended sequences like PageUp/PageDown: \x1b[5~, \x1b[6~
-                    if ch3 == '5':
-                        r, _, _ = select.select([fd], [], [], 0.05)
-                        if r: os.read(fd, 1) # consume ~
+                    if char3 == '5':
+                        ready_to_read, _, _ = select.select([fd], [], [], 0.05)
+                        if ready_to_read: os.read(fd, 1) # consume ~
                         return Keys.PGUP
-                    if ch3 == '6':
-                        r, _, _ = select.select([fd], [], [], 0.05)
-                        if r: os.read(fd, 1) # consume ~
+                    if char3 == '6':
+                        ready_to_read, _, _ = select.select([fd], [], [], 0.05)
+                        if ready_to_read: os.read(fd, 1) # consume ~
                         return Keys.PGDN
-                              
-                    return ord(ch3) 
+                               
+                    return ord(char3) 
                 
                 return Keys.ESC 
             
-            return ord(ch)
+            return ord(char)
         except Exception:
             return None
 
