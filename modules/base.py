@@ -62,6 +62,38 @@ class Module:
             return self.manager.get("default", "system")
         return self.manager or "system"
 
+    def is_supported(self):
+        """
+        Determines if the module is supported on the current distribution.
+        Checks both package_name and manager dictionaries.
+        """
+        # 1. Check package_name mapping
+        if isinstance(self.package_name, dict):
+            if self.system_manager.is_arch and "arch" not in self.package_name: return False
+            if self.system_manager.is_debian and "debian" not in self.package_name: return False
+        
+        # 2. Check manager mapping
+        if isinstance(self.manager, dict):
+            if self.system_manager.is_arch and "arch" not in self.manager and "default" not in self.manager: return False
+            if self.system_manager.is_debian and "debian" not in self.manager and "default" not in self.manager: return False
+            
+        return True
+
+    def get_supported_distros(self):
+        """Returns a string list of supported distributions."""
+        distros = []
+        if isinstance(self.package_name, dict):
+            if "arch" in self.package_name: distros.append("Arch Linux")
+            if "debian" in self.package_name: distros.append("Debian/Ubuntu")
+        elif isinstance(self.manager, dict):
+            if "arch" in self.manager: distros.append("Arch Linux")
+            if "debian" in self.manager: distros.append("Debian/Ubuntu")
+            if "default" in self.manager and len(distros) == 0: return "All Distros"
+        else:
+            return "All Distros"
+            
+        return ", ".join(distros) if distros else "All Distros"
+
     def is_installed(self):
         """Detection logic based on the package manager type."""
         package = self.get_package_name()

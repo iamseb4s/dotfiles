@@ -150,29 +150,40 @@ class SelectorScreen(Screen):
                 color = Style.highlight() if is_cursor else Style.normal()
                 lines.append(f"  {color}{Style.BOLD if is_cursor else ''}{'─' * left_pad}{label}{'─' * (gap - left_pad)}{Style.RESET}")
             elif item['type'] == 'module':
-                module = item['obj']; is_installed = module.is_installed()
-                if module.id in self.auto_locked: mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.red()
+                module = item['obj']; is_installed = module.is_installed(); is_supported = module.is_supported()
+                
+                if not is_supported:
+                    mark, status_text, color = self.SYM_EMPTY, "[ NOT SUPPORTED ]", Style.muted()
+                elif module.id in self.auto_locked:
+                    mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.red()
                 elif module.id in self.selected:
                     override = self.overrides.get(module.id); part = override and (not override.get('install_package', True) or (module.stow_pkg and not override.get('install_dotfiles', True)))
                     mark, status_text, color = (self.SYM_PART if part else self.SYM_SEL), self.STAT_SEL, (Style.green() if module.id not in self.overrides else Style.yellow())
-                else: mark, status_text, color = self.SYM_EMPTY, (self.STAT_INST if is_installed else ""), (Style.blue() if is_installed else Style.muted())
+                else:
+                    mark, status_text, color = self.SYM_EMPTY, (self.STAT_INST if is_installed else ""), (Style.blue() if is_installed else Style.normal())
                 
-                style = Style.highlight() + Style.BOLD if is_cursor else (color if (self.is_active(module.id) or is_installed) else Style.muted())
-                label_color = Style.normal() if not (is_cursor or self.is_active(module.id) or is_installed) else style
+                style = Style.highlight() + Style.BOLD if is_cursor else color
+                label_color = style if (is_cursor or self.is_active(module.id) or is_installed) else color
+                
                 label_text = f" {style}{mark}  {label_color}{Style.BOLD if (self.is_active(module.id) and not is_cursor) else ''}{module.label}{Style.RESET}"
                 lines.append(f"  {TUI.split_line(label_text, f'{style}{status_text}{Style.RESET}' if status_text else '', content_width)}")
 
             elif item['type'] == 'sub':
                 comp = item['obj']
                 module_id = item['module_id']
+                module = self.mod_map.get(module_id)
+                is_supported = module.is_supported() if module else True
+                
                 # Check if it's selected in sub_selections, fallback to its own default
-                is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True))
+                is_sel = self.sub_selections.get(module_id, {}).get(comp['id'], comp.get('default', True)) if is_supported else False
                 mark = self.SYM_SEL if is_sel else self.SYM_EMPTY
                 
                 style = Style.highlight() + Style.BOLD if is_cursor else (Style.green() if is_sel else Style.muted())
+                label_style = style if is_supported else Style.muted()
+                
                 # Use spaces for indentation as requested
                 indent = "    " * item['depth']
-                label_text = f"  {indent}{style}{mark}  {comp['label']}{Style.RESET}"
+                label_text = f"  {indent}{label_style}{mark}  {comp['label']}{Style.RESET}"
                 lines.append(f"  {TUI.visible_ljust(label_text, content_width)}")
 
         visible_lines = lines[self.list_offset : self.list_offset + window_height]
@@ -196,17 +207,25 @@ class SelectorScreen(Screen):
         if not self.flat_items: return lines
         item = self.flat_items[self.cursor_idx]; content_width = width - 6
         if item['type'] == 'module':
-            module = item['obj']; override = self.overrides.get(module.id, {}); is_installed = module.is_installed()
-            color = Style.red() if module.id in self.auto_locked else (Style.yellow() if module.id in self.overrides else (Style.green() if module.id in self.selected else (Style.blue() if is_installed else Style.highlight())))
+            module = item['obj']; override = self.overrides.get(module.id, {}); is_installed = module.is_installed(); is_supported = module.is_supported()
+            color = Style.muted() if not is_supported else (Style.red() if module.id in self.auto_locked else (Style.yellow() if module.id in self.overrides else (Style.green() if module.id in self.selected else (Style.blue() if is_installed else Style.highlight()))))
             lines.extend([f"  {Style.BOLD}{color}{module.label.upper()}{Style.RESET}", f"  {Style.surface1()}{'─' * content_width}{Style.RESET}"])
             if module.description:
                 for line in TUI.wrap_text(module.description, content_width): lines.append(f"  {Style.muted()}{line}{Style.RESET}")
             lines.append("")
-            def row(label, value, color_style=""): return f"  {Style.subtext1()}{label:<10}{Style.RESET} {color_style}{value}{Style.RESET}"
-            lines.append(row("Status", 'Installed' if is_installed else 'Not Installed', Style.blue() if is_installed else Style.muted()))
+            def row(label, value, color_style=""): return f"  {Style.subtext1()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}"
+            
+            status_text = 'Not Supported' if not is_supported else ('Installed' if is_installed else 'Not Installed')
+            status_style = Style.muted() if not is_supported else (Style.blue() if is_installed else Style.muted())
+            lines.append(row("Status", status_text, status_style))
+            
+            supported_os = module.get_supported_distros()
+            lines.append(row("Supported OS", supported_os, Style.normal() if is_supported else Style.muted()))
+
             for key, label in [('manager', 'Manager'), ('package_name', 'Package')]:
                 current_value = getattr(module, key) if key != 'package_name' else module.get_package_name()
-                value = override.get(key, current_value); lines.append(row(label, f"{value}{'*' if value != current_value else ''}"))
+                value = override.get(key, current_value)
+                lines.append(row(label, f"{value}{'*' if value != current_value else ''}", Style.muted() if not is_supported else ""))
             
             current_target = override.get('stow_target', module.stow_target)
             tree = module.get_config_tree(target=current_target)
@@ -273,6 +292,9 @@ class SelectorScreen(Screen):
         item = self.flat_items[self.cursor_idx]
         if item['type'] == 'module':
             module = item['obj']
+            if not module.is_supported():
+                TUI.push_notification(f"{module.label} is not available for your OS", type="ERROR")
+                return
             if module.id in self.auto_locked: return
             if module.id in self.selected:
                 self.selected.remove(module.id)
@@ -318,7 +340,7 @@ class SelectorScreen(Screen):
 
         elif item['type'] == 'header':
             category = item['obj']; modules = self.categories[category]
-            if all(self.is_active(m.id) for m in modules):
+            if all(self.is_active(m.id) for m in modules if m.is_supported()):
                 for module in modules:
                     if module.id in self.selected:
                         self.selected.remove(module.id)
@@ -327,12 +349,20 @@ class SelectorScreen(Screen):
                         self.expanded[module.id] = False # Sync collapse
             else:
                 for module in modules:
-                    if module.id not in self.auto_locked:
+                    if module.id not in self.auto_locked and module.is_supported():
                         self.selected.add(module.id)
                         self.expanded[module.id] = True # Sync expansion
                         if hasattr(module, 'sub_components') and module.sub_components:
                             if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
                             self._set_sub_selection_recursive(module.id, module.sub_components, True)
+                        
+                        # Auto-select binary package by default
+                        if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
+                        self.sub_selections[module.id]['binary'] = True
+                        
+                        # Auto-select dotfiles by default if they exist
+                        if module.has_usable_dotfiles():
+                            self.sub_selections[module.id]['dotfiles'] = True
         return None
 
     def _set_sub_selection_recursive(self, module_id, components, state):
