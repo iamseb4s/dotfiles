@@ -445,6 +445,10 @@ class SelectorScreen(Screen):
             # If we enable a child, we must ensure parents are enabled
             if new_state:
                 self._ensure_parent_path_enabled(module_id, component['id'])
+            else:
+                if not any(self.sub_selections[module_id].values()):
+                    self.selected.discard(module_id)
+                    self.expanded[module_id] = False
 
         elif item['type'] == 'header':
             category = item['obj']; modules = self.categories[category]
