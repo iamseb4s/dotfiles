@@ -136,9 +136,15 @@ class Module:
     def is_installed(self):
         """Detection logic based on the package manager type."""
         package = self.get_package_name()
-        if self.manager == "system":
+        manager = self.get_manager()
+        
+        if manager == "system":
+            # 1. Try robust OS package manager detection
+            if self.system_manager.is_package_installed(package):
+                return True
+            # 2. Fallback to binary path detection (for manual installs)
             return shutil.which(package or "") is not None
-        elif self.manager == "cargo":
+        elif manager == "cargo":
             return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif self.manager == "brew":
             return shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)

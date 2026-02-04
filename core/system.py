@@ -153,3 +153,26 @@ class System:
         else:
             print(f"OS {self.os_id} not supported for package installation.")
             return False
+
+    def is_package_installed(self, package_name):
+        """Checks if a system package is installed using the OS package manager."""
+        if not package_name: return False
+        
+        try:
+            if self.is_arch:
+                # pacman -Qq returns 0 if installed, 1 if not
+                result = subprocess.run(["pacman", "-Qq", package_name], 
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return result.returncode == 0
+            
+            elif self.is_debian:
+                # dpkg -s returns detailed status. We check for 'install ok installed'
+                result = subprocess.run(["dpkg", "-s", package_name], 
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                for line in result.stdout.splitlines():
+                    if line.startswith("Status:"):
+                        return "ok installed" in line
+        except:
+            return False
+            
+        return False
