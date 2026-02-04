@@ -48,25 +48,28 @@ class Module:
                 return True
         return False
 
-    def _resolve_distro_value(self, dictionary, default=None):
+    def _resolve_distro_value(self, value, default=None):
         """
         Generic helper to resolve values from a dictionary based on distribution.
         """
-        if not isinstance(dictionary, dict):
-            return dictionary
+        if value is None:
+            return default
+
+        if not isinstance(value, dict):
+            return value
 
         # 1. Specific OS ID (e.g., 'ubuntu', 'manjaro')
-        if self.system_manager.os_id in dictionary:
-            return dictionary[self.system_manager.os_id]
+        if self.system_manager.os_id in value:
+            return value[self.system_manager.os_id]
         
         # 2. Family ID ('arch' or 'debian')
-        if self.system_manager.is_arch and "arch" in dictionary:
-            return dictionary["arch"]
-        if self.system_manager.is_debian and "debian" in dictionary:
-            return dictionary["debian"]
+        if self.system_manager.is_arch and "arch" in value:
+            return value["arch"]
+        if self.system_manager.is_debian and "debian" in value:
+            return value["debian"]
             
         # 3. Default fallback
-        return dictionary.get("default", default)
+        return value.get("default", default)
 
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
@@ -133,9 +136,15 @@ class Module:
     def is_installed(self):
         """Detection logic based on the package manager type."""
         package = self.get_package_name()
-        if self.manager == "system":
+        manager = self.get_manager()
+        
+        if manager == "system":
+            # 1. Try robust OS package manager detection
+            if self.system_manager.is_package_installed(package):
+                return True
+            # 2. Fallback to binary path detection (for manual installs)
             return shutil.which(package or "") is not None
-        elif self.manager == "cargo":
+        elif manager == "cargo":
             return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif self.manager == "brew":
             return shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
