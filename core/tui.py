@@ -494,7 +494,9 @@ class TUI:
             max_title_len = width - 6
             if len(display_title) > max_title_len:
                 display_title = display_title[:max_title_len-1] + "…"
-            top += f" {Style.BOLD}{display_title}{Style.RESET}{base_border_color} ─"
+            
+            title_style = "" if is_focused else Style.normal()
+            top += f" {Style.BOLD}{title_style}{display_title}{Style.RESET}{base_border_color} ─"
         remaining = width - TUI.visible_len(top) - 1
         top += "─" * max(0, remaining) + "╮"
         output = [f"{base_border_color}{top}{reset}"]

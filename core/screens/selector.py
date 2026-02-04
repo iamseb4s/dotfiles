@@ -383,7 +383,11 @@ class SelectorScreen(Screen):
         elif result in ["CANCEL", "CLOSE", "NO"]: self.modal = None
         return None
 
-    def _move_cursor(self, direction): self.cursor_index = max(0, min(len(self.flat_items) - 1, self.cursor_index + direction)); self.info_scroll_offset = 0; return None
+    def _move_cursor(self, direction): 
+        if not self.flat_items: return None
+        self.cursor_index = (self.cursor_index + direction) % len(self.flat_items)
+        self.info_scroll_offset = 0
+        return None
     def _scroll_info(self, direction, max_offset): self.info_scroll_offset = max(0, min(max_offset, self.info_scroll_offset + direction)); return None
     def _toggle_sel(self):
         """Handles item selection and group toggling with dependency awareness."""
@@ -445,6 +449,10 @@ class SelectorScreen(Screen):
             # If we enable a child, we must ensure parents are enabled
             if new_state:
                 self._ensure_parent_path_enabled(module_id, component['id'])
+            else:
+                if not any(self.sub_selections[module_id].values()):
+                    self.selected.discard(module_id)
+                    self.expanded[module_id] = False
 
         elif item['type'] == 'header':
             category = item['obj']; modules = self.categories[category]

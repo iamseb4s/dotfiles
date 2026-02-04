@@ -41,7 +41,7 @@ class ReviewModal(BaseModal):
             
             color = Style.warning() if is_customized else Style.normal()
             label = module.label + ("*" if is_customized else "")
-            lines.append(f"{Style.muted()}- {Style.RESET}{color}{label}{Style.RESET}")
+            lines.append(f"{Style.muted()}■ {Style.RESET}{color}{label}{Style.RESET}")
             
             # 2. Build recursive tree of active components
             parts = []
