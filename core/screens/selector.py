@@ -14,7 +14,7 @@ class SelectorScreen(Screen):
     """
     # UI Symbols and Constants
     SYM_SEL, SYM_LOCK, SYM_PART, SYM_EMPTY = "[■]", "[■]", "[-]", "[ ]"
-    STAT_LOCKED, STAT_SEL, STAT_INST = "[ LOCKED ]", "[ SELECTED ]", "[ INSTALLED ]"
+    STAT_REQUIRED, STAT_SEL, STAT_INST = "[ REQUIRED ]", "[ SELECTED ]", "[ INSTALLED ]"
 
     def __init__(self, modules):
         self.modules = modules
@@ -31,7 +31,7 @@ class SelectorScreen(Screen):
         self.sub_selections = {} # {module_id: {sub_id: bool}}
         
         # UI State
-        self.cursor_idx, self.list_offset, self.info_offset, self.modal = 0, 0, 0, None
+        self.cursor_index, self.list_scroll_offset, self.info_scroll_offset, self.modal = 0, 0, 0, None
         self.flat_items = []
 
     def _resolve_dependencies(self):
@@ -39,14 +39,35 @@ class SelectorScreen(Screen):
         Recalculates self.auto_locked based on the dependencies of 
         currently selected modules.
         """
-        locked = set()
+        new_auto_locked_set = set()
         for module_id in self.selected:
             if module_id in self.module_map:
                 module = self.module_map[module_id]
-                for dependency_id in module.dependencies:
+                for dependency_id in module.get_dependencies():
                     if dependency_id in self.module_map: 
-                        locked.add(dependency_id)
-        self.auto_locked = locked
+                        new_auto_locked_set.add(dependency_id)
+                        
+                        # Auto-expand if it's a requirement
+                        if dependency_id not in self.auto_locked and dependency_id not in self.selected:
+                            self.expanded[dependency_id] = True
+                            if dependency_id not in self.sub_selections:
+                                self.sub_selections[dependency_id] = {}
+                                # Default to all components ON
+                                dependency_module = self.module_map[dependency_id]
+                                self.sub_selections[dependency_id]['binary'] = True
+                                if hasattr(dependency_module, 'sub_components') and dependency_module.sub_components:
+                                    self._set_sub_selection_recursive(dependency_id, dependency_module.sub_components, True)
+                                if dependency_module.has_usable_dotfiles():
+                                    self.sub_selections[dependency_id]['dotfiles'] = True
+        
+        # Cleanup orphaned dependencies
+        orphaned_dependency_ids = self.auto_locked - new_auto_locked_set - self.selected
+        for module_id in orphaned_dependency_ids:
+            self.expanded[module_id] = False
+            self.sub_selections.pop(module_id, None)
+
+        self.auto_locked = new_auto_locked_set
+
 
     def _build_flat_list(self):
         """
@@ -90,6 +111,17 @@ class SelectorScreen(Screen):
         """Returns True if module is either selected or locked by dependency."""
         return (module_id in self.selected) or (module_id in self.auto_locked)
 
+    def _get_requirers_msg(self, module_id):
+        """Returns a formatted message listing modules that require the given module."""
+        requiring_module_labels = []
+        for selected_id in self.selected:
+            requiring_module = self.module_map.get(selected_id)
+            if requiring_module and module_id in requiring_module.get_dependencies():
+                requiring_module_labels.append(requiring_module.label)
+
+        message_prefix = "Core package is required by"
+        return f"{message_prefix}: {', '.join(requiring_module_labels)}" if requiring_module_labels else f"{message_prefix} system configuration"
+
     def _get_scrollbar(self, total, visible, offset):
         """Returns scroll position and size for create_container."""
         if total <= visible: return {'scroll_pos': None, 'scroll_size': None}
@@ -100,7 +132,7 @@ class SelectorScreen(Screen):
         """Draws the boxed menu interface to the terminal."""
         self._resolve_dependencies()
         self.flat_items = self._build_flat_list()
-        self.cursor_idx = min(self.cursor_idx, len(self.flat_items) - 1)
+        self.cursor_index = min(self.cursor_index, len(self.flat_items) - 1)
         terminal_width, terminal_height = shutil.get_terminal_size()
         
         header = f"{Style.header()}{' PACKAGES SELECTOR '.center(terminal_width)}{Style.RESET}"
@@ -148,14 +180,14 @@ class SelectorScreen(Screen):
     def _draw_left(self, width, height):
         """Internal logic for building the package list box."""
         content_width, window_height = width - 6, height - 3
-        if self.cursor_idx + 1 < self.list_offset + 1: 
-            self.list_offset = max(0, self.cursor_idx)
-        elif self.cursor_idx + 1 >= self.list_offset + window_height: 
-            self.list_offset = self.cursor_idx - window_height + 1
+        if self.cursor_index + 1 < self.list_scroll_offset + 1: 
+            self.list_scroll_offset = max(0, self.cursor_index)
+        elif self.cursor_index + 1 >= self.list_scroll_offset + window_height: 
+            self.list_scroll_offset = self.cursor_index - window_height + 1
 
         lines = [""]
         for index, item in enumerate(self.flat_items):
-            is_cursor = (index == self.cursor_idx)
+            is_cursor = (index == self.cursor_index)
             if item['type'] == 'header':
                 if index > 0: 
                     lines.append("")
@@ -170,7 +202,7 @@ class SelectorScreen(Screen):
                 if not is_supported:
                     mark, status_text, color = self.SYM_EMPTY, "[ NOT SUPPORTED ]", Style.muted()
                 elif module.id in self.auto_locked:
-                    mark, status_text, color = self.SYM_LOCK, self.STAT_LOCKED, Style.error()
+                    mark, status_text, color = self.SYM_LOCK, self.STAT_REQUIRED, Style.error()
                 elif module.id in self.selected:
                     override = self.overrides.get(module.id); part = override and (not override.get('install_package', True) or (module.stow_pkg and not override.get('install_dotfiles', True)))
                     mark, status_text, color = (self.SYM_PART if part else self.SYM_SEL), self.STAT_SEL, (Style.info() if module.id not in self.overrides else Style.warning())
@@ -194,37 +226,46 @@ class SelectorScreen(Screen):
                 mark = self.SYM_SEL if is_selected else self.SYM_EMPTY
                 
                 color = Style.info() if is_selected else (Style.normal() if is_supported else Style.muted())
+                
+                # Core binary restriction for required modules visual feedback
+                is_required_binary = (component['id'] == 'binary' and module_id in self.auto_locked)
+                if is_required_binary:
+                    color = Style.error()
+
                 style = Style.highlight() + Style.BOLD if is_cursor else color
                 label_style = style
                 
                 # Use spaces for indentation as requested
                 indent = "    " * item['depth']
-                label_text = f"  {indent}{label_style}{mark}  {component['label']}{Style.RESET}"
+                label_suffix = " 🔒︎" if is_required_binary else ""
+                label_text = f"  {indent}{label_style}{mark}  {component['label']}{label_suffix}{Style.RESET}"
                 lines.append(f"  {TUI.visible_ljust(label_text, content_width)}")
 
-        visible_lines = lines[self.list_offset : self.list_offset + window_height]
+        visible_lines = lines[self.list_scroll_offset : self.list_scroll_offset + window_height]
         while len(visible_lines) < window_height: visible_lines.append("")
         stats_text = f"Selected: {len(self.selected.union(self.auto_locked))} packages"
         visible_lines.append(f"{' ' * ((width - 2 - len(stats_text)) // 2)}{Style.muted()}{stats_text}{Style.RESET}")
         
-        scrollbar = self._get_scrollbar(len(lines), height - 2, self.list_offset)
+        scrollbar = self._get_scrollbar(len(lines), height - 2, self.list_scroll_offset)
         return TUI.create_container(visible_lines, width, height, title="PACKAGES", is_focused=(not self.modal), scroll_pos=scrollbar['scroll_pos'], scroll_size=scrollbar['scroll_size'])
 
     def _draw_right(self, width, height):
         """Internal logic for building the information box."""
         info_lines = self._get_info_lines(width); max_offset = max(0, len(info_lines) - (height - 2))
-        self.info_offset = min(self.info_offset, max_offset)
-        scrollbar = self._get_scrollbar(len(info_lines), height - 2, self.info_offset)
-        return TUI.create_container(info_lines[self.info_offset : self.info_offset + height - 2], width, height, title="INFORMATION", is_focused=False, scroll_pos=scrollbar['scroll_pos'], scroll_size=scrollbar['scroll_size'])
+        self.info_scroll_offset = min(self.info_scroll_offset, max_offset)
+        scrollbar = self._get_scrollbar(len(info_lines), height - 2, self.info_scroll_offset)
+        return TUI.create_container(info_lines[self.info_scroll_offset : self.info_scroll_offset + height - 2], width, height, title="INFORMATION", is_focused=False, scroll_pos=scrollbar['scroll_pos'], scroll_size=scrollbar['scroll_size'])
 
     def _get_info_lines(self, width):
         """Helper to pre-calculate info lines for scroll limits."""
         lines = [""]
         if not self.flat_items: return lines
-        item = self.flat_items[self.cursor_idx]; content_width = width - 6
+        item = self.flat_items[self.cursor_index]; content_width = width - 6
         if item['type'] == 'module':
             module = item['obj']; override = self.overrides.get(module.id, {}); is_installed = module.is_installed(); is_supported = module.is_supported()
-            color = Style.muted() if not is_supported else (Style.error() if module.id in self.auto_locked else (Style.warning() if module.id in self.overrides else (Style.info() if module.id in self.selected else (Style.success() if is_installed else Style.highlight()))))
+            
+            # Module title color based on state
+            color = Style.muted() if not is_supported else (Style.error() if module.id in self.auto_locked else (Style.error() if module.id in self.overrides else (Style.info() if module.id in self.selected else (Style.success() if is_installed else Style.highlight()))))
             lines.extend([f"  {Style.BOLD}{color}{module.label.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
 
             if module.description:
@@ -239,11 +280,22 @@ class SelectorScreen(Screen):
             supported_os = module.get_supported_distros()
             lines.append(row("Supported OS", supported_os, Style.secondary() if is_supported else Style.muted()))
 
+            # Resolved dependencies for the current distribution
+            resolved_dependencies = module.get_dependencies()
+            dependency_labels = []
+            for dependency_id in resolved_dependencies:
+                dependency_module = self.module_map.get(dependency_id)
+                dependency_labels.append(dependency_module.label if dependency_module else dependency_id)
+            
+            dependency_value = ", ".join(dependency_labels) if dependency_labels else "None"
+            dependency_style = Style.warning() if (dependency_labels and is_supported) else Style.secondary()
+            lines.append(row("Requires", dependency_value, dependency_style))
+
             for key, label in [('manager', 'Manager'), ('package_name', 'Package')]:
                 current_value = getattr(module, key) if key != 'package_name' else module.get_package_name()
                 value = override.get(key, current_value)
-                color_val = Style.secondary() if is_supported else Style.muted()
-                lines.append(row(label, f"{value}{'*' if value != current_value else ''}", color_val))
+                color_value = Style.secondary() if is_supported else Style.muted()
+                lines.append(row(label, f"{value}{'*' if value != current_value else ''}", color_value))
             
             current_target = override.get('stow_target', module.stow_target)
             tree = module.get_config_tree(target=current_target)
@@ -259,12 +311,23 @@ class SelectorScreen(Screen):
             module = self.module_map[module_id]
             is_supported = module.is_supported() if module else True
             is_selected = self.sub_selections.get(module_id, {}).get(component['id'], component.get('default', True))
-            color = Style.info() if is_selected else (Style.normal() if is_supported else Style.muted())
-            lines.extend([f"  {Style.BOLD}{color}{component['label'].upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
+            
+            is_required_binary = (component['id'] == 'binary' and module_id in self.auto_locked)
+            
+            # Determine semantic color and labels based on requirement state
+            if is_required_binary:
+                status_text = "Required"
+                status_color = Style.error()
+            else:
+                status_text = "Selected" if is_selected else "Skipped"
+                status_color = Style.info() if is_selected else (Style.normal() if is_supported else Style.muted())
+            
+            label_suffix = " 🔒︎" if is_required_binary else ""
+            lines.extend([f"  {Style.BOLD}{status_color}{component['label'].upper()}{label_suffix}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
             lines.append(f"  {Style.secondary()}Component of {Style.BOLD}{module.label}{Style.RESET}")
             lines.append("")
             def row(label, value, color_style=""): return f"  {Style.normal()}{label:<13}{Style.RESET} {color_style}{value}{Style.RESET}"
-            lines.append(row("Status", 'Selected' if is_selected else 'Skipped', color))
+            lines.append(row("Status", status_text, status_color))
         else:
             category = item['obj']; lines.extend([f"  {Style.BOLD}{Style.highlight()}{category.upper()}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}", f"  {Style.secondary()}Packages in this group:{Style.RESET}", ""])
             for module in self.categories[category]:
@@ -279,7 +342,7 @@ class SelectorScreen(Screen):
         
         columns_width = shutil.get_terminal_size().columns // 2
         window_height = max(10, shutil.get_terminal_size().lines - 5) - 2
-        max_info_offset = max(0, len(self._get_info_lines(columns_width)) - window_height)
+        max_info_scroll_offset = max(0, len(self._get_info_lines(columns_width)) - window_height)
         
         navigation_map = {
             Keys.UP: lambda: self._move_cursor(-1), 
@@ -288,8 +351,8 @@ class SelectorScreen(Screen):
             Keys.J: lambda: self._move_cursor(1),
             Keys.CTRL_K: lambda: self._move_cursor(-5), 
             Keys.CTRL_J: lambda: self._move_cursor(5),
-            Keys.PGUP: lambda: self._scroll_info(-5, max_info_offset), 
-            Keys.PGDN: lambda: self._scroll_info(5, max_info_offset),
+            Keys.PGUP: lambda: self._scroll_info(-5, max_info_scroll_offset), 
+            Keys.PGDN: lambda: self._scroll_info(5, max_info_scroll_offset),
             Keys.SPACE: self._toggle_sel, 
             Keys.TAB: self._handle_tab,
             Keys.LEFT: self._collapse, 
@@ -308,7 +371,7 @@ class SelectorScreen(Screen):
         if not modal: return None
         result = modal.handle_input(key)
         if isinstance(modal, OptionsModal) and result == "ACCEPT":
-            module = self.flat_items[self.cursor_idx]['obj']; override = modal.get_overrides()
+            module = self.flat_items[self.cursor_index]['obj']; override = modal.get_overrides()
             if not override['install_package'] and not (module.stow_pkg and override['install_dotfiles']):
                 self.selected.discard(module.id); self.overrides.pop(module.id, None)
             else: self.selected.add(module.id); self.overrides[module.id] = override
@@ -320,17 +383,21 @@ class SelectorScreen(Screen):
         elif result in ["CANCEL", "CLOSE", "NO"]: self.modal = None
         return None
 
-    def _move_cursor(self, direction): self.cursor_idx = max(0, min(len(self.flat_items) - 1, self.cursor_idx + direction)); self.info_offset = 0; return None
-    def _scroll_info(self, direction, max_offset): self.info_offset = max(0, min(max_offset, self.info_offset + direction)); return None
+    def _move_cursor(self, direction): self.cursor_index = max(0, min(len(self.flat_items) - 1, self.cursor_index + direction)); self.info_scroll_offset = 0; return None
+    def _scroll_info(self, direction, max_offset): self.info_scroll_offset = max(0, min(max_offset, self.info_scroll_offset + direction)); return None
     def _toggle_sel(self):
-        """Handles item selection and group toggling."""
-        item = self.flat_items[self.cursor_idx]
+        """Handles item selection and group toggling with dependency awareness."""
+        item = self.flat_items[self.cursor_index]
         if item['type'] == 'module':
             module = item['obj']
             if not module.is_supported():
                 TUI.push_notification(f"{module.label} is not available for your OS", type="ERROR")
                 return
-            if module.id in self.auto_locked: return
+            
+            if module.id in self.auto_locked:
+                TUI.push_notification(self._get_requirers_msg(module.id), type="ERROR")
+                return
+
             if module.id in self.selected:
                 self.selected.remove(module.id)
                 self.overrides.pop(module.id, None)
@@ -355,6 +422,12 @@ class SelectorScreen(Screen):
         elif item['type'] == 'sub':
             module_id = item['module_id']
             component = item['obj']
+
+            # Core binary restriction for required modules
+            if component['id'] == 'binary' and module_id in self.auto_locked:
+                TUI.push_notification(self._get_requirers_msg(module_id), type="ERROR")
+                return
+
             if module_id not in self.selected:
                 self.selected.add(module_id)
                 self.expanded[module_id] = True # Ensure expanded if a child is picked
@@ -429,14 +502,14 @@ class SelectorScreen(Screen):
 
     def _handle_tab(self):
         """Handles TAB key for expanding headers or opening options."""
-        item = self.flat_items[self.cursor_idx]
+        item = self.flat_items[self.cursor_index]
         if item['type'] == 'header': self.expanded[item['obj']] = not self.expanded[item['obj']]
         elif item['type'] == 'module': self.modal = OptionsModal(item['obj'], self.overrides.get(item['obj'].id))
         return None
 
     def _collapse(self):
         """Collapses the current header, module or sub-component."""
-        item = self.flat_items[self.cursor_idx]
+        item = self.flat_items[self.cursor_index]
         if item['type'] == 'header': self.expanded[item['obj']] = False
         elif item['type'] == 'module': self.expanded[item['obj'].id] = False
         elif item['type'] == 'sub':
@@ -445,7 +518,7 @@ class SelectorScreen(Screen):
 
     def _expand(self):
         """Expands the current header, module or sub-component."""
-        item = self.flat_items[self.cursor_idx]
+        item = self.flat_items[self.cursor_index]
         if item['type'] == 'header': self.expanded[item['obj']] = True
         elif item['type'] == 'module': self.expanded[item['obj'].id] = True
         elif item['type'] == 'sub':
