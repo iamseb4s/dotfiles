@@ -48,25 +48,28 @@ class Module:
                 return True
         return False
 
-    def _resolve_distro_value(self, dictionary, default=None):
+    def _resolve_distro_value(self, value, default=None):
         """
         Generic helper to resolve values from a dictionary based on distribution.
         """
-        if not isinstance(dictionary, dict):
-            return dictionary
+        if value is None:
+            return default
+
+        if not isinstance(value, dict):
+            return value
 
         # 1. Specific OS ID (e.g., 'ubuntu', 'manjaro')
-        if self.system_manager.os_id in dictionary:
-            return dictionary[self.system_manager.os_id]
+        if self.system_manager.os_id in value:
+            return value[self.system_manager.os_id]
         
         # 2. Family ID ('arch' or 'debian')
-        if self.system_manager.is_arch and "arch" in dictionary:
-            return dictionary["arch"]
-        if self.system_manager.is_debian and "debian" in dictionary:
-            return dictionary["debian"]
+        if self.system_manager.is_arch and "arch" in value:
+            return value["arch"]
+        if self.system_manager.is_debian and "debian" in value:
+            return value["debian"]
             
         # 3. Default fallback
-        return dictionary.get("default", default)
+        return value.get("default", default)
 
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
