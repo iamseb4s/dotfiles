@@ -55,6 +55,16 @@ class Module:
             if self.system_manager.is_debian: return self.package_name.get("debian")
         return self.package_name or self.id
 
+    def get_dependencies(self):
+        """Resolves dependencies based on OS if a dict is provided."""
+        if isinstance(self.dependencies, dict):
+            if self.system_manager.is_arch: 
+                return self.dependencies.get("arch", self.dependencies.get("default", []))
+            if self.system_manager.is_debian: 
+                return self.dependencies.get("debian", self.dependencies.get("default", []))
+            return self.dependencies.get("default", [])
+        return self.dependencies or []
+
     def get_manager(self):
         """Resolves the package manager based on OS or direct value."""
         if isinstance(self.manager, dict):
@@ -82,18 +92,18 @@ class Module:
 
     def get_supported_distros(self):
         """Returns a string list of supported distributions."""
-        distros = []
+        supported_distributions = []
         if isinstance(self.package_name, dict):
-            if "arch" in self.package_name: distros.append("Arch Linux")
-            if "debian" in self.package_name: distros.append("Debian/Ubuntu")
+            if "arch" in self.package_name: supported_distributions.append("Arch Linux")
+            if "debian" in self.package_name: supported_distributions.append("Debian/Ubuntu")
         elif isinstance(self.manager, dict):
-            if "arch" in self.manager: distros.append("Arch Linux")
-            if "debian" in self.manager: distros.append("Debian/Ubuntu")
-            if "default" in self.manager and len(distros) == 0: return "All Distros"
+            if "arch" in self.manager: supported_distributions.append("Arch Linux")
+            if "debian" in self.manager: supported_distributions.append("Debian/Ubuntu")
+            if "default" in self.manager and len(supported_distributions) == 0: return "All Distros"
         else:
             return "All Distros"
             
-        return ", ".join(distros) if distros else "All Distros"
+        return ", ".join(supported_distributions) if supported_distributions else "All Distros"
 
     def is_installed(self):
         """Detection logic based on the package manager type."""
