@@ -48,30 +48,37 @@ class Module:
                 return True
         return False
 
+    def _resolve_distro_value(self, dictionary, default=None):
+        """
+        Generic helper to resolve values from a dictionary based on distribution.
+        """
+        if not isinstance(dictionary, dict):
+            return dictionary
+
+        # 1. Specific OS ID (e.g., 'ubuntu', 'manjaro')
+        if self.system_manager.os_id in dictionary:
+            return dictionary[self.system_manager.os_id]
+        
+        # 2. Family ID ('arch' or 'debian')
+        if self.system_manager.is_arch and "arch" in dictionary:
+            return dictionary["arch"]
+        if self.system_manager.is_debian and "debian" in dictionary:
+            return dictionary["debian"]
+            
+        # 3. Default fallback
+        return dictionary.get("default", default)
+
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
-        if isinstance(self.package_name, dict):
-            if self.system_manager.is_arch: return self.package_name.get("arch")
-            if self.system_manager.is_debian: return self.package_name.get("debian")
-        return self.package_name or self.id
+        return self._resolve_distro_value(self.package_name, default=self.id)
 
     def get_dependencies(self):
         """Resolves dependencies based on OS if a dict is provided."""
-        if isinstance(self.dependencies, dict):
-            if self.system_manager.is_arch: 
-                return self.dependencies.get("arch", self.dependencies.get("default", []))
-            if self.system_manager.is_debian: 
-                return self.dependencies.get("debian", self.dependencies.get("default", []))
-            return self.dependencies.get("default", [])
-        return self.dependencies or []
+        return self._resolve_distro_value(self.dependencies, default=[])
 
     def get_manager(self):
         """Resolves the package manager based on OS or direct value."""
-        if isinstance(self.manager, dict):
-            if self.system_manager.is_arch: return self.manager.get("arch", "system")
-            if self.system_manager.is_debian: return self.manager.get("debian", "system")
-            return self.manager.get("default", "system")
-        return self.manager or "system"
+        return self._resolve_distro_value(self.manager, default="system")
 
     def is_supported(self):
         """
@@ -80,27 +87,45 @@ class Module:
         """
         # 1. Check package_name mapping
         if isinstance(self.package_name, dict):
-            if self.system_manager.is_arch and "arch" not in self.package_name: return False
-            if self.system_manager.is_debian and "debian" not in self.package_name: return False
+            has_specific = self.system_manager.os_id in self.package_name
+            has_family = (self.system_manager.is_arch and "arch" in self.package_name) or (self.system_manager.is_debian and "debian" in self.package_name)
+            if not has_specific and not has_family:
+                return False
         
         # 2. Check manager mapping
         if isinstance(self.manager, dict):
-            if self.system_manager.is_arch and "arch" not in self.manager and "default" not in self.manager: return False
-            if self.system_manager.is_debian and "debian" not in self.manager and "default" not in self.manager: return False
+            has_specific = self.system_manager.os_id in self.manager
+            has_family = (self.system_manager.is_arch and "arch" in self.manager) or (self.system_manager.is_debian and "debian" in self.manager)
+            has_default = "default" in self.manager
+            if not has_specific and not has_family and not has_default:
+                return False
             
         return True
 
     def get_supported_distros(self):
         """Returns a string list of supported distributions."""
         supported_distributions = []
-        if isinstance(self.package_name, dict):
-            if "arch" in self.package_name: supported_distributions.append("Arch Linux")
-            if "debian" in self.package_name: supported_distributions.append("Debian/Ubuntu")
-        elif isinstance(self.manager, dict):
-            if "arch" in self.manager: supported_distributions.append("Arch Linux")
-            if "debian" in self.manager: supported_distributions.append("Debian/Ubuntu")
-            if "default" in self.manager and len(supported_distributions) == 0: return "All Distros"
-        else:
+        
+        # Combine keys from all relevant dictionaries
+        all_keys = set()
+        if isinstance(self.package_name, dict): all_keys.update(self.package_name.keys())
+        if isinstance(self.manager, dict): all_keys.update(self.manager.keys())
+        if isinstance(self.dependencies, dict): all_keys.update(self.dependencies.keys())
+        
+        if not all_keys:
+            return "All Distros"
+            
+        if "arch" in all_keys: supported_distributions.append("Arch Linux")
+        if "debian" in all_keys: supported_distributions.append("Debian/Ubuntu")
+        
+        # Add specific ones if they are not already covered by family names (simple heuristic)
+        for key in sorted(all_keys):
+            if key in ["arch", "debian", "default"]: continue
+            pretty_name = key.capitalize()
+            if pretty_name not in supported_distributions:
+                supported_distributions.append(pretty_name)
+        
+        if "default" in all_keys and not supported_distributions:
             return "All Distros"
             
         return ", ".join(supported_distributions) if supported_distributions else "All Distros"
