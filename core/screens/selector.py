@@ -319,7 +319,7 @@ class SelectorScreen(Screen):
         
         return TUI.create_container(
             viewport_lines, width, height, 
-            title="PACKAGES", 
+            title="PACKAGE LIST", 
             is_focused=(not self.modal), 
             scroll_pos=scrollbar_state['scroll_pos'], 
             scroll_size=scrollbar_state['scroll_size']

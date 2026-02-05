@@ -10,7 +10,7 @@ class ReviewModal(BaseModal):
     """
     def __init__(self, modules, selected_ids, overrides, results=None):
         self.is_results_mode = results is not None
-        title = " INSTALLATION RESULTS " if self.is_results_mode else " FINAL REVIEW "
+        title = "INSTALLATION RESULTS" if self.is_results_mode else "INSTALLATION REVIEW"
         super().__init__(title, width=64)
         
         self.active_modules = [m for m in modules if m.id in selected_ids]
