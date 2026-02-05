@@ -159,7 +159,8 @@ class SelectorScreen(Screen):
                     main_buffer[modal_y + index] = TUI.overlay(main_buffer[modal_y + index], line, modal_x)
         
         main_buffer = TUI.draw_notifications(main_buffer)
-        final_output = "\n".join([TUI.visible_ljust(line, terminal_width) for line in main_buffer[:terminal_height]])
+        # Final rendering pass with overflow protection (Line-wrap shield)
+        final_output = "\n".join([TUI.truncate_ansi(line, terminal_width) for line in main_buffer[:terminal_height]])
         sys.stdout.write("\033[H" + final_output + "\033[J")
         sys.stdout.flush()
 
@@ -244,7 +245,7 @@ class SelectorScreen(Screen):
 
                 active_style = Style.highlight() + Style.BOLD if is_cursor else semantic_color
                 indentation = "    " * item['depth']
-                lock_icon_suffix = " 🔒︎" if is_required_binary else ""
+                lock_icon_suffix = " " if is_required_binary else ""
                 
                 sub_component_line = f"  {indentation}{active_style}{status_mark}  {component['label']}{lock_icon_suffix}{Style.RESET}"
                 rendered_content_lines.append(f"  {TUI.visible_ljust(sub_component_line, content_width)}")
@@ -405,7 +406,7 @@ class SelectorScreen(Screen):
                 status_label_text = "Selected" if component_is_selected else "Skipped"
                 status_semantic_color = Style.info() if component_is_selected else (Style.normal() if is_supported else Style.muted())
             
-            lock_icon_suffix = " 🔒︎" if is_required_binary else ""
+            lock_icon_suffix = " " if is_required_binary else ""
             info_content_lines.extend([f"  {Style.BOLD}{status_semantic_color}{component['label'].upper()}{lock_icon_suffix}{Style.RESET}", f"  {Style.muted()}{'─' * content_width}{Style.RESET}"])
             info_content_lines.append(f"  {Style.secondary()}Component of {Style.BOLD}{module.label}{Style.RESET}")
             info_content_lines.append("")

@@ -5,6 +5,7 @@ import os
 import time
 import re
 import shutil
+import unicodedata
 
 class Keys:
     """Keyboard scan code mapping for terminal navigation."""
@@ -360,7 +361,6 @@ class TUI:
                 
             # Wrap message
             wrapped = TUI.wrap_text(n['msg'], width - 4)
-            height = len(wrapped) + 2
             
             # Build notification lines
             n_lines = []
@@ -392,93 +392,107 @@ class TUI:
             
         return buffer
 
-        term_width = shutil.get_terminal_size().columns
-
     @staticmethod
-    def truncate_ansi(text, max_len):
+    def truncate_ansi(text, max_width):
         """Truncates a string containing ANSI codes without breaking them, while stripping layout-breaking control chars."""
         # Pre-clean the text from carriage returns
         text = text.replace('\r', '')
-        
-        if TUI.visible_len(text) <= max_len:
+        if TUI.visible_len(text) <= max_width:
             return text
             
         # Pattern to match ANSI escape sequences
-        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        ansi_escape_pattern = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        final_truncated_result = ""
+        current_accumulated_width = 0
+        last_match_end_index = 0
+        width_limit_for_text = max_width - 3 # Leave room for "..."
         
-        result = ""
-        current_visible_len = 0
-        last_match_end = 0
-        
-        for match in ansi_escape.finditer(text):
+        for match in ansi_escape_pattern.finditer(text):
             # Text before the ANSI code
-            pre_ansi = text[last_match_end:match.start()]
-            for char in pre_ansi:
-                if current_visible_len < max_len - 3: # Leave room for "..."
-                    result += char
-                    current_visible_len += 1
+            plain_text_chunk = text[last_match_end_index:match.start()]
+            for character in plain_text_chunk:
+                character_visual_width = TUI._get_char_width(character)
+                if current_accumulated_width + character_visual_width <= width_limit_for_text:
+                    final_truncated_result += character
+                    current_accumulated_width += character_visual_width
                 else:
-                    return result + Style.RESET + "..."
+                    # Fill remaining space if a wide character was about to be split
+                    final_truncated_result += " " * (width_limit_for_text - current_accumulated_width)
+                    return final_truncated_result + Style.RESET + "..."
             
-            # The ANSI code itself (doesn't count toward length)
-            result += match.group()
-            last_match_end = match.end()
+            # The ANSI code itself (0 width)
+            final_truncated_result += match.group()
+            last_match_end_index = match.end()
             
         # Final bit of text after last ANSI code
-        post_ansi = text[last_match_end:]
-        for char in post_ansi:
-            if current_visible_len < max_len - 3:
-                result += char
-                current_visible_len += 1
+        remaining_plain_text = text[last_match_end_index:]
+        for character in remaining_plain_text:
+            character_visual_width = TUI._get_char_width(character)
+            if current_accumulated_width + character_visual_width <= width_limit_for_text:
+                final_truncated_result += character
+                current_accumulated_width += character_visual_width
             else:
-                return result + Style.RESET + "..."
+                final_truncated_result += " " * (width_limit_for_text - current_accumulated_width)
+                return final_truncated_result + Style.RESET + "..."
                 
-        return result
+        return final_truncated_result
 
     @staticmethod
-    def ansi_slice(text, start, end=None):
-        """Slices a string by its visible length, preserving necessary ANSI codes."""
-        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-        result = ""
-        current_visible_pos = 0
-        last_match_end = 0
+    def ansi_slice(text, slice_start_width, slice_end_width=None):
+        """Slices a string by its visual width, preserving ANSI codes and compensating for split wide chars."""
+        ansi_escape_pattern = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        final_sliced_result = ""
+        current_visual_position = 0
+        last_match_end_index = 0
         
-        for match in ansi_escape.finditer(text):
+        # Helper to process a chunk of plain text
+        def process_plain_text_chunk(plain_text_chunk, current_pos, accumulated_sliced_string):
+            for character in plain_text_chunk:
+                character_visual_width = TUI._get_char_width(character)
+                
+                # Check if we are splitting a wide character at the start boundary
+                if current_pos < slice_start_width and current_pos + character_visual_width > slice_start_width:
+                    accumulated_sliced_string += " " * (current_pos + character_visual_width - slice_start_width)
+                # Normal inclusion
+                elif current_pos >= slice_start_width and (slice_end_width is None or current_pos + character_visual_width <= slice_end_width):
+                    accumulated_sliced_string += character
+                # Check if we are splitting a wide character at the end boundary
+                elif slice_end_width is not None and current_pos < slice_end_width and current_pos + character_visual_width > slice_end_width:
+                    accumulated_sliced_string += " " * (slice_end_width - current_pos)
+                
+                current_pos += character_visual_width
+            return current_pos, accumulated_sliced_string
+
+        for match in ansi_escape_pattern.finditer(text):
             # Process plain text before the ANSI sequence
-            pre_text = text[last_match_end:match.start()]
-            for char in pre_text:
-                if current_visible_pos >= start and (end is None or current_visible_pos < end):
-                    result += char
-                current_visible_pos += 1
+            plain_text_before_ansi = text[last_match_end_index:match.start()]
+            current_visual_position, final_sliced_result = process_plain_text_chunk(plain_text_before_ansi, current_visual_position, final_sliced_result)
             
-            # Only include ANSI sequence
-            if end is None or current_visible_pos < end:
-                result += match.group()
-                
-            last_match_end = match.end()
+            # Always include ANSI sequences if we haven't reached the end (or there is no end)
+            if slice_end_width is None or current_visual_position < slice_end_width:
+                final_sliced_result += match.group()
+            last_match_end_index = match.end()
             
-        # Process remaining plain text
-        post_text = text[last_match_end:]
-        for char in post_text:
-            if current_visible_pos >= start and (end is None or current_visible_pos < end):
-                result += char
-            current_visible_pos += 1
+        remaining_plain_text = text[last_match_end_index:]
+        current_visual_position, final_sliced_result = process_plain_text_chunk(remaining_plain_text, current_visual_position, final_sliced_result)
             
-        return result
+        return final_sliced_result
+
 
     @staticmethod
-    def overlay(bg, fg, x):
+    def overlay(background_text, foreground_text, x_offset):
         """Composites foreground text onto background text at a specific x-offset."""
-        bg_vlen = TUI.visible_len(bg)
-        if bg_vlen < x:
-            left = bg + " " * (x - bg_vlen)
+        background_visible_length = TUI.visible_len(background_text)
+        if background_visible_length < x_offset:
+            left_segment = background_text + " " * (x_offset - background_visible_length)
         else:
-            left = TUI.ansi_slice(bg, 0, x)
+            left_segment = TUI.ansi_slice(background_text, 0, x_offset)
             
-        fg_vlen = TUI.visible_len(fg)
-        right = TUI.ansi_slice(bg, x + fg_vlen)
+        foreground_visible_length = TUI.visible_len(foreground_text)
+        right_segment = TUI.ansi_slice(background_text, x_offset + foreground_visible_length)
         
-        return left + fg + right
+        return left_segment + foreground_text + right_segment
+
 
     @staticmethod
     def create_container(lines, width, height, title="", color="", is_focused=False, scroll_pos=None, scroll_size=None):
@@ -636,6 +650,13 @@ class TUI:
         return lines
 
     @staticmethod
+    def _get_char_width(char):
+        """Returns the visual width of a character in terminal columns."""
+        if char in '\ufe0e\ufe0f': return 0
+        width_category = unicodedata.east_asian_width(char)
+        return 2 if width_category in ['W', 'F'] else 1
+
+    @staticmethod
     def visible_len(text):
         """Calculates character count excluding ANSI control codes and non-printable characters."""
         if not text: return 0
@@ -644,7 +665,10 @@ class TUI:
         clean_text = ansi_escape.sub('', text)
         # Remove or replace other control characters that might break layout
         clean_text = clean_text.replace('\r', '').replace('\t', '    ')
-        return len(clean_text)
+        total_width = 0
+        for char in clean_text:
+            total_width += TUI._get_char_width(char)
+        return total_width
 
     @staticmethod
     def visible_ljust(text, width):

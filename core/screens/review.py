@@ -142,6 +142,7 @@ class ReviewModal(BaseModal):
 
     def render(self):
         """Draws the modal with tree content and dynamic height."""
+        width = self.effective_width
         terminal_height = shutil.get_terminal_size().lines
         max_window_height = min(15, terminal_height - 12)
         actual_window_height = min(len(self.content_lines), max_window_height)
@@ -155,18 +156,21 @@ class ReviewModal(BaseModal):
         if self.is_results_mode:
             stats = self._get_summary_stats()
             summary_text = f"{Style.success()}{stats['installed']} installed{Style.RESET}, {Style.info()}{stats['cancelled']} cancelled{Style.RESET}, {Style.error()}{stats['failed']} failed{Style.RESET}"
-            inner_buffer.append(f"{' ' * ((self.width - 2 - TUI.visible_len(summary_text)) // 2)}{summary_text}")
+            inner_buffer.append(f"{' ' * ((width - 2 - TUI.visible_len(summary_text)) // 2)}{summary_text}")
         else:
             # Check if any task requires root by searching for the normal asterisk in the content
             any_root_required = any(f"{Style.normal()}*{Style.RESET}" in line for line in self.content_lines)
             if any_root_required:
                 root_message = f"{Style.error()}*root required{Style.RESET}"
-                inner_buffer.append(f"{' ' * ((self.width - 2 - TUI.visible_len(root_message)) // 2)}{root_message}")
+                inner_buffer.append(f"{' ' * ((width - 2 - TUI.visible_len(root_message)) // 2)}{root_message}")
             
             confirmation_text = "Confirm and start installation?"
-            inner_buffer.append(f"{Style.secondary()}{confirmation_text.center(self.width-2)}{Style.RESET}")
+            padding_size = max(0, (width - 2 - TUI.visible_len(confirmation_text)) // 2)
+            inner_buffer.append(f"{Style.secondary()}{' ' * padding_size}{confirmation_text}{Style.RESET}")
         
-        buttons = ["  FINISH  ", "  VIEW LOGS  "] if self.is_results_mode else ["  INSTALL  ", "  CANCEL  "]
+        buttons = ["  INSTALL  ", "  CANCEL  "]
+        if self.is_results_mode:
+            buttons = ["  FINISH  ", "  VIEW LOGS  "]
         inner_buffer.append(self._render_button_row(buttons, self.focus_idx))
         
         scroll_pos, scroll_size = self._get_scroll_params(len(self.content_lines), actual_window_height, self.scroll_offset)
