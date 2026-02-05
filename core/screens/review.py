@@ -78,6 +78,15 @@ class ReviewModal(BaseModal):
         lines = []
         connector_char = "└── " if is_last else "├── "
         
+        # Determine if this node represents a system package installation (requires root)
+        is_package_node = node['id'] == 'binary' or (not hasattr(module, 'sub_components') and "Package" in node['label'])
+        requires_root = False
+        if is_package_node and not self.is_results_mode:
+            manager = override.get('manager', module.get_manager())
+            requires_root = (manager == "system" and sub_selections.get('binary', True))
+        
+        root_indicator = f"{Style.error()}*{Style.RESET}" if requires_root else ""
+
         # Icon for results mode only
         results_prefix = ""
         if self.is_results_mode:
@@ -87,22 +96,20 @@ class ReviewModal(BaseModal):
             status_color = (Style.success() if success else Style.error()) if success is not None else Style.muted()
             results_prefix = f"{status_color}[{icon}]{Style.RESET} "
 
-        # Component Label (Always Normal/White)
-        lines.append(f"{Style.muted()}  {prefix}{connector_char}{Style.RESET}{results_prefix}{Style.normal()}{node['label']}{Style.RESET}")
+        # Component Label
+        lines.append(f"{Style.muted()}  {prefix}{connector_char}{Style.RESET}{results_prefix}{Style.normal()}{node['label']}{root_indicator}{Style.RESET}")
         
         # Children and Metadata prefix
         new_prefix = prefix + ("    " if is_last else "│   ")
         
         # Inject Metadata under specific nodes
         if not self.is_results_mode:
-            if node['id'] == 'binary' or (not hasattr(module, 'sub_components') and "Package" in node['label']):
+            if is_package_node:
                 package_name = override.get('package_name', module.get_package_name())
                 manager = override.get('manager', module.get_manager())
-                requires_root = (manager == "system" and sub_selections.get('binary', True))
-                root_mark = f"{Style.normal()}*{Style.RESET}" if requires_root else ""
                 
                 metadata_line = f"{Style.muted()}  {new_prefix}{Style.RESET}"
-                metadata_line += f"{Style.secondary()}Package:{Style.RESET} {Style.normal()}'{package_name}'{Style.RESET}{root_mark}{Style.muted()}, "
+                metadata_line += f"{Style.secondary()}Package:{Style.RESET} {Style.normal()}'{package_name}'{Style.RESET}{Style.muted()}, "
                 metadata_line += f"{Style.secondary()}Manager:{Style.RESET} {Style.normal()}'{manager}'{Style.RESET}"
                 lines.append(metadata_line)
                 
@@ -167,10 +174,11 @@ class ReviewModal(BaseModal):
             inner_buffer.append(f"{' ' * ((width - 2 - TUI.visible_len(summary_text)) // 2)}{summary_text}")
         else:
             # 2. Root requirement check or empty line
-            any_root_required = any(f"{Style.normal()}*{Style.RESET}" in line for line in self.tree_content_lines)
+            any_root_required = any(f"{Style.error()}*" in line for line in self.tree_content_lines)
             if any_root_required:
                 root_message = f"{Style.error()}*root required{Style.RESET}"
-                inner_buffer.append(f"{' ' * ((width - 2 - TUI.visible_len(root_message)) // 2)}{root_message}")
+                padding_size = max(0, (width - 2 - TUI.visible_len(root_message)) // 2)
+                inner_buffer.append(f"{' ' * padding_size}{root_message}")
             else:
                 inner_buffer.append("")
             
