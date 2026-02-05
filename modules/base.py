@@ -146,7 +146,9 @@ class Module:
             return shutil.which(package or "") is not None
         elif manager == "cargo":
             return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
-        elif self.manager == "brew":
+        elif manager == "bob":
+            return shutil.which("nvim") is not None
+        elif manager == "brew":
             return shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
         return False
 
