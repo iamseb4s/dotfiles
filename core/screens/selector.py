@@ -122,11 +122,23 @@ class SelectorScreen(Screen):
         message_prefix = "Core package is required by"
         return f"{message_prefix}: {', '.join(requiring_module_labels)}" if requiring_module_labels else f"{message_prefix} system configuration"
 
-    def _get_scrollbar(self, total, visible, offset):
-        """Returns scroll position and size for create_container."""
-        if total <= visible: return {'scroll_pos': None, 'scroll_size': None}
-        sz = max(1, int(visible**2 / total))
-        return {'scroll_pos': int((offset / (total - visible)) * (visible - sz)), 'scroll_size': sz}
+    def _get_scrollbar(self, total_items_count, visible_window_height, scroll_offset, track_available_height):
+        """Returns scroll position and size relative to the provided track height."""
+        if total_items_count <= visible_window_height: 
+            return {'scroll_pos': None, 'scroll_size': None}
+        
+        thumb_size = max(1, int(track_available_height * (visible_window_height / total_items_count)))
+        
+        # Max offset is total items minus visible window
+        max_scroll_offset = total_items_count - visible_window_height
+        
+        # Ratio of current offset to max offset
+        scroll_ratio = scroll_offset / max_scroll_offset
+        
+        # Position within the available track minus the thumb itself
+        thumb_position = int(scroll_ratio * (track_available_height - thumb_size))
+        
+        return {'scroll_pos': thumb_position, 'scroll_size': thumb_size}
 
     def render(self):
         """Draws the boxed menu interface to the terminal with cursor persistence."""
@@ -205,8 +217,10 @@ class SelectorScreen(Screen):
 
     def _draw_left(self, width, height):
         """Internal logic for building the package list box."""
-        content_width, window_height = width - 6, height - 3
-        rendered_content_lines = [""]
+        content_width = width - 6
+        scrollable_window_height = height - 4
+        
+        rendered_content_lines = []
         item_to_line_mapping = {}
 
         for index, item in enumerate(self.flat_items):
@@ -214,7 +228,7 @@ class SelectorScreen(Screen):
             
             if item['type'] == 'header':
                 # Add spacing before category if it's not the first one
-                if len(rendered_content_lines) > 1: 
+                if len(rendered_content_lines) > 0: 
                     rendered_content_lines.append("")
                 
                 # The category title itself is the target for the cursor
@@ -290,32 +304,39 @@ class SelectorScreen(Screen):
                     break
         
         # Ensure we always show the top breathing room if we are at the first item
-        if self.cursor_index == 0:
-            self.list_scroll_offset = 0
-        elif start_line_index < self.list_scroll_offset: 
+        if start_line_index < self.list_scroll_offset: 
             self.list_scroll_offset = start_line_index
-        elif end_line_index >= self.list_scroll_offset + window_height: 
+        elif end_line_index >= self.list_scroll_offset + scrollable_window_height: 
             # Scroll down to reveal children, but prioritize keeping the module header in view
-            self.list_scroll_offset = min(start_line_index, end_line_index - window_height + 1)
+            self.list_scroll_offset = min(start_line_index, end_line_index - scrollable_window_height + 1)
 
         # Clamp list_scroll_offset to prevent orphaned empty space at the end
-        maximum_allowable_offset = max(0, len(rendered_content_lines) - window_height)
+        maximum_allowable_offset = max(0, len(rendered_content_lines) - scrollable_window_height)
         self.list_scroll_offset = min(self.list_scroll_offset, maximum_allowable_offset)
 
-        # Extract visible lines for the container
-        viewport_lines = rendered_content_lines[self.list_scroll_offset : self.list_scroll_offset + window_height]
-        while len(viewport_lines) < window_height: 
+        # Build final display buffer with FIXED top air
+        viewport_lines = [""] # The static top breathing room
+        viewport_lines.extend(rendered_content_lines[self.list_scroll_offset : self.list_scroll_offset + scrollable_window_height])
+        
+        # Pad with empty lines if content is short
+        while len(viewport_lines) < height - 3: 
             viewport_lines.append("")
         
         # Footer statistics
+        if len(viewport_lines) >= height - 2:
+            viewport_lines = viewport_lines[:height - 3]
         active_packages_count = len(self.selected.union(self.auto_locked))
         stats_line_text = f"Selected: {active_packages_count} packages"
         stats_padding = " " * ((width - 2 - len(stats_line_text)) // 2)
         viewport_lines.append(f"{stats_padding}{Style.muted()}{stats_line_text}{Style.RESET}")
         
         # Synchronize scrollbar
-        total_lines_for_scroll = len(rendered_content_lines) + 1
-        scrollbar_state = self._get_scrollbar(total_lines_for_scroll, height - 2, self.list_scroll_offset)
+        scrollbar_state = self._get_scrollbar(
+            len(rendered_content_lines), 
+            scrollable_window_height, 
+            self.list_scroll_offset, 
+            height - 2
+        )
         
         return TUI.create_container(
             viewport_lines, width, height, 
@@ -329,17 +350,38 @@ class SelectorScreen(Screen):
     def _draw_right(self, width, height):
         """Internal logic for building the information box."""
         info_lines = self._get_info_lines(width)
-        max_offset = max(0, len(info_lines) - (height - 2))
+        scrollable_window_height = height - 4
+        max_offset = max(0, len(info_lines) - scrollable_window_height)
         self.info_scroll_offset = min(self.info_scroll_offset, max_offset)
-        scrollbar = self._get_scrollbar(len(info_lines), height - 2, self.info_scroll_offset)
-        return TUI.create_container(info_lines[self.info_scroll_offset : self.info_scroll_offset + height - 2], width, height, title="INFORMATION", is_focused=False, scroll_pos=scrollbar['scroll_pos'], scroll_size=scrollbar['scroll_size'])
+        
+        visible_lines = [""]
+        visible_lines.extend(info_lines[self.info_scroll_offset : self.info_scroll_offset + scrollable_window_height])
+        
+        # Pad if needed
+        while len(visible_lines) < height - 3:
+            visible_lines.append("")
+        visible_lines.append("")
+            
+        scrollbar = self._get_scrollbar(
+            len(info_lines), 
+            scrollable_window_height, 
+            self.info_scroll_offset, 
+            height - 2
+        )
+
+        return TUI.create_container(
+            visible_lines, width, height, 
+            title="INFORMATION", 
+            is_focused=False, 
+            scroll_pos=scrollbar['scroll_pos'], 
+            scroll_size=scrollbar['scroll_size']
+        )
 
     def _get_info_lines(self, width):
         """Helper to pre-calculate info lines for scroll limits."""
-        info_content_lines = [""]
+        info_content_lines = [] 
         if not self.flat_items: 
-            return info_content_lines
-
+            return [""]
             
         item = self.flat_items[self.cursor_index]
         content_width = width - 6
@@ -469,9 +511,16 @@ class SelectorScreen(Screen):
         if self.modal: 
             return self._handle_modal_input(key)
         
-        columns_width = shutil.get_terminal_size().columns // 2
-        window_height = max(10, shutil.get_terminal_size().lines - 5) - 2
-        max_info_scroll_offset = max(0, len(self._get_info_lines(columns_width)) - window_height)
+        terminal_width, terminal_height = shutil.get_terminal_size()
+        footer_pills = self._get_footer_pills()
+        footer_lines = TUI.wrap_pills(footer_pills, terminal_width - 4)
+        available_height = max(10, terminal_height - 4 - len(footer_lines))
+        
+        columns_width = terminal_width // 2
+        # scrollable_window_height must match the one in _draw_right (available_height - 4)
+        scrollable_window_height = available_height - 4
+        
+        max_info_scroll_offset = max(0, len(self._get_info_lines(columns_width)) - scrollable_window_height)
         
         navigation_map = {
             Keys.UP: lambda: self._move_cursor(-1), 
