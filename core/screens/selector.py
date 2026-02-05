@@ -129,9 +129,34 @@ class SelectorScreen(Screen):
         return {'scroll_pos': int((offset / (total - visible)) * (visible - sz)), 'scroll_size': sz}
 
     def render(self):
-        """Draws the boxed menu interface to the terminal."""
+        """Draws the boxed menu interface to the terminal with cursor persistence."""
+        # 1. Identify current item to maintain focus after list rebuild
+        current_item_marker = None
+        if self.flat_items and self.cursor_index < len(self.flat_items):
+            item = self.flat_items[self.cursor_index]
+            if item['type'] == 'header': current_item_marker = ('header', item['obj'])
+            elif item['type'] == 'module': current_item_marker = ('module', item['obj'].id)
+            elif item['type'] == 'sub': current_item_marker = ('sub', item['module_id'], item['obj']['id'])
+
+        # 2. Rebuild the list (handles dependency expansions and category states)
         self._resolve_dependencies()
         self.flat_items = self._build_flat_list()
+        
+        # 3. Relocate cursor to the previously focused item
+        if current_item_marker:
+            for index, item in enumerate(self.flat_items):
+                match_found = False
+                if current_item_marker[0] == 'header' and item['type'] == 'header' and item['obj'] == current_item_marker[1]: 
+                    match_found = True
+                elif current_item_marker[0] == 'module' and item['type'] == 'module' and item['obj'].id == current_item_marker[1]: 
+                    match_found = True
+                elif current_item_marker[0] == 'sub' and item['type'] == 'sub' and item['module_id'] == current_item_marker[1] and item['obj']['id'] == current_item_marker[2]: 
+                    match_found = True
+                
+                if match_found:
+                    self.cursor_index = index
+                    break
+
         self.cursor_index = min(self.cursor_index, len(self.flat_items) - 1)
         terminal_width, terminal_height = shutil.get_terminal_size()
         
@@ -250,15 +275,32 @@ class SelectorScreen(Screen):
                 sub_component_line = f"  {indentation}{active_style}{status_mark}  {component['label']}{lock_icon_suffix}{Style.RESET}"
                 rendered_content_lines.append(f"  {TUI.visible_ljust(sub_component_line, content_width)}")
 
-        # Synchronize viewport offset based on the actual line index of the cursor
-        current_cursor_line_index = item_to_line_mapping.get(self.cursor_index, 0)
-
+        # Synchronize viewport
+        start_line_index = item_to_line_mapping.get(self.cursor_index, 0)
+        end_line_index = start_line_index
+        
+        focused_item = self.flat_items[self.cursor_index] if self.cursor_index < len(self.flat_items) else None
+        if focused_item and focused_item['type'] == 'module' and self.expanded.get(focused_item['obj'].id):
+            # Look ahead to find the last line of the expanded module's children
+            for subsequent_index in range(self.cursor_index + 1, len(self.flat_items)):
+                subsequent_item = self.flat_items[subsequent_index]
+                if subsequent_item['type'] == 'sub':
+                    end_line_index = item_to_line_mapping.get(subsequent_index, end_line_index)
+                else:
+                    break
+        
+        # Ensure we always show the top breathing room if we are at the first item
         if self.cursor_index == 0:
             self.list_scroll_offset = 0
-        elif current_cursor_line_index < self.list_scroll_offset: 
-            self.list_scroll_offset = current_cursor_line_index
-        elif current_cursor_line_index >= self.list_scroll_offset + window_height: 
-            self.list_scroll_offset = current_cursor_line_index - window_height + 1
+        elif start_line_index < self.list_scroll_offset: 
+            self.list_scroll_offset = start_line_index
+        elif end_line_index >= self.list_scroll_offset + window_height: 
+            # Scroll down to reveal children, but prioritize keeping the module header in view
+            self.list_scroll_offset = min(start_line_index, end_line_index - window_height + 1)
+
+        # Clamp list_scroll_offset to prevent orphaned empty space at the end
+        maximum_allowable_offset = max(0, len(rendered_content_lines) - window_height)
+        self.list_scroll_offset = min(self.list_scroll_offset, maximum_allowable_offset)
 
         # Extract visible lines for the container
         viewport_lines = rendered_content_lines[self.list_scroll_offset : self.list_scroll_offset + window_height]
