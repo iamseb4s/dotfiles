@@ -9,13 +9,21 @@ class BaseModal:
         self.title = title
         self.width = width
 
+    @property
+    def effective_width(self):
+        """Returns the width adjusted for the current terminal size."""
+        terminal_width = shutil.get_terminal_size().columns
+        return min(self.width, terminal_width - 4)
+
     def _get_layout(self, inner_lines, scroll_pos=None, scroll_size=None):
         """Standardizes centering and container creation."""
         terminal_width, terminal_height = shutil.get_terminal_size()
+        
+        # Ensure modal doesn't exceed terminal width
+        width = self.effective_width
         height = len(inner_lines) + 2
-        lines = TUI.create_container(inner_lines, self.width, height, title=self.title, color="", is_focused=True, 
-                                    scroll_pos=scroll_pos, scroll_size=scroll_size)
-        return lines, (terminal_height - height) // 2, (terminal_width - self.width) // 2
+        lines = TUI.create_container(inner_lines, width, height, title=self.title, color="", is_focused=True, scroll_pos=scroll_pos, scroll_size=scroll_size)
+        return lines, (terminal_height - height) // 2, (terminal_width - width) // 2
 
     def _render_button_row(self, buttons, focus_idx):
         """Unifies the visual style of button rows."""
@@ -25,14 +33,21 @@ class BaseModal:
                 styled_buttons.append(f"{Style.button_focused()}{button}{Style.RESET}")
             else:
                 styled_buttons.append(f"{Style.muted()}[ {button.strip()} ]{Style.RESET}")
-        button_row = "     ".join(styled_buttons)
-        return f"{' ' * ((self.width - 2 - TUI.visible_len(button_row)) // 2)}{button_row}"
+        
+        button_row_text = "     ".join(styled_buttons)
+        visible_button_width = TUI.visible_len(button_row_text)
+        
+        # Center based on effective_width of the modal
+        padding_size = max(0, (self.effective_width - 2 - visible_button_width) // 2)
+        return f"{' ' * padding_size}{button_row_text}"
 
-    def _get_scroll_params(self, total, visible, offset):
+    def _get_scroll_params(self, total_items_count, visible_window_height, scroll_offset):
         """Generic scrollbar thumb position and size calculation."""
-        if total <= visible: return None, None
-        sz = max(1, int(visible**2 / total))
-        return int((offset / (total - visible)) * (visible - sz)), sz
+        if total_items_count <= visible_window_height: 
+            return None, None
+        thumb_size = max(1, int(visible_window_height**2 / total_items_count))
+        thumb_position = int((scroll_offset / (total_items_count - visible_window_height)) * (visible_window_height - thumb_size))
+        return thumb_position, thumb_size
 
 class DependencyModal(BaseModal):
     """Multi-select modal for module dependencies."""
@@ -57,10 +72,10 @@ class DependencyModal(BaseModal):
                 mark = "[■]" if is_selected else "[ ]"
                 label = f"{module.label} ({module.id})"
                 style = Style.highlight() + Style.BOLD if is_focused else (Style.success() if is_selected else Style.muted())
-                inner.append(f"    {style}{TUI.split_line(f'{mark}  {label}', '', self.width - 10)}{Style.RESET}")
+                inner.append(f"    {style}{TUI.split_line(f'{mark}  {label}', '', self.effective_width - 10)}{Style.RESET}")
         
         hint = "SPACE: Toggle   ENTER: Confirm   ESC: Cancel"
-        inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
+        inner.extend(["", f"{' ' * ((self.effective_width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
         scroll_position, scroll_size = self._get_scroll_params(len(self.modules), window_height, self.scroll_offset)
         return self._get_layout(inner, scroll_pos=scroll_position, scroll_size=scroll_size)
 
@@ -139,7 +154,7 @@ class DraftSelectionModal(BaseModal):
                     label = f"{draft_id} ({draft_time})"
                 inner.append(f"    {Style.highlight() + Style.BOLD if is_focused else Style.normal()}{label}{Style.RESET}")
         hint = "ENTER: Select   X: Delete   ESC: Start Fresh"
-        inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
+        inner.extend(["", f"{' ' * ((self.effective_width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
         return self._get_layout(inner)
 
     def handle_input(self, key):
@@ -158,8 +173,9 @@ class ConfirmModal(BaseModal):
         self.message = message; self.focus_idx = 1 # Default NO
 
     def render(self):
-        wrapped = TUI.wrap_text(self.message, self.width - 6)
-        inner = [""] + [f"  {Style.normal()}{line.center(self.width - 6)}{Style.RESET}" for line in wrapped]
+        width = self.effective_width
+        wrapped = TUI.wrap_text(self.message, width - 6)
+        inner = [""] + [f"  {Style.normal()}{line.center(width - 6)}{Style.RESET}" for line in wrapped]
         inner.extend(["", self._render_button_row(["  YES  ", "  NO  "], self.focus_idx)])
         return self._get_layout(inner)
 
@@ -180,20 +196,21 @@ class PasswordModal(BaseModal):
         self.password = ""
 
     def render(self):
-        wrapped = TUI.wrap_text(self.message, self.width - 10)
-        inner = [""] + [f"{Style.normal()}{line.center(self.width-2)}{Style.RESET}" for line in wrapped]
+        width = self.effective_width
+        wrapped = TUI.wrap_text(self.message, width - 10)
+        inner = [""] + [f"{Style.normal()}{line.center(width - 2)}{Style.RESET}" for line in wrapped]
         
         # Password field
         pwd_display = "*" * len(self.password)
         # Style the field box with a fixed width for the input area
-        field_width = self.width - 12
-        field = f" {Style.highlight()}{pwd_display}{Style.RESET}" + " " * (field_width - len(pwd_display) - 1)
+        field_width = width - 12
+        field = f" {Style.highlight()}{pwd_display}{Style.RESET}" + " " * max(0, field_width - len(pwd_display) - 1)
         inner.append(f"    {Style.muted()}╭{'─' * field_width}╮{Style.RESET}")
         inner.append(f"    {Style.muted()}│{Style.RESET}{field}{Style.muted()}│{Style.RESET}")
         inner.append(f"    {Style.muted()}╰{'─' * field_width}╯{Style.RESET}")
         
         hint = "ENTER: Confirm   ESC: Cancel"
-        inner.extend(["", f"{' ' * ((self.width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
+        inner.extend(["", f"{' ' * ((width - 2 - TUI.visible_len(hint)) // 2)}{Style.muted()}{hint}{Style.RESET}"])
         return self._get_layout(inner)
 
     def handle_input(self, key):
