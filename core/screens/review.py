@@ -18,15 +18,15 @@ class ReviewModal(BaseModal):
         self.results = results # { 'module_id': {'package': True, 'dotfiles': True} }
         
         # Build the flat list of content lines once
-        self.content_lines = self._build_content()
+        self.tree_content_lines = self._build_content()
         
         # UI State
-        self.focus_idx = 0 # 0: Install/Finish, 1: Cancel/Logs
+        self.button_focus_index = 0 # 0: Install/Finish, 1: Cancel/Logs
         self.scroll_offset = 0
 
     def _build_content(self):
         """Constructs the tree-like representation of the installation plan or results."""
-        lines = []
+        tree_lines = []
         for module in self.active_modules:
             override = self.overrides.get(module.id, {})
             module_results = self.results.get(module.id, {}) if self.results else {}
@@ -41,7 +41,7 @@ class ReviewModal(BaseModal):
             
             color = Style.warning() if is_customized else Style.normal()
             label = module.label + ("*" if is_customized else "")
-            lines.append(f"{Style.muted()}■ {Style.RESET}{color}{label}{Style.RESET}")
+            tree_lines.append(f"{Style.muted()}■ {Style.RESET}{color}{label}{Style.RESET}")
             
             # 2. Build recursive tree of active components
             parts = []
@@ -57,9 +57,9 @@ class ReviewModal(BaseModal):
             # 3. Render recursive tree
             for index, part in enumerate(parts):
                 is_last = (index == len(parts) - 1)
-                lines.extend(self._render_node(part, "", is_last, module, override, sub_selections, module_results))
+                tree_lines.extend(self._render_node(part, "", is_last, module, override, sub_selections, module_results))
                     
-        return lines
+        return tree_lines
 
     def _get_active_sub_tree(self, components, selections):
         """Recursively builds a tree of only selected components."""
@@ -144,52 +144,74 @@ class ReviewModal(BaseModal):
         """Draws the modal with tree content and dynamic height."""
         width = self.effective_width
         terminal_height = shutil.get_terminal_size().lines
-        max_window_height = min(15, terminal_height - 12)
-        actual_window_height = min(len(self.content_lines), max_window_height)
-        inner_buffer = [""]
         
-        visible_lines = self.content_lines[self.scroll_offset : self.scroll_offset + actual_window_height]
-        for line in visible_lines: 
-            inner_buffer.append(f"  {line}")
+        # Max height for the tree area
+        max_tree_height = max(3, terminal_height - 14)
+        actual_tree_height = min(len(self.tree_content_lines), max_tree_height)
+        
+        
+        # Internal Padding: top weight
+        inner_buffer = [""]
+
+        visible_tree_lines = self.tree_content_lines[self.scroll_offset : self.scroll_offset + actual_tree_height]
+        for tree_line in visible_tree_lines: 
+            inner_buffer.append(f"  {tree_line}")
+        
+        # Internal Padding: bottom weight
         inner_buffer.append("")
         
         if self.is_results_mode:
+            # 2. Results stats
             stats = self._get_summary_stats()
             summary_text = f"{Style.success()}{stats['installed']} installed{Style.RESET}, {Style.info()}{stats['cancelled']} cancelled{Style.RESET}, {Style.error()}{stats['failed']} failed{Style.RESET}"
             inner_buffer.append(f"{' ' * ((width - 2 - TUI.visible_len(summary_text)) // 2)}{summary_text}")
         else:
-            # Check if any task requires root by searching for the normal asterisk in the content
-            any_root_required = any(f"{Style.normal()}*{Style.RESET}" in line for line in self.content_lines)
+            # 2. Root requirement check or empty line
+            any_root_required = any(f"{Style.normal()}*{Style.RESET}" in line for line in self.tree_content_lines)
             if any_root_required:
                 root_message = f"{Style.error()}*root required{Style.RESET}"
                 inner_buffer.append(f"{' ' * ((width - 2 - TUI.visible_len(root_message)) // 2)}{root_message}")
+            else:
+                inner_buffer.append("")
             
+        # 3. Confirmation text / spacing
+        if self.is_results_mode:
+            inner_buffer.append("")
+        else:
             confirmation_text = "Confirm and start installation?"
             padding_size = max(0, (width - 2 - TUI.visible_len(confirmation_text)) // 2)
             inner_buffer.append(f"{Style.secondary()}{' ' * padding_size}{confirmation_text}{Style.RESET}")
         
+        # 4. Buttons row
         buttons = ["  INSTALL  ", "  CANCEL  "]
         if self.is_results_mode:
             buttons = ["  FINISH  ", "  VIEW LOGS  "]
-        inner_buffer.append(self._render_button_row(buttons, self.focus_idx))
+        inner_buffer.append(self._render_button_row(buttons, self.button_focus_index))
         
-        scroll_pos, scroll_size = self._get_scroll_params(len(self.content_lines), actual_window_height, self.scroll_offset)
+        # Scrollbar
+        total_interior_items = len(self.tree_content_lines) + 5
+        visible_interior_items = actual_tree_height + 5
+        scroll_pos, scroll_size = self._get_scroll_params(total_interior_items, visible_interior_items, self.scroll_offset)
+        
         return self._get_layout(inner_buffer, scroll_pos=scroll_pos, scroll_size=scroll_size)
 
     def handle_input(self, key):
-        """Manages modal navigation and confirmation."""
+        """Manages modal navigation and confirmation with synchronized scroll limits."""
         if key in [Keys.Q, Keys.Q_UPPER]: return "CLOSE" if self.is_results_mode else "CANCEL"
         if key == Keys.ESC:
-            if self.focus_idx != 1: self.focus_idx = 1
+            if self.button_focus_index != 1: self.button_focus_index = 1
             else: return "CLOSE" if self.is_results_mode else "CANCEL"
 
-        if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L, Keys.TAB]: self.focus_idx = 1 - self.focus_idx
-        elif key in [Keys.UP, Keys.K]: self.scroll_offset = max(0, self.scroll_offset - 1)
+        terminal_height = shutil.get_terminal_size().lines
+        max_tree_height = max(3, terminal_height - 14)
+        
+        if key in [Keys.LEFT, Keys.H, Keys.RIGHT, Keys.L, Keys.TAB]: self.button_focus_index = 1 - self.button_focus_index
+        elif key in [Keys.UP, Keys.K]: self.scroll_offset = max(0, self.scroll_offset - 3)
         elif key in [Keys.DOWN, Keys.J]:
-            terminal_height = shutil.get_terminal_size().lines
-            max_window_height = min(15, terminal_height - 12)
-            self.scroll_offset = min(max(0, len(self.content_lines) - max_window_height), self.scroll_offset + 1)
+            self.scroll_offset = min(max(0, len(self.tree_content_lines) - max_tree_height), self.scroll_offset + 3)
+        elif key == Keys.PGUP: self.scroll_offset = max(0, self.scroll_offset - 10)
+        elif key == Keys.PGDN: self.scroll_offset = min(max(0, len(self.tree_content_lines) - max_tree_height), self.scroll_offset + 10)
         elif key == Keys.ENTER:
-            if self.is_results_mode: return "FINISH" if self.focus_idx == 0 else "CLOSE"
-            return "INSTALL" if self.focus_idx == 0 else "CANCEL"
+            if self.is_results_mode: return "FINISH" if self.button_focus_index == 0 else "CLOSE"
+            return "INSTALL" if self.button_focus_index == 0 else "CANCEL"
         return None
