@@ -291,11 +291,48 @@ class SelectorScreen(Screen):
             dependency_style = Style.warning() if (dependency_labels and is_supported) else Style.secondary()
             lines.append(row("Requires", dependency_value, dependency_style))
 
-            for key, label in [('manager', 'Manager'), ('package_name', 'Package')]:
-                current_value = getattr(module, key) if key != 'package_name' else module.get_package_name()
-                value = override.get(key, current_value)
-                color_value = Style.secondary() if is_supported else Style.muted()
-                lines.append(row(label, f"{value}{'*' if value != current_value else ''}", color_value))
+            for field_key, field_label in [('manager', 'Manager'), ('package_name', 'Package')]:
+                raw_field_value = getattr(module, field_key)
+                
+                # Handle user overrides first
+                if field_key in override:
+                    lines.append(row(field_label, f"{override[field_key]}*", Style.secondary()))
+                    continue
+
+                if isinstance(raw_field_value, dict):
+                    # Find which key matched the current system
+                    detected_distro_key = None
+                    system_manager = module.system_manager
+                    if system_manager.os_id in raw_field_value: 
+                        detected_distro_key = system_manager.os_id
+                    elif system_manager.is_arch and "arch" in raw_field_value: 
+                        detected_distro_key = "arch"
+                    elif system_manager.is_debian and "debian" in raw_field_value: 
+                        detected_distro_key = "debian"
+                    elif "default" in raw_field_value: 
+                        detected_distro_key = "default"
+
+                    # Resolve the main value using core logic
+                    resolved_system_value = module.get_manager() if field_key == 'manager' else module.get_package_name()
+                    
+                    if detected_distro_key:
+                        primary_distro_info = f"{detected_distro_key.capitalize()}: {resolved_system_value}"
+                        other_distro_info_list = [
+                            f"{distro_id.capitalize()}: {distro_package_name}" 
+                            for distro_id, distro_package_name in raw_field_value.items() 
+                            if distro_id != detected_distro_key
+                        ]
+                        
+                        composite_field_value = f"{Style.secondary()}{primary_distro_info}{Style.RESET}"
+                        if other_distro_info_list:
+                            composite_field_value += f" {Style.muted()}- {' - '.join(other_distro_info_list)}{Style.RESET}"
+                        lines.append(row(field_label, composite_field_value, ""))
+                    else:
+                        lines.append(row(field_label, resolved_system_value, Style.secondary() if is_supported else Style.muted()))
+                else:
+                    # Simple string value
+                    display_value = raw_field_value or (module.id if field_key == 'package_name' else "system")
+                    lines.append(row(field_label, display_value, Style.secondary() if is_supported else Style.muted()))
             
             current_target = override.get('stow_target', module.stow_target)
             tree = module.get_config_tree(target=current_target)
