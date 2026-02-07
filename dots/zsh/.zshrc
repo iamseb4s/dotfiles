@@ -146,3 +146,32 @@ command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh)"
 # conda activate myenv
 # <<< conda initialize <<<
 
+
+# ======================
+# Zellij Configuration
+# ======================
+# Automatic tab naming based on currently running process
+if [[ -n $ZELLIJ ]]; then
+    function zellij_tab_name_update() {
+        local tab_name="zsh"
+        if [[ -n $1 ]]; then
+            # Extract command name and handle paths
+            tab_name="${1%% *}"
+            tab_name="${tab_name##*/}"
+            
+            # Special case for sudo
+            if [[ "$tab_name" == "sudo" ]]; then
+                local next_cmd="${${1#* }%% *}"
+                tab_name="${next_cmd##*/}"
+            fi
+        fi
+        # Rename the current tab
+        command zellij action rename-tab "$tab_name" >/dev/null 2>&1
+    }
+    
+    autoload -Uz add-zsh-hook
+    add-zsh-hook precmd  zellij_tab_name_update
+    add-zsh-hook preexec zellij_tab_name_update
+fi
+
+
