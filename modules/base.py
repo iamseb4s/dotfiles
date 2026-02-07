@@ -20,6 +20,8 @@ class Module:
     manager = "system"
     # Mapping for OS-specific package names
     package_name = None 
+    # Optional mapping for binary names (string or list) to improve detection
+    binary_names = None
     
     # Stow configuration
     stow_target = "~"   
@@ -87,6 +89,28 @@ class Module:
     def get_package_name(self):
         """Resolves package name based on OS if a dict is provided."""
         return self._resolve_distro_value(self.package_name, default=self.id)
+
+    def get_binary_names(self):
+        """
+        Resolves the list of possible binary names for detection.
+        Returns a list of strings.
+        """
+        resolved_names = self._resolve_distro_value(self.binary_names)
+        
+        # 1. Handle case where binary_names is explicitly defined
+        if resolved_names:
+            if isinstance(resolved_names, list):
+                return resolved_names
+            return [resolved_names]
+            
+        # 2. Fallback to package_name
+        package_name = self.get_package_name()
+        # We take the first part as a heuristic for the main executable
+        if package_name:
+            main_name = package_name.split()[0]
+            return [main_name]
+            
+        return [self.id]
 
     def get_dependencies(self):
         """Resolves dependencies based on OS if a dict is provided."""
@@ -190,19 +214,24 @@ class Module:
         manager = self.get_manager()
         
         result = False
+        # 1. Manager-specific detection
         if manager == "system":
-            # 1. Try robust OS package manager detection
+            # Try robust OS package manager detection
             if self.system_manager.is_package_installed(package):
                 result = True
-            # 2. Fallback to binary path detection (for manual installs)
-            else:
-                result = shutil.which(package or "") is not None
         elif manager == "cargo":
             result = os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif manager == "bob":
             result = shutil.which("nvim") is not None
         elif manager == "brew":
             result = shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
+        
+        # 2. Universal PATH fallback
+        if not result:
+            for binary_name in self.get_binary_names():
+                if shutil.which(binary_name) is not None:
+                    result = True
+                    break
         
         self._cache["is_installed"] = result
         return result
