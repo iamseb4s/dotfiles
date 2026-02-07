@@ -33,6 +33,8 @@ class SelectorScreen(Screen):
         # UI State
         self.cursor_index, self.list_scroll_offset, self.info_scroll_offset, self.modal = 0, 0, 0, None
         self.flat_items = []
+        self._structure_needs_rebuild = True
+        self._info_cache = {} # {(index, width): lines}
 
     def _resolve_dependencies(self):
         """
@@ -150,24 +152,27 @@ class SelectorScreen(Screen):
             elif item['type'] == 'module': current_item_marker = ('module', item['obj'].id)
             elif item['type'] == 'sub': current_item_marker = ('sub', item['module_id'], item['obj']['id'])
 
-        # 2. Rebuild the list (handles dependency expansions and category states)
-        self._resolve_dependencies()
-        self.flat_items = self._build_flat_list()
-        
-        # 3. Relocate cursor to the previously focused item
-        if current_item_marker:
-            for index, item in enumerate(self.flat_items):
-                match_found = False
-                if current_item_marker[0] == 'header' and item['type'] == 'header' and item['obj'] == current_item_marker[1]: 
-                    match_found = True
-                elif current_item_marker[0] == 'module' and item['type'] == 'module' and item['obj'].id == current_item_marker[1]: 
-                    match_found = True
-                elif current_item_marker[0] == 'sub' and item['type'] == 'sub' and item['module_id'] == current_item_marker[1] and item['obj']['id'] == current_item_marker[2]: 
-                    match_found = True
-                
-                if match_found:
-                    self.cursor_index = index
-                    break
+        # 2. Rebuild the list
+        if self._structure_needs_rebuild:
+            self._resolve_dependencies()
+            self.flat_items = self._build_flat_list()
+            self._structure_needs_rebuild = False
+            self._info_cache.clear()
+            
+            # 3. Relocate cursor to the previously focused item
+            if current_item_marker:
+                for index, item in enumerate(self.flat_items):
+                    match_found = False
+                    if current_item_marker[0] == 'header' and item['type'] == 'header' and item['obj'] == current_item_marker[1]: 
+                        match_found = True
+                    elif current_item_marker[0] == 'module' and item['type'] == 'module' and item['obj'].id == current_item_marker[1]: 
+                        match_found = True
+                    elif current_item_marker[0] == 'sub' and item['type'] == 'sub' and item['module_id'] == current_item_marker[1] and item['obj']['id'] == current_item_marker[2]: 
+                        match_found = True
+                    
+                    if match_found:
+                        self.cursor_index = index
+                        break
 
         self.cursor_index = min(self.cursor_index, len(self.flat_items) - 1)
         terminal_width, terminal_height = shutil.get_terminal_size()
@@ -349,7 +354,13 @@ class SelectorScreen(Screen):
 
     def _draw_right(self, width, height):
         """Internal logic for building the information box."""
-        info_lines = self._get_info_lines(width)
+        cache_key = (self.cursor_index, width)
+        if cache_key in self._info_cache and not self._structure_needs_rebuild:
+            info_lines = self._info_cache[cache_key]
+        else:
+            info_lines = self._get_info_lines(width)
+            self._info_cache[cache_key] = info_lines
+
         scrollable_window_height = height - 4
         max_offset = max(0, len(info_lines) - scrollable_window_height)
         self.info_scroll_offset = min(self.info_scroll_offset, max_offset)
@@ -511,6 +522,23 @@ class SelectorScreen(Screen):
         if self.modal: 
             return self._handle_modal_input(key)
         
+        # Input Coalescing
+        nav_keys = {Keys.UP, Keys.DOWN, Keys.K, Keys.J, Keys.CTRL_K, Keys.CTRL_J}
+        if key in nav_keys:
+            current_key = key
+            while True:
+                # Dispatch the current navigation key
+                self._dispatch_navigation(current_key)
+                # Check if there's another navigation key immediately available
+                next_key = TUI.get_key(blocking=False)
+                if next_key is None:
+                    break
+                if next_key in nav_keys:
+                    current_key = next_key
+                else:
+                    return self.handle_input(next_key)
+            return None
+
         terminal_width, terminal_height = shutil.get_terminal_size()
         footer_pills = self._get_footer_pills()
         footer_lines = TUI.wrap_pills(footer_pills, terminal_width - 4)
@@ -523,12 +551,6 @@ class SelectorScreen(Screen):
         max_info_scroll_offset = max(0, len(self._get_info_lines(columns_width)) - scrollable_window_height)
         
         navigation_map = {
-            Keys.UP: lambda: self._move_cursor(-1), 
-            Keys.K: lambda: self._move_cursor(-1),
-            Keys.DOWN: lambda: self._move_cursor(1), 
-            Keys.J: lambda: self._move_cursor(1),
-            Keys.CTRL_K: lambda: self._move_cursor(-5), 
-            Keys.CTRL_J: lambda: self._move_cursor(5),
             Keys.PGUP: lambda: self._scroll_info(-5, max_info_scroll_offset), 
             Keys.PGDN: lambda: self._scroll_info(5, max_info_scroll_offset),
             Keys.SPACE: self._toggle_sel, 
@@ -543,6 +565,13 @@ class SelectorScreen(Screen):
         }
         return navigation_map[key]() if key in navigation_map else None
 
+    def _dispatch_navigation(self, key):
+        """Helper to process navigation keys without full render loop overhead."""
+        if key in [Keys.UP, Keys.K]: self._move_cursor(-1)
+        elif key in [Keys.DOWN, Keys.J]: self._move_cursor(1)
+        elif key == Keys.CTRL_K: self._move_cursor(-5)
+        elif key == Keys.CTRL_J: self._move_cursor(5)
+
     def _handle_modal_input(self, key):
         """Processes results from active modals."""
         modal = self.modal
@@ -553,7 +582,9 @@ class SelectorScreen(Screen):
             if not override['install_package'] and not (module.stow_package and override['install_dotfiles']):
                 self.selected.discard(module.id); self.overrides.pop(module.id, None)
             else: self.selected.add(module.id); self.overrides[module.id] = override
-            self.modal = None; TUI.push_notification(f"Changes saved for {module.label}", type="INFO")
+            self.modal = None
+            self._structure_needs_rebuild = True
+            TUI.push_notification(f"Changes saved for {module.label}", type="INFO")
         elif isinstance(modal, ReviewModal) and result == "INSTALL": self.modal = None; return "CONFIRM"
         elif isinstance(modal, ConfirmModal) and result == "YES":
             self.selected.clear(); self.overrides.clear(); self.sub_selections.clear()
@@ -563,14 +594,17 @@ class SelectorScreen(Screen):
 
     def _move_cursor(self, direction): 
         if not self.flat_items: return None
+        old_index = self.cursor_index
         self.cursor_index = (self.cursor_index + direction) % len(self.flat_items)
-        self.info_scroll_offset = 0
+        if old_index != self.cursor_index:
+            self.info_scroll_offset = 0
         return None
     def _scroll_info(self, scroll_direction, maximum_offset): 
         self.info_scroll_offset = max(0, min(maximum_offset, self.info_scroll_offset + scroll_direction))
         return None
     def _toggle_sel(self):
         """Handles item selection and group toggling with dependency awareness."""
+        self._structure_needs_rebuild = True
         item = self.flat_items[self.cursor_index]
         if item['type'] == 'module':
             module = item['obj']
@@ -691,26 +725,38 @@ class SelectorScreen(Screen):
     def _handle_tab(self):
         """Handles TAB key for expanding headers or opening options."""
         item = self.flat_items[self.cursor_index]
-        if item['type'] == 'header': self.expanded[item['obj']] = not self.expanded[item['obj']]
+        if item['type'] == 'header':
+            self.expanded[item['obj']] = not self.expanded[item['obj']]
+            self._structure_needs_rebuild = True
         elif item['type'] == 'module': self.modal = OptionsModal(item['obj'], self.overrides.get(item['obj'].id))
         return None
 
     def _collapse(self):
         """Collapses the current header, module or sub-component."""
         item = self.flat_items[self.cursor_index]
-        if item['type'] == 'header': self.expanded[item['obj']] = False
-        elif item['type'] == 'module': self.expanded[item['obj'].id] = False
+        if item['type'] == 'header':
+            self.expanded[item['obj']] = False
+            self._structure_needs_rebuild = True
+        elif item['type'] == 'module':
+            self.expanded[item['obj'].id] = False
+            self._structure_needs_rebuild = True
         elif item['type'] == 'sub':
             self.expanded[f"{item['module_id']}:{item['obj']['id']}"] = False
+            self._structure_needs_rebuild = True
         return None
 
     def _expand(self):
         """Expands the current header, module or sub-component."""
         item = self.flat_items[self.cursor_index]
-        if item['type'] == 'header': self.expanded[item['obj']] = True
-        elif item['type'] == 'module': self.expanded[item['obj'].id] = True
+        if item['type'] == 'header':
+            self.expanded[item['obj']] = True
+            self._structure_needs_rebuild = True
+        elif item['type'] == 'module':
+            self.expanded[item['obj'].id] = True
+            self._structure_needs_rebuild = True
         elif item['type'] == 'sub':
             self.expanded[f"{item['module_id']}:{item['obj']['id']}"] = True
+            self._structure_needs_rebuild = True
         return None
 
     def get_effective_overrides(self):

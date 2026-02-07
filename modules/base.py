@@ -31,21 +31,34 @@ class Module:
         self.system_manager = system_manager
         # Auto-resolve stow_package to match module id
         self.stow_package = self.id
+        self._cache = {}
+
+    def clear_cache(self):
+        """Clears all memoized results."""
+        self._cache = {}
 
     def has_usable_dotfiles(self):
         """
         Recursively checks if the dotfiles directory exists and contains at least one file.
         """
+        if "has_dotfiles" in self._cache:
+            return self._cache["has_dotfiles"]
+            
         if not self.stow_package:
+            self._cache["has_dotfiles"] = False
             return False
             
         package_path = os.path.join(os.getcwd(), "dots", self.stow_package)
         if not os.path.exists(package_path) or not os.path.isdir(package_path):
+            self._cache["has_dotfiles"] = False
             return False
             
         for root, dirs, files in os.walk(package_path):
             if files:
+                self._cache["has_dotfiles"] = True
                 return True
+        
+        self._cache["has_dotfiles"] = False
         return False
 
     def _resolve_distro_value(self, value, default=None):
@@ -135,22 +148,29 @@ class Module:
 
     def is_installed(self):
         """Detection logic based on the package manager type."""
+        if "is_installed" in self._cache:
+            return self._cache["is_installed"]
+
         package = self.get_package_name()
         manager = self.get_manager()
         
+        result = False
         if manager == "system":
             # 1. Try robust OS package manager detection
             if self.system_manager.is_package_installed(package):
-                return True
+                result = True
             # 2. Fallback to binary path detection (for manual installs)
-            return shutil.which(package or "") is not None
+            else:
+                result = shutil.which(package or "") is not None
         elif manager == "cargo":
-            return os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
+            result = os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif manager == "bob":
-            return shutil.which("nvim") is not None
+            result = shutil.which("nvim") is not None
         elif manager == "brew":
-            return shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
-        return False
+            result = shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
+        
+        self._cache["is_installed"] = result
+        return result
 
     def install(self, override=None, callback=None, input_callback=None, password=None):
         """Generic installation logic supporting modular user selections."""
@@ -235,14 +255,19 @@ class Module:
 
     def get_config_tree(self, target=None):
         """
-        Recursively scans the dotfiles source directory to generate 
-        a visual file tree.
+        Recursively scans the dotfiles source directory to generate a visual file tree.
         """
+        cache_key = f"tree_{target}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
         if not self.stow_package:
             return []
             
         if not self.has_usable_dotfiles():
-            return [f"No source files found in dots/{self.stow_package}"]
+            result = [f"No source files found in dots/{self.stow_package}"]
+            self._cache[cache_key] = result
+            return result
             
         package_path = os.path.join(os.getcwd(), "dots", self.stow_package)
         tree = []
@@ -268,6 +293,8 @@ class Module:
             except PermissionError:
                 tree.append(f"{prefix}└── [Permission Denied]")
                 return
+            except FileNotFoundError:
+                return
 
             for i, entry in enumerate(entries):
                 is_last = (i == len(entries) - 1)
@@ -281,4 +308,5 @@ class Module:
                     scan(full_path, new_prefix, depth + 1)
                     
         scan(package_path)
+        self._cache[cache_key] = tree
         return tree

@@ -126,10 +126,13 @@ def main():
                     # Reset state and selector for a clean start
                     state = "WELCOME"
                     TUI.clear_screen()
+                    for module in modules: module.clear_cache()
                     selector_screen = SelectorScreen(modules)
                 elif result == "SELECTOR":
                     state = "SELECTOR"
                     TUI.clear_screen()
+                    for module in modules: module.clear_cache()
+                    selector_screen._structure_needs_rebuild = True
                 else:
                     sys.exit(0)
     finally:

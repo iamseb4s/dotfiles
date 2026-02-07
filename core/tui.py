@@ -154,6 +154,7 @@ class TUI:
     """
     Core utility for low-level terminal manipulation and input capture.
     """
+    ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
     _old_settings = None
     _raw_ref_count = 0
     _resize_pending = False
@@ -396,18 +397,20 @@ class TUI:
     def truncate_ansi(text, max_width):
         """Truncates a string containing ANSI codes without breaking them, while stripping layout-breaking control chars."""
         # Pre-clean the text from carriage returns
+        if not text: return ""
         text = text.replace('\r', '')
-        if TUI.visible_len(text) <= max_width:
+        
+        # Fast Path: If visual width is within limits, return original text immediately.
+        v_len = TUI.visible_len(text)
+        if v_len <= max_width:
             return text
             
-        # Pattern to match ANSI escape sequences
-        ansi_escape_pattern = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         final_truncated_result = ""
         current_accumulated_width = 0
         last_match_end_index = 0
         width_limit_for_text = max_width - 3 # Leave room for "..."
         
-        for match in ansi_escape_pattern.finditer(text):
+        for match in TUI.ANSI_ESCAPE.finditer(text):
             # Text before the ANSI code
             plain_text_chunk = text[last_match_end_index:match.start()]
             for character in plain_text_chunk:
@@ -440,7 +443,6 @@ class TUI:
     @staticmethod
     def ansi_slice(text, slice_start_width, slice_end_width=None):
         """Slices a string by its visual width, preserving ANSI codes and compensating for split wide chars."""
-        ansi_escape_pattern = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
         final_sliced_result = ""
         current_visual_position = 0
         last_match_end_index = 0
@@ -463,7 +465,7 @@ class TUI:
                 current_pos += character_visual_width
             return current_pos, accumulated_sliced_string
 
-        for match in ansi_escape_pattern.finditer(text):
+        for match in TUI.ANSI_ESCAPE.finditer(text):
             # Process plain text before the ANSI sequence
             plain_text_before_ansi = text[last_match_end_index:match.start()]
             current_visual_position, final_sliced_result = process_plain_text_chunk(plain_text_before_ansi, current_visual_position, final_sliced_result)
@@ -660,9 +662,8 @@ class TUI:
     def visible_len(text):
         """Calculates character count excluding ANSI control codes and non-printable characters."""
         if not text: return 0
-        # Remove ANSI escape sequences
-        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-        clean_text = ansi_escape.sub('', text)
+        # Use pre-compiled regex
+        clean_text = TUI.ANSI_ESCAPE.sub('', text)
         # Remove or replace other control characters that might break layout
         clean_text = clean_text.replace('\r', '').replace('\t', '    ')
         total_width = 0
