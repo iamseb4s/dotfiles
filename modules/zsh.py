@@ -5,10 +5,16 @@ from modules.base import Module
 
 class ZshModule(Module):
     id = "zsh"
-    label = "Zsh & Oh-My-Zsh"
+    label = "Zsh Shell"
     category = "Terminal"
     manager = "system"
     description = "Zsh shell with Oh-My-Zsh, Powerlevel10k theme, and productivity plugins."
+
+    dependencies = {
+        "default": {
+            "dot_deps": ["stow"]
+        }
+    }
 
     sub_components = [
         {
@@ -19,12 +25,13 @@ class ZshModule(Module):
                 {"id": "chsh", "label": "Mark as default shell", "default": True},
                 {
                     "id": "omz",
-                    "label": "Oh-My-Zsh",
+                    "label": "Oh-My-Zsh + Core Plugins",
                     "default": True,
+                    "dependencies": {"default": ["curl"]},
                     "children": [
-                        {"id": "autosuggestions", "label": "zsh-autosuggestions", "default": True},
-                        {"id": "syntax_highlighting", "label": "zsh-syntax-highlighting + Catppuccin Mocha theme", "default": True},
-                        {"id": "p10k", "label": "Powerlevel10k Theme", "default": True}
+                        {"id": "autosuggestions", "label": "zsh-autosuggestions", "default": True, "dependencies": {"default": ["git"]}},
+                        {"id": "syntax_highlighting", "label": "zsh-syntax-highlighting + Catppuccin Mocha theme", "default": True, "dependencies": {"default": ["git", "curl"]}},
+                        {"id": "p10k", "label": "Powerlevel10k Theme", "default": True, "dependencies": {"default": ["git"]}}
                     ]
                 }
             ]

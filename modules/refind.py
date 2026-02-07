@@ -8,7 +8,13 @@ class RefindModule(Module):
     description = "Boot manager with Catppuccin theme"
     category = "System Core"
     manager = "system"
-    package_name = "refind gdisk"
+    package_name = "refind"
+    
+    dependencies = {
+        "default": {
+            "bin_deps": ["gdisk"]
+        }
+    }
     
     # Package metadata
     stow_target = "/boot/EFI/refind"

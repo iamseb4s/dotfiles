@@ -17,8 +17,13 @@ class LazygitModule(Module):
     package_name = "lazygit"
     
     dependencies = {
-        "arch": [],
-        "ubuntu": ["curl", "git", "unzip"]
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["curl", "git", "unzip"],
+            "dot_deps": ["stow"]
+        }
     }
 
     def install(self, override=None, callback=None, input_callback=None, password=None):

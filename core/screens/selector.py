@@ -38,31 +38,59 @@ class SelectorScreen(Screen):
 
     def _resolve_dependencies(self):
         """
-        Recalculates self.auto_locked based on the dependencies of 
-        currently selected modules.
+        Recalculates self.auto_locked using a recursive fixed-point algorithm
+        that is aware of specific sub-component selections.
         """
         new_auto_locked_set = set()
-        for module_id in self.selected:
-            if module_id in self.module_map:
-                module = self.module_map[module_id]
-                for dependency_id in module.get_dependencies():
-                    if dependency_id in self.module_map: 
-                        new_auto_locked_set.add(dependency_id)
-                        
-                        # Auto-expand if it's a requirement
-                        if dependency_id not in self.auto_locked and dependency_id not in self.selected:
-                            self.expanded[dependency_id] = True
-                            if dependency_id not in self.sub_selections:
-                                self.sub_selections[dependency_id] = {}
-                                # Default to all components ON
-                                dependency_module = self.module_map[dependency_id]
-                                self.sub_selections[dependency_id]['binary'] = True
-                                if hasattr(dependency_module, 'sub_components') and dependency_module.sub_components:
-                                    self._set_sub_selection_recursive(dependency_id, dependency_module.sub_components, True)
-                                if dependency_module.has_usable_dotfiles():
-                                    self.sub_selections[dependency_id]['dotfiles'] = True
+        # Worklist of tuples: (module_identifier, component_identifier)
+        resolution_queue = []
         
-        # Cleanup orphaned dependencies
+        # 1. Initialize queue with explicitly selected module components
+        for module_id in self.selected:
+            if module_id not in self.module_map: 
+                continue
+            module_selections = self.sub_selections.get(module_id, {})
+            for component_id, is_component_active in module_selections.items():
+                if is_component_active:
+                    resolution_queue.append((module_id, component_id))
+
+        processed_component_states = set()
+        while resolution_queue:
+            current_module_id, current_component_id = resolution_queue.pop(0)
+            state_key = (current_module_id, current_component_id)
+            if state_key in processed_component_states: 
+                continue
+            processed_component_states.add(state_key)
+            
+            module_instance = self.module_map.get(current_module_id)
+            if not module_instance: 
+                continue
+            
+            # Get dependencies for THIS specific component (e.g. 'dotfiles' requires 'stow')
+            component_dependencies = module_instance.get_component_dependencies(current_component_id)
+            for dependency_id in component_dependencies:
+                if dependency_id not in self.module_map or dependency_id == current_module_id:
+                    continue
+                
+                new_auto_locked_set.add(dependency_id)
+                
+                # If the dependency isn't manually selected, we must process its 
+                # core binary requirements recursively.
+                if dependency_id not in self.selected:
+                    resolution_queue.append((dependency_id, "binary"))
+                    
+                    # Ensure it has basic selection state if it is newly locked
+                    if dependency_id not in self.auto_locked:
+                        self.expanded[dependency_id] = True
+                        if dependency_id not in self.sub_selections:
+                            self.sub_selections[dependency_id] = {'binary': True}
+                            
+                            # Recursively enable mandatory sub-components for the dependency
+                            dependency_module = self.module_map[dependency_id]
+                            if hasattr(dependency_module, 'sub_components') and dependency_module.sub_components:
+                                self._set_sub_selection_recursive(dependency_id, dependency_module.sub_components, True)
+
+        # Cleanup orphaned dependencies and their associated states
         orphaned_dependency_ids = self.auto_locked - new_auto_locked_set - self.selected
         for module_id in orphaned_dependency_ids:
             self.expanded[module_id] = False

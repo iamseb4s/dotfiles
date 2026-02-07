@@ -18,6 +18,11 @@ class NeovimModule(Module):
     }
     
     dependencies = {
-        "arch": [],
-        "ubuntu": ["bob", "unzip"]
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["bob", "unzip"],
+            "dot_deps": ["stow"]
+        }
     }

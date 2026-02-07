@@ -92,6 +92,41 @@ class Module:
         """Resolves dependencies based on OS if a dict is provided."""
         return self._resolve_distro_value(self.dependencies, default=[])
 
+    def get_component_dependencies(self, component_id):
+        """
+        Resolves dependencies for a specific sub-component, binary, or dotfiles.
+        """
+        # 1. Handle primary components
+        if component_id == "binary":
+            resolved_deps = self.get_dependencies()
+            # Support granular dictionary format: {"bin_deps": [...], "dot_deps": [...]}
+            if isinstance(resolved_deps, dict):
+                return resolved_deps.get("bin_deps", [])
+            return resolved_deps
+
+        if component_id == "dotfiles":
+            resolved_deps = self.get_dependencies()
+            dot_deps = []
+            if isinstance(resolved_deps, dict):
+                dot_deps.extend(resolved_deps.get("dot_deps", []))
+            return list(set(dot_deps))
+
+        # 2. Handle sub-components defined in self.sub_components
+        def find_component(components):
+            for component in components:
+                if component.get("id") == component_id:
+                    return component
+                if "children" in component:
+                    found = find_component(component["children"])
+                    if found: return found
+            return None
+
+        component = find_component(self.sub_components)
+        if component and "dependencies" in component:
+            return self._resolve_distro_value(component["dependencies"], default=[])
+
+        return []
+
     def get_manager(self):
         """Resolves the package manager based on OS or direct value."""
         return self._resolve_distro_value(self.manager, default="system")
