@@ -606,12 +606,53 @@ class SelectorScreen(Screen):
         if not modal: return None
         result = modal.handle_input(key)
         if isinstance(modal, OptionsModal) and result == "ACCEPT":
-            module = self.flat_items[self.cursor_index]['obj']; override = modal.get_overrides()
-            if not override['install_package'] and not (module.stow_package and override['install_dotfiles']):
-                self.selected.discard(module.id); self.overrides.pop(module.id, None)
-            else: self.selected.add(module.id); self.overrides[module.id] = override
+            module = self.flat_items[self.cursor_index]['obj']
+            override = modal.get_overrides()
+            
+            # 1. Determine if the module should remain selected (has at least one active component)
+            has_active_components = override['install_package'] or (module.has_usable_dotfiles() and override['install_dotfiles'])
+            
+            if not has_active_components:
+                self.selected.discard(module.id)
+                self.overrides.pop(module.id, None)
+                self.sub_selections.pop(module.id, None)
+                self.expanded[module.id] = False
+            else:
+                self.selected.add(module.id)
+                self.expanded[module.id] = True # Fix: Auto-expand to show sub-components
+                
+                # 2. Sync sub_selections for the recursive dependency engine
+                if module.id not in self.sub_selections:
+                    self.sub_selections[module.id] = {}
+                
+                self.sub_selections[module.id]['binary'] = override['install_package']
+                if module.has_usable_dotfiles():
+                    self.sub_selections[module.id]['dotfiles'] = override['install_dotfiles']
+                
+                # Enable hierarchical sub-components if it's a first-time selection via modal
+                if hasattr(module, 'sub_components') and module.sub_components:
+                    # We only force default sub-selections if the module wasn't previously fully configured
+                    if not any(k not in ['binary', 'dotfiles'] for k in self.sub_selections[module.id]):
+                        self._set_sub_selection_recursive(module.id, module.sub_components, True)
+
+                # 3. Detect if anything was modified compared to defaults to decide color (Yellow vs Blue)
+                is_modified = (
+                    override['package_name'] != module.get_package_name() or
+                    override['manager'] != module.get_manager() or
+                    override['stow_target'] != module.stow_target or
+                    not override['install_package'] or # Modification: Binary disabled
+                    (module.has_usable_dotfiles() and not override['install_dotfiles']) # Modification: Dotfiles disabled
+                )
+                
+                if is_modified:
+                    self.overrides[module.id] = override
+                else:
+                    # If nothing was modified, remove from overrides to revert color to standard Blue
+                    self.overrides.pop(module.id, None)
+
             self.modal = None
             self._structure_needs_rebuild = True
+            self._info_cache.clear() # Invalidate cache as state changed
             TUI.push_notification(f"Changes saved for {module.label}", type="INFO")
         elif isinstance(modal, ReviewModal) and result == "INSTALL": self.modal = None; return "CONFIRM"
         elif isinstance(modal, ConfirmModal) and result == "YES":
