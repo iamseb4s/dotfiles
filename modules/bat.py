@@ -11,7 +11,15 @@ class BatModule(Module):
         "ubuntu": "cargo"
     }
     
-    package_name = "bat"
+    package_name = {
+        "arch": "bat",
+        "ubuntu": "bat"
+    }
+    
+    binary_names = {
+        "ubuntu": ["batcat", "bat"],
+        "default": "bat"
+    }
     
     dependencies = {
         "arch": {
