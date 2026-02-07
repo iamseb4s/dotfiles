@@ -16,7 +16,9 @@ class RustModule(Module):
     
     dependencies = {
         "arch": [],
-        "ubuntu": ["build_tools", "openssl", "curl", "git"]
+        "ubuntu": {
+            "bin_deps": ["build_tools", "openssl", "curl", "git"]
+        }
     }
 
     def is_installed(self):

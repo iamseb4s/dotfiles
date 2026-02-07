@@ -12,5 +12,7 @@ class BobModule(Module):
     }
     
     dependencies = {
-        "ubuntu": ["rust"]
+        "ubuntu": {
+            "bin_deps": ["rust"]
+        }
     }

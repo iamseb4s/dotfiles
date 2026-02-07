@@ -10,3 +10,9 @@ class GitModule(Module):
         "arch": "git",
         "ubuntu": "git"
     }
+    
+    dependencies = {
+        "default": {
+            "dot_deps": ["stow"]
+        }
+    }
