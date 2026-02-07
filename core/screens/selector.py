@@ -146,7 +146,7 @@ class SelectorScreen(Screen):
         requiring_module_labels = []
         for selected_id in self.selected:
             requiring_module = self.module_map.get(selected_id)
-            if requiring_module and module_id in requiring_module.get_dependencies():
+            if requiring_module and module_id in requiring_module.get_flat_dependencies():
                 requiring_module_labels.append(requiring_module.label)
 
         message_prefix = "Core package is required by"
@@ -450,7 +450,7 @@ class SelectorScreen(Screen):
             info_content_lines.append(row("Supported OS", supported_distros_text, Style.secondary() if is_supported else Style.muted()))
 
             # Resolved dependencies for the current distribution
-            resolved_dependencies = module.get_dependencies()
+            resolved_dependencies = module.get_flat_dependencies()
             dependency_labels = []
             for dependency_id in resolved_dependencies:
                 dependency_module = self.module_map.get(dependency_id)
