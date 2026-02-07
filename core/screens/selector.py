@@ -656,8 +656,17 @@ class SelectorScreen(Screen):
             TUI.push_notification(f"Changes saved for {module.label}", type="INFO")
         elif isinstance(modal, ReviewModal) and result == "INSTALL": self.modal = None; return "CONFIRM"
         elif isinstance(modal, ConfirmModal) and result == "YES":
-            self.selected.clear(); self.overrides.clear(); self.sub_selections.clear()
-            self.expanded = {cat: True for cat in self.category_names}; self.modal = None; return "WELCOME"
+            # Deep reset of all internal state to ensure a clean start on re-entry
+            self.selected.clear()
+            self.overrides.clear()
+            self.sub_selections.clear()
+            self.auto_locked.clear()
+            self._info_cache.clear()
+            self.expanded = {category: True for category in self.category_names}
+            self.cursor_index, self.list_scroll_offset, self.info_scroll_offset = 0, 0, 0
+            self._structure_needs_rebuild = True
+            self.modal = None
+            return "WELCOME"
         elif result in ["CANCEL", "CLOSE", "NO"]: self.modal = None
         return None
 
