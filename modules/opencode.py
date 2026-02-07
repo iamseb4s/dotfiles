@@ -13,8 +13,10 @@ class OpencodeModule(Module):
     package_name = "opencode"
     
     dependencies = {
-        "arch": ["curl"],
-        "ubuntu": ["curl"]
+        "default": {
+            "bin_deps": ["curl"],
+            "dot_deps": ["stow"]
+        }
     }
 
     def is_installed(self):

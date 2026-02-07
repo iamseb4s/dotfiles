@@ -16,8 +16,13 @@ class FzfModule(Module):
     package_name = "fzf"
     
     dependencies = {
-        "arch": [],
-        "ubuntu": ["git"]
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["git"],
+            "dot_deps": ["stow"]
+        }
     }
 
     def is_installed(self):

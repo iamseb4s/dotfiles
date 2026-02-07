@@ -14,6 +14,11 @@ class ZellijModule(Module):
     package_name = "zellij"
     
     dependencies = {
-        "arch": [],
-        "ubuntu": ["rust"]
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["rust"],
+            "dot_deps": ["stow"]
+        }
     }

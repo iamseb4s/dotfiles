@@ -14,6 +14,11 @@ class BatModule(Module):
     package_name = "bat"
     
     dependencies = {
-        "arch": [],
-        "ubuntu": ["rust"]
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["rust"],
+            "dot_deps": ["stow"]
+        }
     }

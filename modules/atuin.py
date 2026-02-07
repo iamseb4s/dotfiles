@@ -15,8 +15,13 @@ class AtuinModule(Module):
     package_name = "atuin"
     
     dependencies = {
-        "arch": [],
-        "ubuntu": ["rust"]
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["rust"],
+            "dot_deps": ["stow"]
+        }
     }
 
     sub_components = [

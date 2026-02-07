@@ -7,7 +7,15 @@ class GitHubCLIModule(Module):
     category = "Tools"
     
     package_name = {"arch": "github-cli", "ubuntu": "gh"}
-    dependencies = {"arch": [], "ubuntu": ["wget"]}
+    dependencies = {
+        "arch": {
+            "dot_deps": ["stow"]
+        },
+        "ubuntu": {
+            "bin_deps": ["wget"],
+            "dot_deps": ["stow"]
+        }
+    }
 
     def install(self, override=None, callback=None, input_callback=None, password=None):
         if self.system_manager.is_arch:
