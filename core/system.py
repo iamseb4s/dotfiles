@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import select
+import shlex
 
 class System:
     """
@@ -59,6 +60,10 @@ class System:
                 elif password and "sudo -S" not in command:
                     command = command.replace("sudo", "sudo -S", 1)
         
+        # If command is a string and shell=False, we must split it to avoid [Errno 2]
+        if isinstance(command, str) and not shell:
+            command = shlex.split(command)
+
         try:
             if callback:
                 # Use binary mode to avoid TextIOWrapper buffering issues
