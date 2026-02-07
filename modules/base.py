@@ -116,6 +116,17 @@ class Module:
         """Resolves dependencies based on OS if a dict is provided."""
         return self._resolve_distro_value(self.dependencies, default=[])
 
+    def get_flat_dependencies(self):
+        """Returns a flattened list of all dependency IDs for the current distribution."""
+        resolved = self.get_dependencies()
+        if isinstance(resolved, dict):
+            flattened = []
+            for value in resolved.values():
+                if isinstance(value, list):
+                    flattened.extend(value)
+            return list(set(flattened))
+        return resolved if isinstance(resolved, list) else []
+
     def get_component_dependencies(self, component_id):
         """
         Resolves dependencies for a specific sub-component, binary, or dotfiles.
