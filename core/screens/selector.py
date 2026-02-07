@@ -649,7 +649,8 @@ class SelectorScreen(Screen):
             if module_id not in self.selected:
                 self.selected.add(module_id)
                 self.expanded[module_id] = True # Ensure expanded if a child is picked
-                self.sub_selections[module_id] = {}
+                if module_id not in self.sub_selections:
+                    self.sub_selections[module_id] = {}
             
             # Get current state or default
             current_state = self.sub_selections[module_id].get(component['id'], component.get('default', True))
@@ -664,7 +665,7 @@ class SelectorScreen(Screen):
             if new_state:
                 self._ensure_parent_path_enabled(module_id, component['id'])
             else:
-                if not any(self.sub_selections[module_id].values()):
+                if not any(self.sub_selections.get(module_id, {}).values()) and module_id not in self.auto_locked:
                     self.selected.discard(module_id)
                     self.expanded[module_id] = False
 
