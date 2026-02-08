@@ -83,8 +83,9 @@ class ZshModule(Module):
         if sub_selections.get("chsh", True):
             zsh_path = shutil.which("zsh")
             if zsh_path:
-                if callback: callback(f"Changing default shell to {zsh_path}...")
-                if not self.system_manager.run(["chsh", "-s", zsh_path], needs_root=True, password=password, callback=callback, input_callback=input_callback):
+                username = os.environ.get("USER") or os.getlogin()
+                if callback: callback(f"Changing default shell to {zsh_path} for user '{username}'...")
+                if not self.system_manager.run(["chsh", "-s", zsh_path, username], needs_root=True, password=password, callback=callback, input_callback=input_callback):
                     return False
 
         return True
