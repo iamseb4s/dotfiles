@@ -29,6 +29,9 @@ class Module:
     # Hierarchical sub-components
     sub_components = []
 
+    # Protected parent directories that should never be removed recursively.
+    PROTECTED_PARENTS = {".config", ".local", ".cache", "bin", "share", "include", "lib"}
+
     def __init__(self, system_manager: System):
         self.system_manager = system_manager
         # Auto-resolve stow_package to match module id
@@ -107,10 +110,10 @@ class Module:
         package_name = self.get_package_name()
         # We take the first part as a heuristic for the main executable
         if package_name:
-            main_name = package_name.split()[0]
+            main_name = str(package_name).split()[0]
             return [main_name]
             
-        return [self.id]
+        return [str(self.id)] if self.id else []
 
     def get_dependencies(self):
         """Resolves dependencies based on OS if a dict is provided."""
@@ -228,19 +231,19 @@ class Module:
         # 1. Manager-specific detection
         if manager == "system":
             # Try robust OS package manager detection
-            if self.system_manager.is_package_installed(package):
+            if self.system_manager.is_package_installed(str(package)) if package else False:
                 result = True
         elif manager == "cargo":
             result = os.path.exists(os.path.expanduser(f"~/.cargo/bin/{self.id}"))
         elif manager == "bob":
             result = shutil.which("nvim") is not None
         elif manager == "brew":
-            result = shutil.which("brew") and self.system_manager.run(f"brew list {package}", shell=True)
+            result = shutil.which("brew") is not None and self.system_manager.run(f"brew list {package}", shell=True)
         
         # 2. Universal PATH fallback
         if not result:
             for binary_name in self.get_binary_names():
-                if shutil.which(binary_name) is not None:
+                if binary_name and shutil.which(str(binary_name)) is not None:
                     result = True
                     break
         
@@ -290,6 +293,41 @@ class Module:
             
         return self.run_stow(self.stow_package, self.stow_target, callback=callback, input_callback=input_callback, password=password)
 
+    def _safe_cleanup(self, source_dir, target_dir, callback=None):
+        """
+        Recursively cleans up conflicts in the target directory before stowing.
+        Protects common parent directories like .config from being removed entirely.
+        """
+        if not os.path.exists(source_dir):
+            return
+            
+        for entry in os.listdir(source_dir):
+            source_path = os.path.join(source_dir, entry)
+            target_path = os.path.join(target_dir, entry)
+            
+            if not os.path.lexists(target_path):
+                continue
+                
+            # If target is a symlink (broken or not), it's safe to remove
+            if os.path.islink(target_path):
+                os.remove(target_path)
+                continue
+                
+            # If target is a directory
+            if os.path.isdir(target_path):
+                # If it's a protected parent, descend into it instead of deleting it
+                if entry in self.PROTECTED_PARENTS:
+                    self._safe_cleanup(source_path, target_path, callback)
+                else:
+                    # It's an application-specific directory (e.g., ~/.config/lazygit)
+                    # Safe to remove recursively to let stow create its own symlink
+                    if callback: callback(f"Cleaning up directory {entry} in target...")
+                    shutil.rmtree(target_path)
+            else:
+                # It's a regular file that conflicts with a source file/dir
+                if callback: callback(f"Cleaning up file {entry} in target...")
+                os.remove(target_path)
+
     def run_stow(self, package_name, target=None, callback=None, input_callback=None, password=None):
         """Standard GNU Stow wrapper with cleanup of existing files."""
         dotfiles_directory = os.path.join(os.getcwd(), "dots")
@@ -304,14 +342,7 @@ class Module:
 
         # Cleanup: Remove existing files/dirs or broken symlinks that would cause Stow conflicts
         try:
-            for entry in os.listdir(package_source_directory):
-                target_path = os.path.join(target_directory, entry)
-                if os.path.lexists(target_path) and (not os.path.islink(target_path) or not os.path.exists(target_path)):
-                    if callback: callback(f"Cleaning up existing {entry} in target...")
-                    if os.path.isdir(target_path) and not os.path.islink(target_path):
-                        shutil.rmtree(target_path)
-                    else:
-                        os.remove(target_path)
+            self._safe_cleanup(package_source_directory, target_directory, callback)
         except Exception as error:
             if callback: callback(f"Cleanup warning: {error}")
 
