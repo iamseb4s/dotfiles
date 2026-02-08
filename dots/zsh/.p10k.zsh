@@ -209,9 +209,18 @@ typeset -g POWERLEVEL9K_EMPTY_LINE_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=
 
 
 #################################[ os_icon: os identifier ]##################################
-# OS identifier color.
-typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#eeeeee'
-typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#fe640b'
+  # OS identifier color.
+  typeset -g POWERLEVEL9K_OS_ICON_FOREGROUND='#eeeeee'
+  # OS identifier background color based on the current distribution.
+  () {
+    local os_id
+    [[ -f /etc/os-release ]] && os_id=$(. /etc/os-release && echo $ID)
+    case "$os_id" in
+      arch)   typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#1793d1' ;; # Arch Blue
+      ubuntu) typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#fe640b' ;; # Ubuntu Orange
+      *)      typeset -g POWERLEVEL9K_OS_ICON_BACKGROUND='#1e1e2e' ;; # Default
+    esac
+  }
 # Custom icon.
 # typeset -g POWERLEVEL9K_OS_ICON_CONTENT_EXPANSION='⭐'
 
