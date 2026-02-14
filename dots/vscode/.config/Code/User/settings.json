@@ -1,0 +1,146 @@
+{
+    "workbench.colorTheme": "One Dark Pro Darker",
+    "workbench.colorCustomizations": {
+        "scrollbarSlider.background": "#FFFFFF4D", // (30%)
+        "scrollbarSlider.hoverBackground": "#FFFFFF99", // (60%)
+        "scrollbarSlider.activeBackground": "#FFFFFFCC" // (80%)
+    },
+    "editor.wordWrap": "on",
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "workbench.iconTheme": "material-icon-theme",
+    "editor.fontFamily": "'Hack Nerd Font Mono', 'monospace', monospace",
+    "editor.fontWeight": "500",
+    "editor.fontSize": 14.5,
+    "gitlens.defaultDateShortFormat": "DD/MM/YYYY",
+    "gitlens.defaultDateFormat": "Do MMMM, YYYY hh:mma",
+    "gitlens.defaultDateLocale": "en-US",
+    "gitlens.defaultTimeFormat": "hh:mma",
+    "diffEditor.ignoreTrimWhitespace": true,
+    "editor.minimap.enabled": false,
+    "editor.overviewRulerBorder": false,
+    "editor.scrollbar.vertical": "auto",
+    "editor.hideCursorInOverviewRuler": true,
+    "editor.glyphMargin": false,
+    "editor.cursorWidth": 2,
+    "editor.cursorSurroundingLines": 10,
+    "python.analysis.completeFunctionParens": true,
+    "terminal.integrated.fontFamily": "Hack Nerd Font Mono",
+    "security.workspace.trust.untrustedFiles": "newWindow",
+    "notebook.cellToolbarLocation": {
+        "default": "right",
+        "jupyter-notebook": "right"
+    },
+    "editor.largeFileOptimizations": false,
+    "[python]": {
+        "editor.formatOnType": true,
+        "diffEditor.ignoreTrimWhitespace": false
+    },
+    "editor.detectIndentation": false,
+    "editor.inlineSuggest.showToolbar": "always",
+    "editor.stickyScroll.enabled": true,
+    "workbench.tree.enableStickyScroll": true,
+    "notebook.stickyScroll.enabled": true,
+    "editor.cursorBlinking": "expand",
+    "editor.linkedEditing": true,
+    "editor.guides.bracketPairs": "active",
+    "markdown-preview-enhanced.previewTheme": "github-dark.css",
+    "notebook.output.fontFamily": "Hack Nerd Font Mono",
+    "terminal.integrated.inheritEnv": false,
+    "accessibility.signals.lineHasFoldedArea": {
+        "sound": "on"
+    },
+    "accessibility.signals.lineHasBreakpoint": {
+        "sound": "on"
+    },
+    "accessibility.signals.lineHasInlineSuggestion": {
+        "sound": "on"
+    },
+    "accessibility.signals.terminalQuickFix": {
+        "sound": "on"
+    },
+    "accessibility.signals.onDebugBreak": {
+        "sound": "on"
+    },
+    "accessibility.signals.noInlayHints": {
+        "sound": "on"
+    },
+    "accessibility.signals.taskCompleted": {
+        "sound": "on"
+    },
+    "accessibility.signals.taskFailed": {
+        "sound": "on"
+    },
+    "accessibility.signals.terminalCommandFailed": {
+        "sound": "on"
+    },
+    "accessibility.signals.notebookCellCompleted": {
+        "sound": "on"
+    },
+    "accessibility.signals.notebookCellFailed": {
+        "sound": "on"
+    },
+    "accessibility.signals.diffLineInserted": {
+        "sound": "on"
+    },
+    "accessibility.signals.diffLineDeleted": {
+        "sound": "on"
+    },
+    "accessibility.signals.diffLineModified": {
+        "sound": "on"
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell"
+        },
+        "Command Prompt": {
+            "path": [
+                "${env:windir}\\Sysnative\\cmd.exe",
+                "${env:windir}\\System32\\cmd.exe"
+            ],
+            "args": [],
+            "icon": "terminal-cmd"
+        },
+        "Git Bash": {
+            "source": "Git Bash"
+        }
+    },
+    "terminal.integrated.fontWeightBold": "bold",
+    "workbench.editorAssociations": {
+        "{git,gitlens,conflictResolution,vscode-local-history}:/**/*.tc.json": "default",
+        "*.copilotmd": "vscode.markdown.preview.editor",
+        "*.csv": "default"
+    },
+    "remote.SSH.remotePlatform": {
+        "192.168.1.50": "linux"
+    },
+    "github.copilot.chat.localeOverride": "es",
+    "notebook.defaultFormatter": "esbenp.prettier-vscode",
+    "github.copilot.enable": {
+        "markdown": true
+    },
+    "diffEditor.codeLens": true,
+    "accessibility.dimUnfocused.enabled": true,
+    "accessibility.dimUnfocused.opacity": 0.5,
+    "[markdown]": {
+        "diffEditor.ignoreTrimWhitespace": false,
+        "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+    },
+    "terminal.integrated.defaultProfile.linux": "zsh",
+    "breadcrumbs.enabled": false,
+    "redhat.telemetry.enabled": false,
+    "workbench.editor.decorations.colors": false,
+    "chat.extensionTools.enabled": false,
+    "git.autofetch": true,
+    "workbench.secondarySideBar.defaultVisibility": "hidden",
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "terminal.integrated.enableMultiLinePasteWarning": "never",
+    "gitlens.advanced.messages": {
+        "suppressLineUncommittedWarning": true
+    },
+    "ActiveFileInStatusBar.enable": true
+}
