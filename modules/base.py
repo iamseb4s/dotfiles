@@ -335,6 +335,20 @@ class Module:
                 if callback: callback(f"Cleaning up file {entry} in target...")
                 os.remove(target_path)
 
+    def cleanup(self, path, callback=None):
+        """Safely removes a temporary build or installation directory."""
+        if path and os.path.exists(path):
+            if callback: callback(f"Cleaning up temporary files at {path}...")
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                return True
+            except Exception as e:
+                if callback: callback(f"Warning: Failed to cleanup {path}: {e}")
+        return False
+
     def run_stow(self, package_name, target=None, callback=None, input_callback=None, password=None):
         """Standard GNU Stow wrapper with cleanup of existing files."""
         dotfiles_directory = os.path.join(os.getcwd(), "dots")

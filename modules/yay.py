@@ -53,8 +53,7 @@ class YayModule(Module):
         success = self.system_manager.run(install_cmd, shell=True, callback=callback, input_callback=input_callback)
 
         # Cleanup build directory
-        if os.path.exists(build_dir):
-            shutil.rmtree(build_dir)
+        self.cleanup(build_dir, callback)
 
         return success
 
