@@ -159,6 +159,21 @@ class System:
             print(f"OS {self.os_id} not supported for package installation.")
             return False
 
+    def install_aur_package(self, package_name, callback=None, input_callback=None, password=None):
+        """Installs a package from AUR using yay."""
+        if not self.is_arch:
+            return False
+        
+        if not package_name: return True
+        
+        # Check if yay is installed
+        import shutil
+        if not shutil.which("yay"):
+            if callback: callback("ERROR: yay is not installed. Cannot install AUR package.")
+            return False
+
+        return self.run(f"yay -S --noconfirm --needed {package_name}", shell=True, callback=callback, input_callback=input_callback, password=password)
+
     def is_package_installed(self, package_name):
         """Checks if a system package is installed using the OS package manager."""
         if not package_name: return False
