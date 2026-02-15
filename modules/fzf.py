@@ -6,7 +6,7 @@ class FzfModule(Module):
     id = "fzf"
     label = "Fzf"
     description = "A command-line fuzzy finder"
-    category = "Tools"
+    category = "CLI Tools"
     
     manager = {
         "arch": "system",

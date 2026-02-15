@@ -4,7 +4,7 @@ class ZellijModule(Module):
     id = "zellij"
     label = "Zellij"
     description = "A terminal workspace with batteries included"
-    category = "Tools"
+    category = "Terminal"
     
     manager = {
         "arch": "system",

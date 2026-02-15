@@ -5,7 +5,7 @@ class AtuinModule(Module):
     id = "atuin"
     label = "Atuin"
     description = "Magical shell history replaced with a SQLite database"
-    category = "Tools"
+    category = "CLI Tools"
     
     manager = {
         "arch": "system",

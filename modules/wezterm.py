@@ -5,7 +5,7 @@ class WezTermModule(Module):
     id = "wezterm"
     label = "WezTerm"
     description = "A GPU-accelerated cross-platform terminal emulator and multiplexer"
-    category = "Tools"
+    category = "Terminal"
     
     package_name = "wezterm"
     

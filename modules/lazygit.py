@@ -6,7 +6,7 @@ class LazygitModule(Module):
     id = "lazygit"
     label = "Lazygit"
     description = "A simple terminal UI for git commands"
-    category = "Tools"
+    category = "Development"
     
     # On Arch we use pacman; on Ubuntu we use a custom binary installer
     manager = {
