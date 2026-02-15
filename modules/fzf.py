@@ -17,10 +17,11 @@ class FzfModule(Module):
     
     dependencies = {
         "arch": {
+            "bin_deps": ["fd"],
             "dot_deps": ["stow"]
         },
         "ubuntu": {
-            "bin_deps": ["git"],
+            "bin_deps": ["git", "fd"],
             "dot_deps": ["stow"]
         }
     }

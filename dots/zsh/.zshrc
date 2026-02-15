@@ -7,6 +7,24 @@ fi
 
 
 # ======================
+# Helper Functions
+# ======================
+# Append to PATH only if directory exists and isn't already there
+path_append() {
+    if [[ -d "$1" ]] && [[ ":$PATH:" != *":$1:"* ]]; then
+        export PATH="${PATH:+"$PATH:"}$1"
+    fi
+}
+
+# Prepend to PATH only if directory exists and isn't already there
+path_prepend() {
+    if [[ -d "$1" ]] && [[ ":$PATH:" != *":$1:"* ]]; then
+        export PATH="$1${PATH:+":$PATH"}"
+    fi
+}
+
+
+# ======================
 # Oh-My-Zsh Configuration
 # ======================
 export ZSH="$HOME/.oh-my-zsh"
@@ -43,34 +61,96 @@ fi
 
 
 # ======================
+# Environment & Tools
+# ======================
+# Standard paths
+path_prepend "/usr/local/bin"
+path_prepend "/usr/local/sbin"
+
+# Tool-specific paths
+path_prepend "$HOME/anaconda3/bin"
+path_prepend "$HOME/.npm-global/bin"
+path_prepend "$HOME/.bun/bin"
+path_prepend "$HOME/.opencode/bin"
+path_prepend "$HOME/.spicetify"
+path_prepend "$HOME/.fzf/bin"
+
+# Environment Variables
+export BUN_INSTALL="$HOME/.bun"
+export FZF_DEFAULT_OPTS_FILE="$HOME/.config/fzf/fzf.conf"
+export FZF_DEFAULT_OPTS="--bind='focus:'"
+
+# Preferred editor
+if [[ -n $SSH_CONNECTION ]]; then
+  export EDITOR='nvim'
+else
+  export EDITOR='code --wait'
+fi
+
+
+# ======================
 # Aliases
 # ======================
+# --- System & Config ---
 alias zshconfig="nvim ~/.zshrc"
 alias ohmyzsh="nvim ~/.oh-my-zsh"
 
-# Ubuntu
-alias aptu="sudo apt update && sudo apt upgrade && sudo apt autoremove"
-alias apti="sudo apt install"
-alias aptc="sudo apt clean && sudo apt autoclean && sudo apt autoremove"
-alias aptr="sudo apt purge"
+# --- Package Manager (Distribution-aware) ---
+if command -v pacman >/dev/null 2>&1; then
+    # Arch Linux
+    alias pacu="sudo pacman -Syu"
+    alias paci="sudo pacman -S"
+    alias pacr="sudo pacman -Rs"
+    alias pacc="sudo pacman -Sc"
+    # AUR (yay)
+    if command -v yay >/dev/null 2>&1; then
+        alias yu="yay -Syu"
+        alias yi="yay -S"
+        alias yr="yay -Rs"
+    fi
+elif command -v apt >/dev/null 2>&1; then
+    # Ubuntu
+    alias aptu="sudo apt update && sudo apt upgrade && sudo apt autoremove"
+    alias apti="sudo apt install"
+    alias aptc="sudo apt clean && sudo apt autoclean && sudo apt autoremove"
+    alias aptr="sudo apt purge"
+fi
 
-# Modern CLI
-# eza
+# --- Modern CLI Tools ---
+# ls / tree (eza)
 alias ls='eza --icons --group-directories-first --git'
 alias tree='eza --tree --icons --group-directories-first --git'
 
 # nvim
 alias nv='nvim'
 
-# bat (batcat)
-alias bat="batcat"
+# bat / batcat
+if command -v batcat >/dev/null 2>&1; then
+    alias bat="batcat"
+elif command -v bat >/dev/null 2>&1; then
+    unalias bat 2>/dev/null
+fi
 alias batc='bat --paging=never'
 
-# fzf
+# fzf basic
 alias fp='fzf'
-alias fnv='nvim $(fzf --preview="batcat {}")'
-alias fcd='cd "$(fdfind --type d --hidden --no-ignore --exclude .git | fzf --preview="eza --tree --icons --color=always --group-directories-first --git {}")"'
+if command -v fdfind >/dev/null 2>&1; then
+    alias fd="fdfind"
+elif command -v fd >/dev/null 2>&1; then
+    unalias fd 2>/dev/null
+fi
 
+# fzf search functions (with fd fallback)
+if command -v fd >/dev/null 2>&1 || command -v fdfind >/dev/null 2>&1; then
+    alias fnv='nvim $(fd --type f --hidden --no-ignore --exclude .git | fzf --preview="bat --color=always {}")'
+    alias fcd='cd "$(fd --type d --hidden --no-ignore --exclude .git | fzf --preview="eza --tree --icons --color=always --group-directories-first --git {}")"'
+else
+    # Fallback to standard find if fd is missing
+    alias fnv='nvim $(find . -maxdepth 3 -not -path "*/.*" | fzf --preview="bat --color=always {}")'
+    alias fcd='cd "$(find . -maxdepth 3 -type d -not -path "*/.*" | fzf --preview="eza --tree --icons --color=always --group-directories-first --git {}")"'
+fi
+
+# --- Development ---
 # Git
 alias lg='lazygit'
 
@@ -84,50 +164,25 @@ alias docoup="docker compose up -d"
 alias docodown="docker compose down"
 alias docobuild="docker compose build --no-cache"
 
-# zellij
+# Zellij
 alias z='zellij'
-
-
-# ======================
-# Environment & Tools
-# ======================
-# Conda
-export PATH=$HOME/anaconda3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/bin:$PATH
-
-# NPM
-export PATH=$HOME/.npm-global/bin:$PATH
-
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# fzf
-export FZF_DEFAULT_OPTS_FILE="$HOME/.config/fzf/fzf.conf"
-export FZF_DEFAULT_OPTS="--bind='focus:'"
-
-# Opencode
-export PATH=$HOME/.opencode/bin:$PATH
-
-# Preferred editor for local and remote sessions
-if [[ -n $SSH_CONNECTION ]]; then
-  export EDITOR='nvim'
-else
-  export EDITOR='code --wait'
-fi
 
 
 # ======================
 # Terminal Configuration
 # ======================
-# fzf
-[[ ! "$PATH" == *"$HOME/.fzf/bin"* ]] && export PATH="${PATH:+${PATH}:}$HOME/.fzf/bin"
-command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
+# fzf initialization
+if command -v fzf >/dev/null 2>&1; then
+    source <(fzf --zsh)
+fi
 
 # bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
-# atuin
-command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh)"
+# atuin initialization
+if command -v atuin >/dev/null 2>&1; then
+    eval "$(atuin init zsh)"
+fi
 
 
 # >>> conda initialize >>>
@@ -173,5 +228,3 @@ if [[ -n $ZELLIJ ]]; then
     add-zsh-hook precmd  zellij_tab_name_update
     add-zsh-hook preexec zellij_tab_name_update
 fi
-
-
