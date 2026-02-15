@@ -11,7 +11,16 @@ class VscodeModule(Module):
         "arch": "visual-studio-code-bin"
     }
 
+    manager = {
+        "arch": "yay",
+        "default": "system"
+    }
+
     dependencies = {
+        "arch": {
+            "bin_deps": ["yay"],
+            "dot_deps": ["stow"]
+        },
         "default": {
             "dot_deps": ["stow"]
         }
@@ -34,21 +43,6 @@ class VscodeModule(Module):
             "default": True
         }
     ]
-
-    def install(self, override=None, callback=None, input_callback=None, password=None):
-        """Installation logic for VS Code."""
-        sub_selections = override.get('sub_selections', {}) if override else {}
-        if not sub_selections.get('binary', True):
-            return True
-
-        if self.system_manager.is_arch:
-            package = self.get_package_name()
-            if callback: callback(f"Installing {package} from AUR using yay...")
-            # Using yay for AUR packages on Arch
-            return self.system_manager.run(f"yay -S --noconfirm --needed {package}", shell=True, callback=callback, input_callback=input_callback)
-        
-        # Fallback to base system manager (not implemented for other distros yet as per user request)
-        return super().install(override, callback, input_callback, password)
 
     def configure(self, override=None, callback=None, input_callback=None, password=None):
         """Deploy dotfiles and install extensions."""
