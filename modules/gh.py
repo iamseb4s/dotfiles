@@ -4,7 +4,7 @@ class GitHubCLIModule(Module):
     id = "gh"
     label = "GitHub CLI"
     description = "GitHub's official command line tool"
-    category = "Tools"
+    category = "Development"
     
     package_name = {"arch": "github-cli", "ubuntu": "gh"}
     dependencies = {

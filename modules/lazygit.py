@@ -6,7 +6,7 @@ class LazygitModule(Module):
     id = "lazygit"
     label = "Lazygit"
     description = "A simple terminal UI for git commands"
-    category = "Tools"
+    category = "Development"
     
     # On Arch we use pacman; on Ubuntu we use a custom binary installer
     manager = {
@@ -72,7 +72,7 @@ class LazygitModule(Module):
             success = self.system_manager.run(install_cmd, needs_root=True, callback=callback, input_callback=input_callback, password=password)
             
             # Cleanup
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            self.cleanup(temp_dir, callback)
             
             return success
             

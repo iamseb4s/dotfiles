@@ -6,7 +6,7 @@ class FdModule(Module):
     """
     id = "fd"
     label = "fd-find"
-    category = "Modern CLI"
+    category = "CLI Tools"
     description = "A simple, fast and user-friendly alternative to 'find'."
     
     package_name = {

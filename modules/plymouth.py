@@ -48,8 +48,8 @@ class PlymouthModule(Module):
         # 2. Install Catppuccin theme from AUR
         if sub_selections.get("theme", True):
             theme_pkg = "plymouth-theme-catppuccin-mocha-git"
-            if callback: callback(f"Installing {theme_pkg} from AUR using yay...")
-            if not self.system_manager.run(f"yay -S --noconfirm --needed {theme_pkg}", shell=True, callback=callback, input_callback=input_callback):
+            if callback: callback(f"Installing {theme_pkg} from AUR...")
+            if not self.system_manager.install_aur_package(theme_pkg, callback=callback, input_callback=input_callback):
                 return False
 
         return True

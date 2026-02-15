@@ -6,7 +6,7 @@ class FzfModule(Module):
     id = "fzf"
     label = "Fzf"
     description = "A command-line fuzzy finder"
-    category = "Tools"
+    category = "CLI Tools"
     
     manager = {
         "arch": "system",
@@ -14,6 +14,11 @@ class FzfModule(Module):
     }
     
     package_name = "fzf"
+    
+    binary_names = {
+        "ubuntu": ["fzf", os.path.expanduser("~/.fzf/bin/fzf")],
+        "default": "fzf"
+    }
     
     dependencies = {
         "arch": {
@@ -25,16 +30,6 @@ class FzfModule(Module):
             "dot_deps": ["stow"]
         }
     }
-
-    def is_installed(self):
-        """Custom detection for fzf."""
-        # 1. Check if fzf is in PATH
-        if shutil.which("fzf"):
-            return True
-            
-        # 2. Check standard git installation location
-        fzf_bin = os.path.expanduser("~/.fzf/bin/fzf")
-        return os.path.exists(fzf_bin)
 
     def install(self, override=None, callback=None, input_callback=None, password=None):
         if self.system_manager.is_arch:

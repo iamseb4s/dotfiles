@@ -4,7 +4,7 @@ class BtopModule(Module):
     id = "btop"
     label = "Btop"
     description = "Resource monitor that shows usage and stats for processor, memory, disks, network and processes"
-    category = "Tools"
+    category = "CLI Tools"
     
     package_name = {
         "arch": "btop",

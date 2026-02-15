@@ -4,7 +4,7 @@ class FastfetchModule(Module):
     id = "fastfetch"
     label = "Fastfetch"
     description = "A maintained, feature-rich and performance oriented, system information tool"
-    category = "Tools"
+    category = "CLI Tools"
     
     package_name = {
         "arch": "fastfetch",

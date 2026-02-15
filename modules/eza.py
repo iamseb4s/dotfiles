@@ -4,7 +4,7 @@ class EzaModule(Module):
     id = "eza"
     label = "Eza"
     description = "A modern, maintained replacement for 'ls'"
-    category = "Tools"
+    category = "CLI Tools"
     
     manager = {
         "arch": "system",

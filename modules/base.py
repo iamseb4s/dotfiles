@@ -174,14 +174,19 @@ class Module:
         Determines if the module is supported on the current distribution.
         Checks both package_name and manager dictionaries.
         """
-        # 1. Check package_name mapping
+        # 1. Handle special managers
+        manager = self.get_manager()
+        if manager == "yay" and not self.system_manager.is_arch:
+            return False
+
+        # 2. Check package_name mapping
         if isinstance(self.package_name, dict):
             has_specific = self.system_manager.os_id in self.package_name
             has_family = (self.system_manager.is_arch and "arch" in self.package_name) or (self.system_manager.is_debian and "debian" in self.package_name)
             if not has_specific and not has_family:
                 return False
         
-        # 2. Check manager mapping
+        # 3. Check manager mapping
         if isinstance(self.manager, dict):
             has_specific = self.system_manager.os_id in self.manager
             has_family = (self.system_manager.is_arch and "arch" in self.manager) or (self.system_manager.is_debian and "debian" in self.manager)
@@ -229,7 +234,7 @@ class Module:
         
         result = False
         # 1. Manager-specific detection
-        if manager == "system":
+        if manager == "system" or manager == "yay":
             # Try robust OS package manager detection
             if self.system_manager.is_package_installed(str(package)) if package else False:
                 result = True
@@ -269,6 +274,8 @@ class Module:
             callback=callback,
             input_callback=input_callback,
             password=password)
+        elif manager == "yay":
+            return self.system_manager.install_aur_package(package, callback=callback, input_callback=input_callback, password=password)
         elif manager == "cargo":
             return self.system_manager.run(f"cargo install {package}", shell=True, callback=callback, input_callback=input_callback)
         elif manager == "bob":
@@ -327,6 +334,20 @@ class Module:
                 # It's a regular file that conflicts with a source file/dir
                 if callback: callback(f"Cleaning up file {entry} in target...")
                 os.remove(target_path)
+
+    def cleanup(self, path, callback=None):
+        """Safely removes a temporary build or installation directory."""
+        if path and os.path.exists(path):
+            if callback: callback(f"Cleaning up temporary files at {path}...")
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                return True
+            except Exception as e:
+                if callback: callback(f"Warning: Failed to cleanup {path}: {e}")
+        return False
 
     def run_stow(self, package_name, target=None, callback=None, input_callback=None, password=None):
         """Standard GNU Stow wrapper with cleanup of existing files."""

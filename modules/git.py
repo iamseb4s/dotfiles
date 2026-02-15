@@ -4,7 +4,7 @@ class GitModule(Module):
     id = "git"
     label = "Git"
     description = "Distributed version control system"
-    category = "Infrastructure"
+    category = "Development"
     
     package_name = {
         "arch": "git",

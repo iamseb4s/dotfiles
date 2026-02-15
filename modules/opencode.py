@@ -6,7 +6,7 @@ class OpencodeModule(Module):
     id = "opencode"
     label = "OpenCode"
     description = "Official OpenCode CLI - The interactive agent for software engineering"
-    category = "Tools"
+    category = "CLI Tools"
     
     # The installation script is universal for Unix-like systems
     manager = "wget" 

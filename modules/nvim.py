@@ -4,7 +4,7 @@ class NeovimModule(Module):
     id = "nvim"
     label = "Neovim"
     description = "Hyperextensible Vim-based text editor with LazyVim starter"
-    category = "Terminal"
+    category = "Development"
     
     manager = {
         "arch": "system",
