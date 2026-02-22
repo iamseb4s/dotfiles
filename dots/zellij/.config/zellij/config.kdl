@@ -139,10 +139,6 @@ keybinds clear-defaults=true {
         }
     }
     shared_among "normal" "locked" {
-        bind "Ctrl left" { MoveFocusOrTab "left"; }
-        bind "Ctrl down" { MoveFocus "down"; }
-        bind "Ctrl up" { MoveFocus "up"; }
-        bind "Ctrl right" { MoveFocusOrTab "right"; }
         bind "Ctrl +" { Resize "Increase"; }
         bind "Ctrl -" { Resize "Decrease"; }
         bind "Ctrl =" { Resize "Increase"; }
