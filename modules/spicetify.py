@@ -52,6 +52,13 @@ class SpicetifyModule(Module):
         # 2. Dynamic INI updates (Portability and Extension Auto-discovery)
         config_path = os.path.expanduser("~/.config/spicetify/config-xpui.ini")
         ext_dir = os.path.expanduser("~/.config/spicetify/Extensions")
+        theme_dir = os.path.expanduser("~/.config/spicetify/Themes/sleek")
+        sync_script = os.path.expanduser("~/.config/spicetify/scripts/sync.sh")
+
+        # Bootstrap: If theme or extensions are missing, run sync script
+        if os.path.exists(sync_script) and (not os.path.exists(theme_dir) or not os.path.exists(ext_dir) or not os.listdir(ext_dir)):
+            if callback: callback("Missing Spicetify assets. Running initial synchronization...")
+            self.system_manager.run(f"bash {sync_script}", shell=True, callback=callback, input_callback=input_callback)
         
         if os.path.exists(config_path):
             if callback: callback("Updating config-xpui.ini for portability and sync...")
