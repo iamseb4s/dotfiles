@@ -1,0 +1,24 @@
+/* --- Modern ScrollBar --- */
+.os-scrollbar-handle { width:0.25rem!important;border-radius:10rem !important; transition: width 300ms ease-in-out; } .os-scrollbar-handle:focus,.os-scrollbar-handle:focus-within,.os-scrollbar-handle:hover { width:0.35rem!important }
+
+/* --- Rotating Cover Art --- */
+@keyframes rotating {from {transform: rotate(0deg);}to {transform: rotate(360deg);}}.cover-art, .main-nowPlayingView-coverArtContainer::after, .main-nowPlayingView-coverArtContainer::before {animation: rotating 10s linear infinite;border-radius: 50%;}.cover-art {clip-path: circle(50% at 50% 50%);} .main-nowPlayingBar-left button {background: transparent;} .main-nowPlayingView-coverArt {box-shadow:none; filter: drop-shadow(0 9px 9px rgba(0,0,0,.271));}
+
+/* --- Pretty Lyrics --- */
+.lyrics-lyrics-background { display: none; } .lyrics-lyrics-contentWrapper>*:not(.lyrics-lyricsContent-active, .lyrics-lyricsContent-highlight, .lyrics-lyricsContent-provider, .lyrics-lyricsContent-description, .lyrics-lyricsContent-unsynced) { color: #FFFFFF4D !important; } .lyrics-lyrics-contentWrapper>*:not(.lyrics-lyricsContent-active, .lyrics-lyricsContent-highlight, .lyrics-lyricsContent-provider, .lyrics-lyricsContent-description, .lyrics-lyricsContent-unsynced):hover { color: #FFFFFF !important; } .lyrics-lyricsContent-highlight { color: #FFFFFF66; } .lyrics-lyricsContent-unsynced { color: #FFFFFF !important; } .lyrics-lyricsContent-unsynced:hover { color: #FFFFFF !important; } .lyrics-lyricsContent-provider, .lyrics-lyricsContent-description { color: #FFFFFFB6 !important; }
+
+/* --- Thin Library Sidebar Rows --- */
+.main-yourLibraryX-listItemGroup {grid-template-rows: none !important;} .main-yourLibraryX-listItemGroup * {padding-block: 0;}.main-yourLibraryX-listItem [role="group"] {min-block-size: 0 !important;} .main-yourLibraryX-listItem .HeaderArea .Column {flex-direction: row; gap: 0.5em;} .main-yourLibraryX-listItem .HeaderArea * {padding-top: 0 !important; padding-bottom: 0 !important;} .main-yourLibraryX-listItem .x-entityImage-imageContainer, .main-yourLibraryX-rowCover {width: 1.6em !important; height: 1.6em !important;} .main-yourLibraryX-listRowSubtitle {padding-top: 0px;}
+
+/* --- Hide What's New Button --- */
+[aria-label="What's New"] {display:none;}
+
+/* --- Hide Mini Player Button --- */
+button:has(path[d='M16 2.45c0-.8-.65-1.45-1.45-1.45H1.45C.65 1 0 1.65 0 2.45v11.1C0 14.35.65 15 1.45 15h5.557v-1.5H1.5v-11h13V7H16V2.45z']), button:has(path[d='M16 2.45c0-.8-.65-1.45-1.45-1.45H1.45C.65 1 0 1.65 0 2.45v11.1C0 14.35.65 15 1.45 15h5.557v-1.5H1.5v-11h13V7H16z']) {display: none;}
+
+/* --- Queue Top Side Panel --- */
+.main-nowPlayingView-section:not(.main-nowPlayingView-queue) { order: 99; }
+
+/* --- Remove the Artists and Credits sections from the Sidebar --- */
+.nw2W4ZMdICuBo08Tzxg9 { justify-content: center; height: 100%; width: 100%; } .main-nowPlayingView-section:not(.main-nowPlayingView-queue) {display: none !important}
+
