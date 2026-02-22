@@ -1,0 +1,15 @@
+[Theme:Sleek]
+user_css = https://raw.githubusercontent.com/spicetify/spicetify-themes/master/Sleek/user.css
+color_ini = https://raw.githubusercontent.com/spicetify/spicetify-themes/master/Sleek/color.ini
+
+[Extensions]
+cat-jam.js = https://raw.githubusercontent.com/BlafKing/spicetify-cat-jam-synced/main/marketplace/cat-jam.js
+quickQueue.js = https://raw.githubusercontent.com/ohitstom/spicetify-extensions/main/quickQueue/quickQueue.js
+volumePercentage.js = https://raw.githubusercontent.com/ohitstom/spicetify-extensions/main/volumePercentage/volumePercentage.js
+SleepTimer.js = https://raw.githubusercontent.com/Theblockbuster1/spicetify-extensions/main/SleepTimer/SleepTimer.js
+djinfo.mjs = https://raw.githubusercontent.com/L3-N0X/spicetify-dj-info/main/dist/djinfo.mjs
+playlist-icons.js = https://raw.githubusercontent.com/jeroentvb/spicetify-playlist-icons/dist/playlist-icons.js
+
+[Snippets]
+source_json = https://raw.githubusercontent.com/spicetify/marketplace/main/resources/snippets.json
+list = Modern ScrollBar, Rotating Cover Art, Pretty Lyrics, Thin Library Sidebar Rows, Hide What's New Button, Hide Mini Player Button, Queue Top Side Panel, Remove the Artists and Credits sections from the Sidebar
