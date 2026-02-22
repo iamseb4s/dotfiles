@@ -12,4 +12,4 @@ playlist-icons.js = https://raw.githubusercontent.com/jeroentvb/spicetify-playli
 
 [Snippets]
 source_json = https://raw.githubusercontent.com/spicetify/marketplace/main/resources/snippets.json
-list = Modern ScrollBar, Rotating Cover Art, Pretty Lyrics, Thin Library Sidebar Rows, Hide What's New Button, Hide Mini Player Button, Queue Top Side Panel, Remove the Artists and Credits sections from the Sidebar
+list = Modern ScrollBar, Rotating Cover Art, Pretty Lyrics, Thin Library Sidebar Rows, Hide What's New Button, Hide Mini Player Button, Queue Top Side Panel, Remove the Artists and Credits sections from the Sidebar, Hide Full Screen Button
