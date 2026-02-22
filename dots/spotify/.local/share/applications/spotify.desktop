@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Spotify
+GenericName=Music Player
+Icon=spotify-client
+Exec=env LD_PRELOAD=/usr/lib/spotifywm.so /opt/spotify/spotify --disable-features=WaylandWindowDecorations --enable-features=UseOzonePlatform --ozone-platform=x11 %U
+Terminal=false
+Categories=Audio;Music;Player;AudioVideo;
+MimeType=x-scheme-handler/spotify;
