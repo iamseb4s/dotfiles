@@ -19,6 +19,7 @@ echo "Starting Spicetify synchronization..."
 THEME_URLS=$(python3 -c "
 import configparser
 config = configparser.ConfigParser(interpolation=None)
+config.optionxform = str
 config.read('$SOURCES_FILE')
 print(f\"{config['Theme:Sleek']['user_css']} {config['Theme:Sleek']['color_ini']}\")
 ")
@@ -36,6 +37,7 @@ mkdir -p "$EXT_DIR"
 python3 -c "
 import configparser, urllib.request, os
 config = configparser.ConfigParser(interpolation=None)
+config.optionxform = str
 config.read('$SOURCES_FILE')
 for filename, url in config.items('Extensions'):
     print(f'  -> {filename}')
@@ -47,6 +49,7 @@ echo "Processing snippets from Marketplace JSON..."
 python3 -c "
 import json, urllib.request, configparser
 config = configparser.ConfigParser(interpolation=None)
+config.optionxform = str
 config.read('$SOURCES_FILE')
 target = [t.strip() for t in config['Snippets']['list'].split(',')]
 url = config['Snippets']['source_json']
