@@ -7,10 +7,19 @@ class WezTermModule(Module):
     description = "A GPU-accelerated cross-platform terminal emulator and multiplexer"
     category = "Terminal"
     
-    package_name = "wezterm"
+    package_name = {
+        "arch": "wezterm-git",
+        "default": "wezterm"
+    }
+
+    manager = {
+        "arch": "yay",
+        "default": "system"
+    }
     
     dependencies = {
         "arch": {
+            "bin_deps": ["yay"],
             "dot_deps": ["stow"]
         },
         "ubuntu": {
