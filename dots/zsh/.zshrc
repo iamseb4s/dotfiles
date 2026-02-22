@@ -91,9 +91,13 @@ fi
 # ======================
 # Aliases
 # ======================
+
+alias c="clear"
+
 # --- System & Config ---
 alias zshconfig="nvim ~/.zshrc"
 alias ohmyzsh="nvim ~/.oh-my-zsh"
+alias hyprconfig='[ -f ~/.config/hypr/hyprland.conf ] && nvim ~/.config/hypr/hyprland.conf || echo "Error: File ~/.config/hypr/hyprland.conf does not exist"'
 
 # --- Package Manager (Distribution-aware) ---
 if command -v pacman >/dev/null 2>&1; then
@@ -101,12 +105,18 @@ if command -v pacman >/dev/null 2>&1; then
     alias pacu="sudo pacman -Syu"
     alias paci="sudo pacman -S"
     alias pacr="sudo pacman -Rs"
-    alias pacc="sudo pacman -Sc"
+    alias pacc="sudo pacman -Sc && pacman -Rns $(pacman -Qtdq 2>/dev/null || echo '')"
+    alias pacq='pacman -Qq | fzf --preview="pacman -Qi {}"'
+    alias pacs='pacman -Slq | fzf --preview="pacman -Si {}"'
+    
     # AUR (yay)
     if command -v yay >/dev/null 2>&1; then
-        alias yu="yay -Syu"
-        alias yi="yay -S"
-        alias yr="yay -Rs"
+        alias yayu="yay -Syu"
+        alias yayi="yay -S"
+        alias yayr="yay -Rs"
+        alias yayc="yay -Yc"
+        alias yayq='yay -Qq | fzf --preview="yay -Qi {}"'
+        alias yays='yay -Slq | fzf --preview="yay -Si {}"'
     fi
 elif command -v apt >/dev/null 2>&1; then
     # Ubuntu
@@ -114,6 +124,13 @@ elif command -v apt >/dev/null 2>&1; then
     alias apti="sudo apt install"
     alias aptc="sudo apt clean && sudo apt autoclean && sudo apt autoremove"
     alias aptr="sudo apt purge"
+fi
+
+# --- Updates ---
+# Spofity + Spicetify
+if command -v spicetify >/dev/null 2>&1; then
+    alias upspicetify="spicetify update && spicetify restore backup apply"
+    alias upspotify="yay -S spotify && spicetify update && spicetify backup apply"
 fi
 
 # --- Modern CLI Tools ---
