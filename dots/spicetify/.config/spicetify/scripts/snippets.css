@@ -22,3 +22,6 @@ button:has(path[d='M16 2.45c0-.8-.65-1.45-1.45-1.45H1.45C.65 1 0 1.65 0 2.45v11.
 /* --- Remove the Artists and Credits sections from the Sidebar --- */
 .nw2W4ZMdICuBo08Tzxg9 { justify-content: center; height: 100%; width: 100%; } .main-nowPlayingView-section:not(.main-nowPlayingView-queue) {display: none !important}
 
+/* --- Hide Full Screen Button --- */
+[data-testid="fullscreen-mode-button"] {display: none;}
+
