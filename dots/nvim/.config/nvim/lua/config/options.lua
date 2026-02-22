@@ -4,7 +4,11 @@
 
 vim.opt.clipboard = "unnamedplus"
 
-if vim.fn.has("nvim-0.10") == 1 then
+-- Check if we are running inside an SSH session
+local is_ssh = os.getenv("SSH_CLIENT") ~= nil or os.getenv("SSH_TTY") ~= nil
+
+-- Fallback to OSC 52 ONLY for remote servers. Local machines will use native clipboard (wl-clipboard/xclip)
+if is_ssh and vim.fn.has("nvim-0.10") == 1 then
   vim.g.clipboard = {
     name = "osc52",
     copy = {
