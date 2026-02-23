@@ -10,3 +10,9 @@ class BtopModule(Module):
         "arch": "btop",
         "ubuntu": "btop"
     }
+
+    dependencies = {
+        "default": {
+            "dot_deps": ["stow"]
+        }
+    }
