@@ -11,6 +11,12 @@ class FastfetchModule(Module):
         "ubuntu": "fastfetch"
     }
 
+    dependencies = {
+        "default": {
+            "dot_deps": ["stow"]
+        }
+    }
+
     def install(self, override=None, callback=None, input_callback=None, password=None):
         if self.system_manager.is_arch:
             return super().install(override, callback, input_callback, password)
