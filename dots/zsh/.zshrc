@@ -79,6 +79,7 @@ path_prepend "$HOME/.fzf/bin"
 export BUN_INSTALL="$HOME/.bun"
 export FZF_DEFAULT_OPTS_FILE="$HOME/.config/fzf/fzf.conf"
 export FZF_DEFAULT_OPTS="--bind='focus:'"
+export ZLE_RPROMPT_INDENT=0
 
 # Preferred editor
 if [[ -n $SSH_CONNECTION ]]; then

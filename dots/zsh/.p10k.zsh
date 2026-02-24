@@ -141,19 +141,13 @@ typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
 
 # Connect left prompt lines with these symbols. You'll probably want to use the same color
 # as POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_FOREGROUND below.
-typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_PREFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX=''
-# typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX='%244F╭─'
-# typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_PREFIX='%244F├─'
-# typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX='%242F╰─❯'
+typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=
+typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_PREFIX=
+typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX=
 # Connect right prompt lines with these symbols.
 typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_SUFFIX=
 typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_SUFFIX=
 typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_SUFFIX=
-#   typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_SUFFIX='%242F─╮'
-#   typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_SUFFIX='%242F─┤'
-#   typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_SUFFIX='%242F─╯'
 
 # Filler between left and right prompt on the first prompt line. You can set it to ' ', '·' or
 # '─'. The last two make it easier to see the alignment between left and right prompt and to
@@ -1814,7 +1808,7 @@ typeset -g POWERLEVEL9K_WIFI_BACKGROUND=3
 ####################################[ time: current time ]####################################
 # Current time color.
 typeset -g POWERLEVEL9K_TIME_FOREGROUND='#89b4fa'
-typeset -g POWERLEVEL9K_TIME_BACKGROUND='#282c34'
+typeset -g POWERLEVEL9K_TIME_BACKGROUND='#45475a'
 # Format for the current time: 09:51:02. See `man 3 strftime`.
 typeset -g POWERLEVEL9K_TIME_FORMAT='%D{%I:%M:%S %p}'
 # If set to true, time will update when you hit enter. This way prompts for the past
