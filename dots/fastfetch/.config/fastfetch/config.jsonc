@@ -108,10 +108,9 @@ Custom fastfetch config
             "keyColor": "cyan"
         },
         {
-            "type": "disk",
+            "type": "command",
             "key": "   Disk ",
-            "folders": "/home",
-            "format": "{size-used} / {size-total} ({size-percentage}%)",
+            "text": "df -h /home / | grep -v 'Filesystem' | head -n 1 | awk '{print $3 \" / \" $2 \" (\" $5 \")\"}'",
             "keyColor": "green"
         },
         {
