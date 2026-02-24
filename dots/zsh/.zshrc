@@ -81,6 +81,17 @@ export FZF_DEFAULT_OPTS_FILE="$HOME/.config/fzf/fzf.conf"
 export FZF_DEFAULT_OPTS="--bind='focus:'"
 export ZLE_RPROMPT_INDENT=0
 
+# Fastfetch OS Icon (Distribution-aware)
+if [[ -f /etc/os-release ]]; then
+    case "$(. /etc/os-release && echo $ID)" in
+        arch)   export FF_OS_ICON="󰣇" ;;
+        ubuntu) export FF_OS_ICON="" ;;
+        *)      export FF_OS_ICON="" ;;
+    esac
+else
+    export FF_OS_ICON=""
+fi
+
 # Preferred editor
 if [[ -n $SSH_CONNECTION ]]; then
   export EDITOR='nvim'

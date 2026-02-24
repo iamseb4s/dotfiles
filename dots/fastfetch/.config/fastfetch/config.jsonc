@@ -23,7 +23,7 @@ Custom fastfetch config
         },
         {
             "type": "os",
-            "key": "  󰣇 OS",
+            "key": "  {$FF_OS_ICON} OS",
             "format": "{2}",
             "keyColor": "blue"
         },
