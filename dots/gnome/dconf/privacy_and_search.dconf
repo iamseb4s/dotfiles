@@ -1,0 +1,8 @@
+[org/gnome/desktop/privacy]
+recent-files-max-age=30
+remove-old-temp-files=true
+remove-old-trash-files=true
+
+[org/gnome/desktop/search-providers]
+disabled=['org.gnome.Epiphany.desktop']
+sort-order=['org.gnome.Settings.desktop', 'org.gnome.Contacts.desktop', 'org.gnome.Nautilus.desktop']

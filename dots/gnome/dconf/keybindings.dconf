@@ -1,0 +1,36 @@
+[org/gnome/desktop/wm/keybindings]
+close=['<Super>q']
+minimize=['<Super>m']
+move-to-workspace-down=['<Control><Shift><Alt>Down', '<Super><Shift>Page_Down']
+move-to-workspace-left=['<Super><Shift>KP_Prior', '<Super><Shift><Alt>Left', '<Control><Shift><Alt>Left']
+move-to-workspace-right=['<Super><Shift>KP_Next', '<Super><Shift><Alt>Right', '<Control><Shift><Alt>Right']
+move-to-workspace-up=['<Control><Shift><Alt>Up', '<Super><Shift>Page_Up']
+show-desktop=['<Super>d']
+switch-to-workspace-down=['<Control><Alt>Down', '<Super>Page_Down']
+switch-to-workspace-left=['<Super>KP_Prior', '<Super><Alt>Left', '<Control><Alt>Left']
+switch-to-workspace-right=['<Super>KP_Next', '<Super><Alt>Right', '<Control><Alt>Right']
+switch-to-workspace-up=['<Control><Alt>Up', '<Super>Page_Up']
+
+[org/gnome/settings-daemon/plugins/media-keys]
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/']
+magnifier=@as []
+screenreader=@as []
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
+binding='<Super>Return'
+command='wezterm'
+name='Wezterm'
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1]
+binding='<Super>b'
+command='brave'
+name='Brave'
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2]
+binding='<Super>e'
+command='nautilus'
+name='Nautilus'
+
+[org/gnome/shell/keybindings]
+focus-active-notification=@as []
+toggle-message-tray=['<Super>n']
