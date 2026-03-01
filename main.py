@@ -119,7 +119,9 @@ def main():
             elif state == "INSTALL":
                 # Transfer control to the installation runner with merged effective overrides
                 effective_overrides = selector_screen.get_effective_overrides()
-                installer = InstallerScreen(modules, selector_screen.selected, effective_overrides)
+                # Use all selected IDs (manual + automatic dependencies)
+                selected_ids = list(effective_overrides.keys())
+                installer = InstallerScreen(modules, selected_ids, effective_overrides)
                 result = installer.run()
                 
                 if result == "WELCOME":

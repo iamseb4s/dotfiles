@@ -49,6 +49,10 @@ class SelectorScreen(Screen):
         for module_id in self.selected:
             if module_id not in self.module_map: 
                 continue
+            
+            # Always pull global module dependencies for ANY selected module
+            resolution_queue.append((module_id, "binary"))
+            
             module_selections = self.sub_selections.get(module_id, {})
             for component_id, is_component_active in module_selections.items():
                 if is_component_active:
@@ -704,12 +708,14 @@ class SelectorScreen(Screen):
                 self.expanded[module.id] = True  # Auto-expand on select
                 if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
                 
-                # Auto-select binary package by default
-                self.sub_selections[module.id]['binary'] = True
+                # Use sub_components to decide what to auto-select
+                has_manual_components = hasattr(module, 'sub_components') and module.sub_components
                 
-                # Auto-select all sub-components by default
-                if hasattr(module, 'sub_components') and module.sub_components:
+                if has_manual_components:
                     self._set_sub_selection_recursive(module.id, module.sub_components, True)
+                else:
+                    # Auto-select binary package by default if NO manual components are defined
+                    self.sub_selections[module.id]['binary'] = True
                 
                 # Auto-select dotfiles by default if they exist
                 if module.has_usable_dotfiles():
@@ -739,10 +745,16 @@ class SelectorScreen(Screen):
             if 'children' in component:
                 self._set_sub_selection_recursive(module_id, component['children'], new_state)
             
-            # If we enable a child, we must ensure parents are enabled
+            # Consistency Logic
             if new_state:
+                # If we enable a child, we must ensure all parents in the hierarchy are enabled
                 self._ensure_parent_path_enabled(module_id, component['id'])
             else:
+                # If we disable a parent, children are already disabled by _set_sub_selection_recursive.
+                # If we disable a child, we should check if its parent should also be disabled (if no other children are active)
+                self._ensure_parent_path_disabled_if_empty(module_id, component['id'])
+                
+                # Check if the entire module should be deselected
                 if not any(self.sub_selections.get(module_id, {}).values()) and module_id not in self.auto_locked:
                     self.selected.discard(module_id)
                     self.expanded[module_id] = False
@@ -765,9 +777,10 @@ class SelectorScreen(Screen):
                             if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
                             self._set_sub_selection_recursive(module.id, module.sub_components, True)
                         
-                        # Auto-select binary package by default
-                        if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
-                        self.sub_selections[module.id]['binary'] = True
+                        # Auto-select binary package by default if NO manual components are defined
+                        if not (hasattr(module, 'sub_components') and module.sub_components):
+                            if module.id not in self.sub_selections: self.sub_selections[module.id] = {}
+                            self.sub_selections[module.id]['binary'] = True
                         
                         # Auto-select dotfiles by default if they exist
                         if module.has_usable_dotfiles():
@@ -800,6 +813,33 @@ class SelectorScreen(Screen):
             return False
 
         find_and_enable_parents(module.sub_components, [])
+
+    def _ensure_parent_path_disabled_if_empty(self, module_id, target_component_id):
+        """Disables parent sub-components if they no longer have any active children."""
+        module = self.module_map.get(module_id)
+        if not module or not hasattr(module, 'sub_components'):
+            return
+
+        def check_and_disable_parents(components):
+            parent_found = False
+            for component in components:
+                if 'children' in component:
+                    # Recursive check first to process deepest levels
+                    if check_and_disable_parents(component['children']):
+                        parent_found = True
+                    
+                    # If this component is currently selected, check if it has any active children
+                    if self.sub_selections.get(module_id, {}).get(component['id']):
+                        any_child_active = any(self.sub_selections[module_id].get(child['id']) for child in component['children'])
+                        if not any_child_active:
+                            self.sub_selections[module_id][component['id']] = False
+                            parent_found = True
+                
+                if component['id'] == target_component_id:
+                    parent_found = True
+            return parent_found
+
+        check_and_disable_parents(module.sub_components)
 
     def _handle_tab(self):
         """Handles TAB key for expanding headers or opening options."""

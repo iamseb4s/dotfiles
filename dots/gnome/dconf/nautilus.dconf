@@ -1,0 +1,18 @@
+[org/gnome/nautilus/icon-view]
+captions=['size', 'type', 'date_modified']
+
+[org/gnome/nautilus/list-view]
+default-column-order=['name', 'size', 'type', 'owner', 'group', 'permissions', 'date_modified', 'date_accessed', 'date_created', 'recency', 'detailed_type']
+default-visible-columns=['name', 'size', 'type', 'date_modified']
+default-zoom-level='small'
+use-tree-view=false
+
+[org/gnome/nautilus/preferences]
+default-folder-viewer='icon-view'
+migrated-gtk-settings=true
+show-delete-permanently=false
+
+[org/gnome/nautilus/window-state]
+initial-size=(1186, 745)
+initial-size-file-chooser=(1206, 807)
+maximized=false
