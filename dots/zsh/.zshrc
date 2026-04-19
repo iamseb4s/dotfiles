@@ -136,6 +136,14 @@ elif command -v apt >/dev/null 2>&1; then
     alias apti="sudo apt install"
     alias aptc="sudo apt clean && sudo apt autoclean && sudo apt autoremove"
     alias aptr="sudo apt purge"
+elif command -v brew >/dev/null 2>&1; then
+    # Homebrew (macOS/Linux)
+    alias brewu="brew update && brew upgrade && brew cleanup"
+    alias brewi="brew install"
+    alias brewr="brew uninstall"
+    alias brewc="brew cleanup"
+    alias brewq='brew leaves | fzf --preview="brew info {}"'
+    alias brews="brew search"
 fi
 
 # --- Updates ---
@@ -146,6 +154,9 @@ if command -v spicetify >/dev/null 2>&1; then
 fi
 
 # --- Modern CLI Tools ---
+# fastfetch
+alias ff="fastfetch"
+
 # ls / tree (eza)
 alias ls='eza --icons --group-directories-first --git'
 alias tree='eza --tree --icons --group-directories-first --git'
