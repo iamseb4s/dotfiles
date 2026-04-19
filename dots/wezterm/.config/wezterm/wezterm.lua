@@ -5,7 +5,6 @@ local config = wezterm.config_builder()
 -- ### APPEARANCE ###
 config.color_scheme = "OneDark (base16)"
 config.window_background_opacity = 0.8
-config.window_decorations = "NONE"
 config.enable_wayland = true
 config.initial_cols = 121
 config.initial_rows = 30
@@ -25,8 +24,10 @@ end
 -- Windows-specific configuration
 if wezterm.target_triple:find("windows") then
 	config.default_prog = { "pwsh.exe", "-NoLogo" }
+	config.window_decorations = "NONE"
 -- Linux-specific configuration
 elseif wezterm.target_triple:find("linux") then
+	config.window_decorations = "NONE"
 	-- Check for Zellij availability before setting it as default_prog
 	if is_command_available("zellij") then
 		config.default_prog = { "zellij", "attach", "--create" }
@@ -34,8 +35,19 @@ elseif wezterm.target_triple:find("linux") then
 		config.default_prog = { "/bin/zsh" }
 	end
 -- macOS-specific configuration
-elseif wezterm.target_triple:find("macos") then
-	config.default_prog = { "/bin/zsh" }
+elseif wezterm.target_triple:find("darwin") then
+	config.font_size = 15.0
+	config.window_decorations = "RESIZE"
+	-- Set PATH so wezterm can find the brew installed zellij
+	config.set_environment_variables = {
+		PATH = "/opt/homebrew/bin:" .. (os.getenv("PATH") or ""),
+	}
+	-- Check for Zellij availability before setting it as default_prog
+	if is_command_available("/opt/homebrew/bin/zellij") or is_command_available("zellij") then
+		config.default_prog = { "/opt/homebrew/bin/zellij", "attach", "--create" }
+	else
+		config.default_prog = { "/bin/zsh" }
+	end
 end
 
 -- ### KEYBINDINGS ###

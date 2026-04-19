@@ -29,5 +29,9 @@ Thumbs.db
 ehthumbs.db
 *.log
 
+# --- Dotfiles Ignore ---
+hosts.yml
+lazy-lock.json
+
 # --- Project Specific ---
 modules/.drafts/
