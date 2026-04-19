@@ -44,7 +44,7 @@ elseif wezterm.target_triple:find("darwin") then
 	}
 	-- Check for Zellij availability before setting it as default_prog
 	if is_command_available("/opt/homebrew/bin/zellij") or is_command_available("zellij") then
-		config.default_prog = { "/opt/homebrew/bin/zellij", "attach", "--create" }
+		config.default_prog = { "/opt/homebrew/bin/zellij" }
 	else
 		config.default_prog = { "/bin/zsh" }
 	end
