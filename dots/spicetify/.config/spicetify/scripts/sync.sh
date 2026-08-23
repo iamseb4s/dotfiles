@@ -78,3 +78,11 @@ SEP
 cat "$SNIPPETS_FILE" >> "$THEME_DIR/user.css"
 
 echo "Spicetify synchronization completed successfully!"
+
+# 5. Regenerate platform-specific config (missing paths cause spicetify errors)
+GEN_SCRIPT="$SCRIPT_DIR/gen-config.sh"
+if [[ -f "$GEN_SCRIPT" ]]; then
+    bash "$GEN_SCRIPT"
+else
+    echo "Warning: gen-config.sh not found, skipping config generation."
+fi
