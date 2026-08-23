@@ -49,42 +49,24 @@ class SpicetifyModule(Module):
         if not super().configure(override, callback, input_callback, password):
             return False
 
-        # 2. Dynamic INI updates (Portability and Extension Auto-discovery)
+        # 2. Dynamic INI generation (Portability and Extension Auto-discovery)
         config_path = os.path.expanduser("~/.config/spicetify/config-xpui.ini")
         ext_dir = os.path.expanduser("~/.config/spicetify/Extensions")
         theme_dir = os.path.expanduser("~/.config/spicetify/Themes/sleek")
         sync_script = os.path.expanduser("~/.config/spicetify/scripts/sync.sh")
+        gen_script = os.path.expanduser("~/.config/spicetify/scripts/gen-config.sh")
 
         # Bootstrap: If theme or extensions are missing, run sync script
         if os.path.exists(sync_script) and (not os.path.exists(theme_dir) or not os.path.exists(ext_dir) or not os.listdir(ext_dir)):
             if callback: callback("Missing Spicetify assets. Running initial synchronization...")
             self.system_manager.run(f"bash {sync_script}", shell=True, callback=callback, input_callback=input_callback)
-        
-        if os.path.exists(config_path):
-            if callback: callback("Updating config-xpui.ini for portability and sync...")
-            try:
-                import configparser
-                # Use interpolation=None to avoid issues with special characters in paths/tokens
-                config = configparser.ConfigParser(interpolation=None)
-                config.read(config_path)
-                
-                # Ensure correct sections exist
-                if 'Setting' not in config: config.add_section('Setting')
-                if 'AdditionalOptions' not in config: config.add_section('AdditionalOptions')
-                
-                # Set portable paths
-                config['Setting']['prefs_path'] = os.path.expanduser("~/.config/spotify/prefs")
-                
-                # Auto-detect extensions in the folder
-                if os.path.exists(ext_dir):
-                    extensions = [f for f in os.listdir(ext_dir) if f.endswith(('.js', '.mjs'))]
-                    if extensions:
-                        config['AdditionalOptions']['extensions'] = "|".join(extensions)
-                
-                with open(config_path, 'w') as f:
-                    config.write(f, space_around_delimiters=True)
-            except Exception as e:
-                if callback: callback(f"Warning: Failed to update config-xpui.ini: {e}")
+
+        # Generate platform-specific config (paths differ between Linux/macOS)
+        if os.path.exists(gen_script):
+            if callback: callback("Generating platform-specific config-xpui.ini...")
+            self.system_manager.run(f"bash {gen_script}", shell=True, callback=callback, input_callback=input_callback)
+        elif not os.path.exists(config_path):
+            if callback: callback("Warning: gen-config.sh not found, config-xpui.ini may be missing.")
 
         # 3. Apply Spicetify configuration
         if callback: callback("Applying Spicetify configuration (backup apply)...")

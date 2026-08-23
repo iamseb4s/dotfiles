@@ -33,5 +33,8 @@ ehthumbs.db
 hosts.yml
 lazy-lock.json
 
+# Machine-specific generated file (paths differ per OS)
+dots/spicetify/.config/spicetify/config-xpui.ini
+
 # --- Project Specific ---
 modules/.drafts/
