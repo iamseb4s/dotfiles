@@ -1053,8 +1053,8 @@ typeset -g POWERLEVEL9K_VIRTUALENV_VISUAL_IDENTIFIER_EXPANSION='🐍'
 
 #####################[ anaconda: conda environment (https://conda.io/) ]######################
 # Anaconda environment color.
-typeset -g POWERLEVEL9K_ANACONDA_FOREGROUND=37
-typeset -g POWERLEVEL9K_ANACONDA_BACKGROUND=4
+typeset -g POWERLEVEL9K_ANACONDA_FOREGROUND='#4c4f69'
+typeset -g POWERLEVEL9K_ANACONDA_BACKGROUND='#7287fd'
 
 # Anaconda segment format. The following parameters are available within the expansion.
 #

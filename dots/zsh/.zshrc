@@ -77,6 +77,7 @@ path_prepend "$HOME/.fzf/bin"
 
 # Environment Variables
 export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
 export FZF_DEFAULT_OPTS_FILE="$HOME/.config/fzf/fzf.conf"
 export FZF_DEFAULT_OPTS="--bind='focus:'"
 export ZLE_RPROMPT_INDENT=0
@@ -227,18 +228,18 @@ fi
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-# __conda_setup="$('$HOME/anaconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-# if [ $? -eq 0 ]; then
-#     eval "$__conda_setup"
-# else
-#     if [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
-#         . "$HOME/anaconda3/etc/profile.d/conda.sh"
-#     else
-#         export PATH="$HOME/anaconda3/bin:$PATH"
-#     fi
-# fi
-# unset __conda_setup
-# conda activate myenv
+__conda_setup="$('/Users/sebas/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/Users/sebas/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/Users/sebas/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/Users/sebas/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+conda activate my_env
 # <<< conda initialize <<<
 
 
