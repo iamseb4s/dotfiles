@@ -3,8 +3,8 @@
 # Generates ~/.config/spicetify/config-xpui.ini with platform-specific paths.
 # The file is machine-specific and gitignored; run this after spicetify
 # updates overwrite the paths.
-# The [Backup] section is intentionally omitted: 'spicetify backup apply'
-# writes it automatically with the installed Spotify/spicetify versions.
+# An existing [Backup] section is preserved; if absent, 'spicetify backup
+# apply' writes it with the installed Spotify/spicetify versions.
 
 CONFIG_FILE="$HOME/.config/spicetify/config-xpui.ini"
 
@@ -22,6 +22,20 @@ EXT_DIR="$HOME/.config/spicetify/Extensions"
 EXTENSIONS=""
 if [[ -d "$EXT_DIR" ]]; then
     EXTENSIONS=$(ls "$EXT_DIR" 2>/dev/null | grep -E '\.(js|mjs)$' | sort | paste -sd'|' -)
+fi
+
+# Preserve existing [Backup] metadata if present (written by 'spicetify backup apply')
+BACKUP_BLOCK=""
+if [[ -f "$CONFIG_FILE" ]]; then
+    BACKUP_VERSION=$(awk -F'=' '/^version[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2}' "$CONFIG_FILE")
+    BACKUP_WITH=$(awk -F'=' '/^with[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2}' "$CONFIG_FILE")
+    if [[ -n "$BACKUP_VERSION" && -n "$BACKUP_WITH" ]]; then
+        BACKUP_BLOCK="
+[Backup]
+version = $BACKUP_VERSION
+with    = $BACKUP_WITH
+"
+    fi
 fi
 
 cat > "$CONFIG_FILE" << EOF
@@ -53,5 +67,7 @@ custom_apps           = marketplace
 
 [Patch]
 EOF
+
+printf '%s' "$BACKUP_BLOCK" >> "$CONFIG_FILE"
 
 echo "Generated $CONFIG_FILE"
