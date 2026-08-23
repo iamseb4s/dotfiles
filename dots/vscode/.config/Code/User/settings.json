@@ -142,5 +142,6 @@
     "gitlens.advanced.messages": {
         "suppressLineUncommittedWarning": true
     },
-    "ActiveFileInStatusBar.enable": true
+    "ActiveFileInStatusBar.enable": true,
+    "workbench.editor.editorActionsLocation": "titleBar"
 }
