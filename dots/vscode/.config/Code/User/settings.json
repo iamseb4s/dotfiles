@@ -15,7 +15,7 @@
     "gitlens.defaultDateFormat": "Do MMMM, YYYY hh:mma",
     "gitlens.defaultDateLocale": "en-US",
     "gitlens.defaultTimeFormat": "hh:mma",
-    "diffEditor.ignoreTrimWhitespace": true,
+    "diffEditor.ignoreTrimWhitespace": false,
     "editor.minimap.enabled": false,
     "editor.overviewRulerBorder": false,
     "editor.scrollbar.vertical": "auto",
@@ -143,5 +143,7 @@
         "suppressLineUncommittedWarning": true
     },
     "ActiveFileInStatusBar.enable": true,
-    "workbench.editor.editorActionsLocation": "titleBar"
+    "workbench.editor.editorActionsLocation": "titleBar",
+    "diffEditor.hideUnchangedRegions.enabled": true,
+    "chat.titleBar.openInAgentsWindow.enabled": false
 }
