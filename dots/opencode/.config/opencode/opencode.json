@@ -2,8 +2,24 @@
   "$schema": "https://opencode.ai/config.json",
   "plugin": ["opencode-gemini-auth@latest"],
   "default_agent": "plan",
+  "mcp": {
+    "vscode-diff-mcp": {
+      "type": "local",
+      "command": [
+        "bun",
+        "run",
+        "/Users/sebas/vscode-diff-mcp/server/src/index.ts"
+      ],
+      "enabled": true
+    }
+  },
+  "experimental": {
+    "mcp_timeout": 600000
+  },
   "permission": {
     "*": "ask",
+    "vscode-diff-mcp_edit_with_diff": "allow",
+    "vscode-diff-mcp_write_with_diff": "allow",
     "glob": "allow",
     "grep": "allow",
     "list": "allow",
@@ -12,6 +28,9 @@
       "*": "ask",
       "ls *": "allow",
       "grep *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "echo *": "allow",
       "git status": "allow",
       "git log*": "allow",
       "git diff*": "allow"
@@ -26,7 +45,7 @@
   "provider": {
     "google": {
       "options": {
-        "projectId": "arboreal-logic-470723-d8"
+        "projectId": "valid-bedrock-481122-g9"
       }
     }
   },
