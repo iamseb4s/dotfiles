@@ -32,6 +32,7 @@ ehthumbs.db
 # --- Dotfiles Ignore ---
 hosts.yml
 lazy-lock.json
+.zshrc.local
 
 # Machine-specific generated file (paths differ per OS)
 dots/spicetify/.config/spicetify/config-xpui.ini

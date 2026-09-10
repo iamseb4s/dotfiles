@@ -269,3 +269,13 @@ if [[ -n $ZELLIJ ]]; then
     add-zsh-hook precmd  zellij_tab_name_update
     add-zsh-hook preexec zellij_tab_name_update
 fi
+
+
+# ======================
+# mem0-lan shared memory
+# ======================
+export MEM0_USER_ID="sebas"
+# export MEM0_HOST="https://mem0-api.iamsebas.xyz"  # default
+
+# Local secrets (API keys, per-machine overrides) live in ~/.zshrc.local (gitignored)
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
