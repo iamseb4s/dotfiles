@@ -226,21 +226,24 @@ if command -v atuin >/dev/null 2>&1; then
 fi
 
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/Users/sebas/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/Users/sebas/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/Users/sebas/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/Users/sebas/miniconda3/bin:$PATH"
+# ======================
+# Conda
+# ======================
+
+for _conda_base in "$HOME/miniconda3" "$HOME/anaconda3" /opt/miniconda3; do
+    if [[ -x "$_conda_base/bin/conda" ]]; then
+        __conda_setup="$("$_conda_base/bin/conda" 'shell.zsh' 'hook' 2>/dev/null)"
+        if [[ $? -eq 0 ]]; then
+            eval "$__conda_setup"
+        elif [[ -f "$_conda_base/etc/profile.d/conda.sh" ]]; then
+            . "$_conda_base/etc/profile.d/conda.sh"
+        fi
+        unset __conda_setup
+        conda activate my_env
+        break
     fi
-fi
-unset __conda_setup
-conda activate my_env
-# <<< conda initialize <<<
+done
+unset _conda_base
 
 
 # ======================
@@ -269,6 +272,13 @@ if [[ -n $ZELLIJ ]]; then
     add-zsh-hook precmd  zellij_tab_name_update
     add-zsh-hook preexec zellij_tab_name_update
 fi
+
+
+# ======================
+# PostgreSQL client (libpq, keg-only)
+# ======================
+path_append "/opt/homebrew/opt/libpq/bin"
+path_append "$HOME/.local/bin"
 
 
 # ======================
