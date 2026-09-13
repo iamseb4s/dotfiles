@@ -8,7 +8,7 @@
       "command": [
         "bun",
         "run",
-        "/Users/sebas/vscode-diff-mcp/server/src/index.ts"
+        "{env:HOME}/vscode-diff-mcp/server/src/index.ts"
       ],
       "enabled": true
     }
