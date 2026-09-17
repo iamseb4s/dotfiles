@@ -25,6 +25,7 @@
     "list": "allow",
     "find": "allow",
     "task": "allow",
+    "todowrite": "allow",
     "bash": {
       "*": "ask",
       "ls": "allow",
