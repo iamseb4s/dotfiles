@@ -26,6 +26,8 @@
     "find": "allow",
     "task": "allow",
     "todowrite": "allow",
+    "websearch": "allow",
+    "webfetch": "allow",
     "bash": {
       "*": "ask",
       "ls": "allow",
