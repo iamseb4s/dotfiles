@@ -45,3 +45,12 @@ dots/spicetify/.config/spicetify/config-xpui.ini
 
 # --- Project Specific ---
 modules/.drafts/
+
+# --- Opencode machine-specific (per-machine, do not commit) ---
+dots/opencode/.config/opencode/service.json
+dots/opencode/.config/opencode/tui.json
+dots/opencode/.config/opencode/*.bak
+dots/opencode/.agents/.skill-lock.json
+
+# --- Impeccable engine binaries (per-platform, auto-downloaded to ~/.impeccable) ---
+dots/opencode/.agents/skills/impeccable/scripts/bin/
