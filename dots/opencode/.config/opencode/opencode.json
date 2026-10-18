@@ -25,6 +25,7 @@
     "list": "allow",
     "find": "allow",
     "task": "allow",
+    "subagent": "allow",
     "todowrite": "allow",
     "websearch": "allow",
     "webfetch": "allow",
@@ -245,17 +246,5 @@
         "projectId": "valid-bedrock-481122-g9"
       }
     }
-  },
-  "keybinds": {
-    "input_newline": "shift+return,ctrl+return,ctrl+j",
-    "input_line_home": "ctrl+home",
-    "input_line_end": "ctrl+end",
-    "terminal_suspend": "none",
-    "input_undo": "ctrl+z",
-    "input_redo": "ctrl+shift+z",
-    "input_clear": "none"
-  },
-  "tui": {
-    "scroll_speed": 5
   }
 }

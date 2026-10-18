@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "theme": {
+    "name": "aura"
+  },
+  "keybinds": {
+    "prompt.clear": "none",
+    "input.newline": "shift+return,ctrl+return,ctrl+j",
+    "input.line.home": "ctrl+home",
+    "input.line.end": "ctrl+end",
+    "input.undo": "ctrl+z",
+    "input.redo": "ctrl+shift+z",
+    "terminal.suspend": "none"
+  },
+  "scroll": {
+    "speed": 5
+  },
+  "session": {
+    "sidebar": "hide",
+    "scrollbar": false,
+    "thinking": "show"
+  },
+  "animations": true
+}
