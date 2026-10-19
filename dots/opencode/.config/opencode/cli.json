@@ -4,6 +4,7 @@
     "name": "aura"
   },
   "keybinds": {
+    "agent.cycle": "tab",
     "prompt.clear": "none",
     "input.newline": "shift+return,ctrl+return,ctrl+j",
     "input.line.home": "ctrl+home",
@@ -20,5 +21,8 @@
     "scrollbar": false,
     "thinking": "show"
   },
-  "animations": true
+  "animations": true,
+  "tabs": {
+    "mode": "auto"
+  }
 }

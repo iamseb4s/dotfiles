@@ -6,6 +6,7 @@ local config = wezterm.config_builder()
 config.color_scheme = "OneDark (base16)"
 config.window_background_opacity = 0.8
 config.enable_wayland = true
+config.enable_kitty_keyboard = true
 config.initial_cols = 121
 config.initial_rows = 30
 config.font = wezterm.font_with_fallback({
