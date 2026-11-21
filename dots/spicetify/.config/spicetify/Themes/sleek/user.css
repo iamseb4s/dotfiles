@@ -857,6 +857,14 @@ PERSONAL SNIPPETS
   display: none !important;
 }
 
+/* Queue arriba de Lyrics (el contenedor del panel es flex column) */
+.sleek-npv-queue {
+  order: 2 !important;
+}
+.sleek-npv-lyrics {
+  order: 3 !important;
+}
+
 /* --- Pretty Lyrics --- */
 .lyrics-lyrics-background {
   display: none;
