@@ -145,5 +145,7 @@
     "ActiveFileInStatusBar.enable": true,
     "workbench.editor.editorActionsLocation": "titleBar",
     "diffEditor.hideUnchangedRegions.enabled": true,
-    "chat.titleBar.openInAgentsWindow.enabled": false
+    "chat.titleBar.openInAgentsWindow.enabled": false,
+    "python.analysis.typeCheckingMode": "standard",
+    "python.analysis.diagnosticSeverityOverrides": {}
 }
