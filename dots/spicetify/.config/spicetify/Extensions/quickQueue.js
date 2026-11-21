@@ -229,7 +229,7 @@
 
 						if (placeLeftSide) {
 							const rowGrid = nodeMatch.parentElement;
-							const startCell = rowGrid?.querySelector(':scope > .main-trackList-rowSectionStart[role="gridcell"]');
+							const startCell = rowGrid?.querySelector(':scope > .main-trackList-rowSectionStart, :scope > .trackList-rowSectionStart');
 							const coverImg = startCell?.querySelector(':scope img');
 							if (startCell) {
 								// Avoid duplicate injection in the left cell

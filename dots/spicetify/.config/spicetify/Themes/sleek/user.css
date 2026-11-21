@@ -74,11 +74,7 @@ NAVBAR
 
 /* add gradient to navbar */
 .Root__nav-bar {
-  background-image: linear-gradient(
-    to bottom left,
-    var(--spice-sidebar) 0%,
-    var(--spice-player) 100%
-  ) !important;
+  background-image: linear-gradient(to bottom left, var(--spice-sidebar) 0%, var(--spice-player) 100%) !important;
 }
 
 /* change color of navbar playing icon */
@@ -114,8 +110,7 @@ NAVBAR
 
 /* remove opacity of navbar buttons */
 .main-collectionLinkButton-collectionLinkButton .main-collectionLinkButton-icon,
-.main-collectionLinkButton-collectionLinkButton
-  .main-collectionLinkButton-collectionLinkText,
+.main-collectionLinkButton-collectionLinkButton .main-collectionLinkButton-collectionLinkText,
 .main-createPlaylistButton-button {
   opacity: unset;
 }
@@ -126,13 +121,13 @@ NAVBAR
 
 /* change colors of active tab */
 .main-yourLibraryX-navLink {
-  border-radius: 8px;
-  margin: 6px 0;
-  padding: 0 10px;
+    border-radius: 8px;
+    margin: 6px 0;
+    padding: 0 10px;
 }
 
 .main-yourLibraryX-navItem {
-  padding: 0;
+    padding: 0;
 }
 
 .main-navBar-navBarLinkActive,
@@ -143,8 +138,8 @@ NAVBAR
 .main-yourLibraryX-navLinkActive,
 .main-yourLibraryX-navLinkActive .home-active-icon,
 .main-yourLibraryX-navLinkActive .search-active-icon {
-  color: var(--spice-nav-active-text) !important;
-  background-color: var(--spice-nav-active);
+    color: var(--spice-nav-active-text) !important;
+    background-color: var(--spice-nav-active);
 }
 
 /* color of navbar icons */
@@ -175,8 +170,8 @@ NAVBAR
 .main-trackList-placeholder,
 .Pns6F5g4OEwEpdmOWTLg,
 .eldivguzYznZgQoShJbe {
-  background-color: var(--background-base);
-  background-blend-mode: color-dodge;
+    background-color: var(--background-base);
+    background-blend-mode: color-dodge;
 }
 
 /* 
@@ -193,8 +188,7 @@ PLAYBACK BAR
   transition: left 1s linear;
 }
 
-.progress-bar--isDragging .x-progressBar-fillColor,
-.progress-bar--isDragging .progress-bar__slider {
+.progress-bar--isDragging .x-progressBar-fillColor, .progress-bar--isDragging .progress-bar__slider {
   transition: none;
 }
 
@@ -210,42 +204,44 @@ PLAYBACK BAR
 }
 
 /* hide and move progress time location */
-.playback-bar__progress-time-elapsed {
+.playback-bar [data-testid="playback-position"],
+.playback-bar [data-testid="playback-duration"] {
   opacity: 0;
   position: absolute;
   bottom: 13px;
-  left: 0;
   transition-duration: 0.3s;
-  background-color: rgba(var(--spice-rgb-sidebar), 0.5);
-  box-shadow: 0 0 20px 20px rgba(var(--spice-rgb-sidebar), 0.5);
+  background-color: rgba(var(--spice-rgb-sidebar),.5);
+  box-shadow: 0 0 20px 20px rgba(var(--spice-rgb-sidebar),.5);
   border-radius: 8px;
   z-index: -1;
 }
 
-.main-playbackBarRemainingTime-container {
-  opacity: 0;
-  position: absolute;
-  bottom: 13px;
+.playback-bar [data-testid="playback-position"] {
+  left: 0;
+  right: auto;
+}
+
+.playback-bar [data-testid="playback-duration"] {
+  left: auto;
   right: 0;
-  transition-duration: 0.3s;
-  background-color: rgba(var(--spice-rgb-sidebar), 0.5);
-  box-shadow: 0 0 20px 20px rgba(var(--spice-rgb-sidebar), 0.5);
-  border-radius: 8px;
-  z-index: -1;
 }
 
 /* show time on hover & better visibility */
-.playback-bar:hover .playback-bar__progress-time-elapsed,
-.playback-bar:hover .main-playbackBarRemainingTime-container {
+.main-nowPlayingBar-center:hover [data-testid="playback-position"],
+.main-nowPlayingBar-center:hover [data-testid="playback-duration"] {
   opacity: 1;
 }
 
 /* move progress bar */
-html:not(.fullscreen) .playback-bar {
-  width: 100%;
-  bottom: 83px;
+.main-nowPlayingBar-container {
+  position: relative;
+}
+
+.main-nowPlayingBar-container .playback-bar {
   position: absolute;
-  left: 0px;
+  bottom: 100%;
+  left: 0;
+  width: 100%;
 }
 
 .main-nowPlayingBar-nowPlayingBar:nth-last-child(2) .playback-bar {
@@ -267,6 +263,19 @@ html:not(.fullscreen) .playback-bar {
   background-color: inherit;
   color: var(--spice-play-button);
   transition-duration: 0.3s !important;
+}
+/* 1.3.9: play sin bola blanca, icono rosa (19px de Sleek) */
+button[aria-label="Play"],
+button[aria-label="Pause"],
+button[aria-label="Play"] span,
+button[aria-label="Pause"] span {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+button[aria-label="Play"] svg,
+button[aria-label="Pause"] svg {
+  fill: var(--spice-play-button) !important;
+  transform: scale(1.2);
 }
 
 .main-playPauseButton-button svg {
@@ -296,7 +305,7 @@ html.fullscreen .main-playPauseButton-button svg {
 
 /* matching button colors */
 .main-nowPlayingBar-extraControls button {
-  color: rgba(var(--spice-rgb-selected-row), 0.7);
+  color: rgba(var(--spice-rgb-selected-row),.7);
 }
 /*
 ---------------
@@ -319,11 +328,7 @@ p.main-buddyFeed-timestamp.main-type-finale,
 
 /* add gradient */
 .main-buddyFeed-friendsFeedContainer {
-  background-image: linear-gradient(
-    to bottom left,
-    var(--spice-sidebar) 0%,
-    var(--spice-player) 100%
-  ) !important;
+  background-image: linear-gradient(to bottom left, var(--spice-sidebar) 0%, var(--spice-player) 100%) !important;
 }
 
 /* hide buddyfeed scrollbar */
@@ -398,10 +403,10 @@ input {
 
 /* recolor animated liked or heart button on click */
 #_R_G *:not([fill="none"]) {
-  fill: var(--spice-button-active) !important;
+    fill: var(--spice-button-active) !important;
 }
 #_R_G *:not([stroke="none"]) {
-  stroke: var(--spice-button-active);
+    stroke: var(--spice-button-active);
 }
 
 /* change appearance of 'playlist' tag  */
@@ -415,26 +420,19 @@ input {
 }
 
 /* change appearance of 'follow' button  */
-.artist-artistOverview-overview
-  .main-actionBar-ActionBarRow
-  > button:first-of-type {
+.artist-artistOverview-overview .main-actionBar-ActionBarRow > button:first-of-type {
   border-radius: 8px;
   border: 2px solid var(--spice-button);
 }
 
 /* change scrollbar appearance */
-.os-theme-spotify.os-host-transition
-  > .os-scrollbar-vertical
-  > .os-scrollbar-track
-  > .os-scrollbar-handle {
+.os-theme-spotify.os-host-transition > .os-scrollbar-vertical > .os-scrollbar-track > .os-scrollbar-handle {
   border-radius: 4px;
   width: 6px;
   background-color: var(--spice-button-disabled);
 }
 
-.os-theme-spotify.os-host-transition
-  > .os-scrollbar-vertical
-  > .os-scrollbar-track {
+.os-theme-spotify.os-host-transition > .os-scrollbar-vertical > .os-scrollbar-track {
   width: 6px;
 }
 
@@ -562,16 +560,13 @@ a.x-heroCategoryCard-HeroCategoryCard {
 
 /* change appearance of verified artist badge */
 .main-entityHeader-headerText > span:first-child {
-  border: 0.25em solid var(--spice-text);
+  border: 0.25em  solid var(--spice-text);
   border-radius: 0.5em;
   width: fit-content;
   gap: 0px;
   text-align: center;
   padding: 0.25em 0.75em;
-  --font-family:
-    CircularSp, CircularSp-Arab, CircularSp-Hebr, CircularSp-Cyrl,
-    CircularSp-Grek, CircularSp-Deva, var(--fallback-fonts, sans-serif),
-    sans-serif;
+  --font-family: CircularSp,CircularSp-Arab,CircularSp-Hebr,CircularSp-Cyrl,CircularSp-Grek,CircularSp-Deva,var(--fallback-fonts,sans-serif),sans-serif;
 }
 
 .main-entityHeader-headerText > span:first-child > span {
@@ -611,8 +606,7 @@ CONTEXT MENU
 }
 
 /* dividers between option subgroups */
-.main-contextMenu-menuItem:not(:first-child)
-  > .main-contextMenu-dividerBefore:before {
+.main-contextMenu-menuItem:not(:first-child) > .main-contextMenu-dividerBefore:before {
   border-bottom: 1px solid var(--spice-button-disabled);
 }
 /* 
@@ -658,37 +652,23 @@ TRACKS GRID
 }
 
 /* When song is hovered/selected */
-.main-trackList-trackListRow.main-trackList-selected:not(.main-trackList-active)
-  .main-tag-container,
-.main-trackList-trackListRow:hover:not(.main-trackList-disabled):not(
-    .main-trackList-active
-  )
-  .main-tag-container {
+.main-trackList-trackListRow.main-trackList-selected:not(.main-trackList-active) .main-tag-container,
+.main-trackList-trackListRow:hover:not(.main-trackList-disabled):not(.main-trackList-active) .main-tag-container {
   background-color: var(--spice-text);
 }
 
-.main-trackList-trackListRow:hover:not(.main-trackList-disabled)
-  .main-addButton-button,
-.main-trackList-trackListRow:focus-within:not(.main-trackList-disabled)
-  .main-addButton-button {
+.main-trackList-trackListRow:hover:not(.main-trackList-disabled) .main-addButton-button,
+.main-trackList-trackListRow:focus-within:not(.main-trackList-disabled) .main-addButton-button {
   color: var(--spice-text);
 }
 
-.main-trackList-trackListRow.main-trackList-selected:not(.main-trackList-active)
-  .main-trackList-rowTitle,
-.main-trackList-trackListRow:hover:not(.main-trackList-disabled):not(
-    .main-trackList-active
-  )
-  .main-trackList-rowTitle {
+.main-trackList-trackListRow.main-trackList-selected:not(.main-trackList-active) .main-trackList-rowTitle,
+.main-trackList-trackListRow:hover:not(.main-trackList-disabled):not(.main-trackList-active) .main-trackList-rowTitle {
   color: var(--spice-text);
 }
 
-.main-trackList-trackListRow.main-trackList-selected:not(.main-trackList-active)
-  .main-trackList-rowSubTitle,
-.main-trackList-trackListRow:hover:not(.main-trackList-disabled):not(
-    .main-trackList-active
-  )
-  .main-trackList-rowSubTitle {
+.main-trackList-trackListRow.main-trackList-selected:not(.main-trackList-active) .main-trackList-rowSubTitle,
+.main-trackList-trackListRow:hover:not(.main-trackList-disabled):not(.main-trackList-active) .main-trackList-rowSubTitle {
   color: var(--spice-text) !important;
 }
 
@@ -757,23 +737,92 @@ input:checked ~ .x-toggle-indicatorWrapper .x-toggle-indicator {
   background-color: var(--spice-main);
   right: 4px;
 }
+/* ===================== 1.3.9 PLAYER (Sleek) ===================== */
+/* barra: full-window, pegada al borde superior del player */
+[data-testid="playback-progressbar"] {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 100% !important;
+  width: auto !important;
+  max-width: none !important;
+  height: 12px !important;
+  z-index: 25 !important;
+}
+[data-testid="playback-progressbar"] .progress-bar {
+  width: 100% !important;
+  max-width: none !important;
+  height: 12px !important;
+}
+[data-testid="playback-progressbar"] .x-progressBar-progressBarBg,
+[data-testid="playback-progressbar"] .x-progressBar-fillColor,
+[data-testid="playback-progressbar"] .x-progressBar-sliderArea,
+[data-testid="playback-progressbar"] .x-progressBar-progressFillColor {
+  height: 4px !important;
+  min-height: 4px !important;
+  max-height: 4px !important;
+}
+[data-testid="playback-progressbar"] .progress-bar__slider {
+  height: 12px !important;
+  width: 12px !important;
+}
+/* relleno con el color de Sleek */
+[data-testid="playback-progressbar"] .x-progressBar-fillColor {
+  background-color: var(--spice-playback-bar) !important;
+}
+/* tiempos: exactamente como Sleek (translúcido + glow), encima de la barra */
+html [data-testid="playback-position"],
+html [data-testid="playback-duration"] {
+  opacity: 0 !important;
+  position: absolute !important;
+  bottom: calc(100% + 16px) !important;
+  width: max-content !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-color: rgba(var(--spice-rgb-main), 0.55) !important;
+  box-shadow: 0 0 18px 14px rgba(var(--spice-rgb-main), 0.9) !important;
+  color: var(--spice-text) !important;
+  border-radius: 8px;
+  transition-duration: 0.3s;
+  z-index: 21;
+}
+html [data-testid="playback-position"] {
+  left: 16px !important;
+  right: auto !important;
+  text-align: left !important;
+}
+html [data-testid="playback-duration"] {
+  left: auto !important;
+  right: 16px !important;
+  text-align: right !important;
+}
+[data-testid="playback-position"] > span,
+[data-testid="playback-duration"] > span {
+  position: static !important;
+}
+html:has([data-testid="playback-progressbar"]:hover) [data-testid="playback-position"],
+html:has([data-testid="playback-progressbar"]:hover) [data-testid="playback-duration"],
+html [data-testid="playback-position"]:hover,
+html [data-testid="playback-duration"]:hover {
+  opacity: 1 !important;
+}
+
+/* 1.3.9: el tooltip del scrub debe quedar por encima de los tiempos */
+[data-testid="progress-label"] {
+  z-index: 30 !important;
+}
+
+/* cat-jam: el player bar necesita ser contenedor de posicionamiento */
+[data-testid="now-playing-bar"] {
+  position: relative;
+}
+
 /*
 -----------------
 PERSONAL SNIPPETS
 -----------------
 */
-/* --- Modern ScrollBar --- */
-.os-scrollbar-handle {
-  width: 0.25rem !important;
-  border-radius: 10rem !important;
-  transition: width 300ms ease-in-out;
-}
-.os-scrollbar-handle:focus,
-.os-scrollbar-handle:focus-within,
-.os-scrollbar-handle:hover {
-  width: 0.35rem !important;
-}
-
 /* --- Rotating Cover Art --- */
 @keyframes rotating {
   from {
@@ -838,31 +887,26 @@ PERSONAL SNIPPETS
   color: #ffffffb6 !important;
 }
 
-/* --- Thin Library Sidebar Rows --- */
-.main-yourLibraryX-listItemGroup {
-  grid-template-rows: none !important;
+/* --- Thin Library Sidebar Rows (1.3.9) --- */
+nav [role="row"] img {
+  width: 1.6em !important;
+  height: 1.6em !important;
+  border-radius: 4px !important;
 }
-.main-yourLibraryX-listItemGroup * {
-  padding-block: 0;
-}
-.main-yourLibraryX-listItem [role="group"] {
-  min-block-size: 0 !important;
-}
-.main-yourLibraryX-listItem .HeaderArea .Column {
-  flex-direction: row;
-  gap: 0.5em;
-}
-.main-yourLibraryX-listItem .HeaderArea * {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-}
-.main-yourLibraryX-listItem .x-entityImage-imageContainer,
-.main-yourLibraryX-rowCover {
+nav [role="row"] :has(> img) {
   width: 1.6em !important;
   height: 1.6em !important;
 }
-.main-yourLibraryX-listRowSubtitle {
-  padding-top: 0px;
+/* Colapsado: fila estrecha (42) centrada en la columna, portada 8px por lado */
+html.sleek-sb-collapsed nav [role="row"] {
+  width: 42px !important;
+  padding: 0 !important;
+  margin-inline: auto !important;
+  display: flex !important;
+  justify-content: center !important;
+}
+html.sleek-sb-collapsed nav [role="row"] :has(> img) {
+  margin: 0 0 0 9px !important;
 }
 
 /* --- Hide What's New Button --- */
