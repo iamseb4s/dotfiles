@@ -823,30 +823,38 @@ html [data-testid="playback-duration"]:hover {
 PERSONAL SNIPPETS
 -----------------
 */
-/* --- Rotating Cover Art --- */
+/* --- Rotating Cover Art (1.3.x: cover-art-slot del now playing view) --- */
 @keyframes rotating {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
-.cover-art,
-.main-nowPlayingView-coverArtContainer::after,
-.main-nowPlayingView-coverArtContainer::before {
-  animation: rotating 10s linear infinite;
+[data-testid="cover-art-slot"] {
   border-radius: 50%;
+  overflow: hidden;
 }
-.cover-art {
-  clip-path: circle(50% at 50% 50%);
+[data-testid="cover-art-slot"] img {
+  animation: rotating 12s linear infinite !important;
+  border-radius: 50% !important;
+  filter: drop-shadow(0 9px 9px rgba(0, 0, 0, 0.27));
 }
-.main-nowPlayingBar-left button {
-  background: transparent;
+/* carátula del player: circular y girando */
+[data-testid="cover-art-container"] {
+  border-radius: 50% !important;
+  overflow: hidden;
 }
-.main-nowPlayingView-coverArt {
-  box-shadow: none;
-  filter: drop-shadow(0 9px 9px rgba(0, 0, 0, 0.271));
+[data-testid="cover-art-container"] img {
+  border-radius: 50% !important;
+  animation: rotating 12s linear infinite !important;
+}
+
+/* el botón de la carátula del player sin fondo */
+[data-testid="cover-art-button"] {
+  background: transparent !important;
+}
+
+/* --- Hide Artists / Credits en el now playing view (tag de sleekNpvSections.js) --- */
+.sleek-hide-section {
+  display: none !important;
 }
 
 /* --- Pretty Lyrics --- */
